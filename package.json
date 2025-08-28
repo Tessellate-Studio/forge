@@ -1,0 +1,84 @@
+{
+  "name": "@company/rubric-sdk",
+  "version": "1.0.0",
+  "description": "SDK for scoring, comparing, and prioritizing tasks, features, hooks, or commands before implementation",
+  "main": "lib/index.js",
+  "bin": {
+    "rubric": "cli/index.js"
+  },
+  "scripts": {
+    "start": "node lib/index.js",
+    "test": "jest",
+    "test:unit": "jest tests/unit",
+    "test:integration": "jest tests/integration",
+    "lint": "eslint lib/ cli/ --fix",
+    "lint:check": "eslint lib/ cli/",
+    "audit": "npm audit --audit-level=high",
+    "build": "echo 'Build completed'",
+    "validate": "node cli/rubric-validate.js",
+    "evaluate": "node cli/rubric-evaluate.js",
+    "report": "node cli/rubric-report.js"
+  },
+  "keywords": [
+    "rubric",
+    "sdk",
+    "scoring",
+    "prioritization",
+    "task-evaluation",
+    "decision-making",
+    "project-planning"
+  ],
+  "author": "Your Company",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^11.0.0",
+    "chalk": "^4.1.2",
+    "fs-extra": "^11.0.0",
+    "inquirer": "^8.0.0",
+    "yaml": "^2.3.0",
+    "glob": "^10.0.0",
+    "json2csv": "^6.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "eslint": "^8.0.0",
+    "eslint-config-standard": "^17.0.0",
+    "prettier": "^2.8.0",
+    "husky": "^8.0.0",
+    "lint-staged": "^13.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=7.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ramsaptami/rubric-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ramsaptami/rubric-sdk/issues"
+  },
+  "homepage": "https://github.com/ramsaptami/rubric-sdk#readme",
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "lib/**/*.js",
+      "cli/**/*.js",
+      "!**/node_modules/**"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 80,
+        "functions": 80,
+        "lines": 80,
+        "statements": 80
+      }
+    }
+  },
+  "lint-staged": {
+    "*.js": [
+      "eslint --fix",
+      "prettier --write"
+    ]
+  }
+}
