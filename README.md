@@ -7,12 +7,170 @@
 
 The Rubric SDK provides a consistent framework for evaluating tasks, features, and projects using standardized scoring criteria. Make data-informed decisions and eliminate analysis paralysis.
 
+## Clean Architecture & Dependency Model
+
+This SDK follows a **clean dependency model** ensuring:
+
+### ✅ Proper Integration
+- **SDK provides scoring and prioritization logic only**
+- **No business logic duplication in consuming projects**
+- **Clean API boundary with well-defined responsibilities**
+- **Import as npm dependency, not copied files**
+
+### 🎯 SDK Responsibilities
+- Task scoring algorithms
+- Multi-criteria decision analysis
+- Priority matrix calculations
+- Report generation
+- Configuration management
+
+### 🏗️ Usage in Projects
+When integrated into projects, Rubric SDK is used as:
+```json
+{
+  "devDependencies": {
+    "@company/rubric-sdk": "^1.0.0"
+  }
+}
+```
+
+```javascript
+const rubric = require('@company/rubric-sdk');
+
+// Evaluate tasks with scoring criteria
+const results = await rubric.evaluate(task, {
+  criteria: ['impact', 'complexity', 'reusability', 'strategic']
+});
+```
+
+### 🤝 Integration with Code Directives
+
+Works alongside `@company/code-directives` for complete project management:
+
+- **Code Directives**: Standards, validation, project scaffolding
+- **Rubric SDK**: Task evaluation, prioritization, decision tracking
+
 ## Repository Information
 
 - **Primary Repository**: `git@github.com:ramsaptami/rubric-sdk.git`
 - **Package Name**: `@ramsaptami/rubric-sdk`
 - **Development**: Always commit changes to the dedicated repository
 - **Usage**: Install as dependency in other projects
+
+## 🔄 Automated Development Workflow
+
+This repository uses a comprehensive automated workflow system consistent across all team repositories to ensure code quality, proper review processes, and streamlined development.
+
+### Branch Protection & Naming Conventions
+- **Protected Branch**: `master` (direct commits blocked by pre-commit hooks)
+- **All changes** must go through feature branches and pull requests
+- **Standardized naming** ensures automated workflow triggers and proper PR categorization
+
+### Supported Branch Types & Auto-PR Features
+
+| Branch Pattern | Purpose | Auto-PR Title | Labels | Examples |
+|----------------|---------|---------------|--------|----------|
+| `feature/description` | New features and enhancements | ✨ Feature: [description] | `enhancement`, `auto-created` | `feature/automated-scoring` |
+| `fix/description` | Bug fixes and corrections | 🐛 Fix: [description] | `bug`, `auto-created` | `fix/rubric-config-parsing` |
+| `refactor/description` | Code restructuring without changing functionality | ♻️ Refactor: [description] | `refactoring`, `auto-created` | `refactor/evaluation-engine` |
+| `docs/description` | Documentation updates | 📚 Docs: [description] | `documentation`, `auto-created` | `docs/scoring-framework-guide` |
+| `hotfix/description` | Critical production fixes | 🚨 Hotfix: [description] | `hotfix`, `auto-created`, `priority-high` | `hotfix/scoring-calculation-error` |
+
+### Complete Automated Process
+1. **Create Feature Branch**: `git checkout -b feature/your-feature-name`
+2. **Push Changes**: Triggers automatic PR creation with proper titles and labels
+3. **Automated Checks**: Dependencies validation, tests, security audit
+4. **Code Review**: Manual review with auto-generated checklist
+5. **Auto-Merge**: Approved PRs merge automatically with cleanup
+
+### Quick Start Development
+```bash
+# Feature development
+git checkout master && git pull
+git checkout -b feature/scoring-algorithm-improvements
+# Make your changes
+git push -u origin feature/scoring-algorithm-improvements
+# PR created automatically with proper labels!
+
+# Bug fix
+git checkout -b fix/evaluation-timeout-error
+# Fix issue and push - auto-PR created with bug labels
+
+# Documentation update
+git checkout -b docs/api-documentation-update
+# Update docs and push - fast-track merge for docs
+```
+
+### Integration Setup for New Team Members
+
+1. **Clone Repository**:
+   ```bash
+   git clone git@github.com:ramsaptami/rubric-sdk.git
+   cd rubric-sdk
+   npm install
+   ```
+
+2. **Verify Pre-commit Hooks**:
+   ```bash
+   # Hooks should be installed automatically
+   # Test branch protection
+   echo "test" > test.txt && git add test.txt
+   git commit -m "test"  # Should be blocked with helpful message
+   ```
+
+3. **Configure Git Aliases** (Optional):
+   ```bash
+   git config alias.newfeature '!git checkout master && git pull && git checkout -b feature/$1'
+   git config alias.newfix '!git checkout master && git pull && git checkout -b fix/$1'
+   ```
+
+4. **First Feature Branch**:
+   ```bash
+   git checkout -b feature/contributor-setup-complete
+   echo "Setup completed by [your-name]" >> CONTRIBUTORS.md
+   git add CONTRIBUTORS.md
+   git commit -m "Add contributor setup completion"
+   git push -u origin feature/contributor-setup-complete
+   ```
+
+### Troubleshooting Common Workflow Issues
+
+#### Issue: Branch not triggering auto-PR
+**Symptoms**: Pushed branch but no PR created
+**Solutions**:
+- Verify branch name matches pattern: `feature/*`, `fix/*`, `refactor/*`, `docs/*`, `hotfix/*`
+- Check GitHub Actions are enabled in repository settings
+- Ensure you have proper repository permissions
+
+#### Issue: Pre-commit hook not blocking direct commits
+**Solutions**:
+```bash
+# Verify hook exists and is executable
+ls -la .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+
+# Reinstall hooks if needed
+npm install  # Hooks should reinstall automatically
+```
+
+#### Issue: Auto-merge not working
+**Symptoms**: PR approved but not merging
+**Checklist**:
+- [ ] All status checks passed
+- [ ] No merge conflicts
+- [ ] Required approvals received
+- [ ] No requested changes pending
+- [ ] Branch is up to date with master
+
+#### Issue: Wrong target branch
+**Solution**:
+```bash
+# Verify repository default branch
+git remote show origin
+# Should show: HEAD branch: master
+```
+
+For detailed workflow examples and advanced scenarios, see [../../docs/PR_WORKFLOW_EXAMPLES.md](../../docs/PR_WORKFLOW_EXAMPLES.md)
 
 ## 🎯 Key Features
 
