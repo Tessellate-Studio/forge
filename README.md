@@ -43,6 +43,42 @@ const results = await rubric.evaluate(task, {
 });
 ```
 
+### 🤖 Autonomous scoring (`evaluateFromContext`)
+
+For consumers that can't ask a human for the 4-axis scores — e.g. agents
+running on a schedule — the SDK exposes `evaluateFromContext(input)`. It
+takes a structured task + context and returns the full 4-axis 0-3 score
++ total + band + per-axis reasoning, deciding the scores via
+transparent rule-based heuristics.
+
+```javascript
+const { evaluateFromContext } = require('@company/rubric-sdk');
+
+const result = evaluateFromContext({
+  title: 'Set up email aliases on tessellate.co.in',
+  description: 'Compliance gap — privacy policy already published with privacy@ as the data-deletion address; emails bounce today.',
+  context: {
+    goals: ['Closed beta live', 'Privacy policy v3.2 published'],
+    dependencies: {
+      this_task_depends_on: [],
+      this_task_unblocks: ['Reddit launch posts', 'Get in touch on BrandIntegration'],
+    },
+  },
+});
+
+// result = {
+//   impact: 3, complexity: 3, reusability: 1, strategic: 3,
+//   total: 10, band: 'Must',
+//   reasoning: { impact: '…', complexity: '…', reusability: '…', strategic: '…' }
+// }
+```
+
+The heuristics are documented in [`lib/evaluate-from-context.js`](lib/evaluate-from-context.js)
+and are deliberately conservative for v1. When consumers (e.g. the
+`roadmap-pulse` Claude skill) produce weekly outputs with real
+follow-through data, those outcomes become training signal for
+tightening the heuristics or swapping in an LLM-backed scorer.
+
 ### 🤝 Integration with Code Directives
 
 Works alongside `@company/code-directives` for complete project management:
