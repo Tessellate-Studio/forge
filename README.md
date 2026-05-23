@@ -29,13 +29,13 @@ When integrated into projects, Rubric SDK is used as:
 ```json
 {
   "devDependencies": {
-    "@company/rubric-sdk": "^1.0.0"
+    "@botessellate/rubric-sdk": "^1.0.0"
   }
 }
 ```
 
 ```javascript
-const rubric = require('@company/rubric-sdk');
+const rubric = require('@botessellate/rubric-sdk');
 
 // Evaluate tasks with scoring criteria
 const results = await rubric.evaluate(task, {
@@ -52,7 +52,7 @@ takes a structured task + context and returns the full 4-axis 0-3 score
 transparent rule-based heuristics.
 
 ```javascript
-const { evaluateFromContext } = require('@company/rubric-sdk');
+const { evaluateFromContext } = require('@botessellate/rubric-sdk');
 
 const result = evaluateFromContext({
   title: 'Set up email aliases on tessellate.co.in',
@@ -81,7 +81,7 @@ tightening the heuristics or swapping in an LLM-backed scorer.
 
 ### 🤝 Integration with Code Directives
 
-Works alongside `@company/code-directives` for complete project management:
+Works alongside `@botessellate/code-directives` for complete project management:
 
 - **Code Directives**: Standards, validation, project scaffolding
 - **Rubric SDK**: Task evaluation, prioritization, decision tracking
@@ -89,7 +89,7 @@ Works alongside `@company/code-directives` for complete project management:
 ## Repository Information
 
 - **Primary Repository**: `git@github.com:ramsaptami/rubric-sdk.git`
-- **Package Name**: `@ramsaptami/rubric-sdk`
+- **Package Name**: `@botessellate/rubric-sdk`
 - **Development**: Always commit changes to the dedicated repository
 - **Usage**: Install as dependency in other projects
 
@@ -222,7 +222,7 @@ For detailed workflow examples and advanced scenarios, see [../../docs/PR_WORKFL
 ### Installation
 
 ```bash
-npm install -g @company/rubric-sdk
+npm install -g @botessellate/rubric-sdk
 ```
 
 ### Initialize Your Project
@@ -414,7 +414,7 @@ rubric report --evaluator "John Doe" --format json
 ### Programmatic Usage
 
 ```javascript
-const { RubricEngine, ReportGenerator } = require('@company/rubric-sdk');
+const { RubricEngine, ReportGenerator } = require('@botessellate/rubric-sdk');
 
 // Create engine with custom config
 const engine = new RubricEngine({
@@ -461,7 +461,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install Rubric SDK
-        run: npm install -g @company/rubric-sdk
+        run: npm install -g @botessellate/rubric-sdk
       - name: Evaluate Features
         run: |
           rubric compare --file features/proposed.json --output evaluation.md
