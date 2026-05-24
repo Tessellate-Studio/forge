@@ -1,5 +1,5 @@
 {
-  "name": "@botessellate/rubric-sdk",
+  "name": "@tessellate-studio/rubric-sdk",
   "version": "1.0.0",
   "description": "SDK for scoring, comparing, and prioritizing tasks, features, hooks, or commands before implementation",
   "main": "lib/index.js",
