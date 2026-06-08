@@ -1,6 +1,6 @@
 # Scoring contract — how roadmap-pulse talks to rubric-sdk (Step 4)
 
-This file is the contract roadmap-pulse expects from `@ramsaptami/rubric-sdk`. The SDK is on its own evolution track (Track B) — that track should evolve to meet this contract, not the other way around.
+This file is the contract roadmap-pulse expects from `@tessellate-studio/rubric-sdk`. The SDK is on its own evolution track (Track B) — that track should evolve to meet this contract, not the other way around.
 
 ## Table of contents
 
@@ -131,7 +131,7 @@ The rubric-sdk is experimental (v1.0.0, 2 commits, no npm release at time of wri
 
 | Failure | Fallback |
 |---|---|
-| SDK CLI not installed | Skip scoring for this run; surface in the report as "rubric-sdk not installed — `npm install -g @ramsaptami/rubric-sdk` then re-run." Continue with un-scored prioritization (Step 2 goal-alignment + Step 3 dependency graph still produces a useful ranking). |
+| SDK CLI not installed | Skip scoring for this run; surface in the report as "rubric-sdk not installed — `npm install -g @tessellate-studio/rubric-sdk` then re-run." Continue with un-scored prioritization (Step 2 goal-alignment + Step 3 dependency graph still produces a useful ranking). |
 | SDK returns malformed JSON | Score that task as `null`; surface in the report as "scoring failed for task X (SDK error)". Don't fail the whole run. |
 | SDK takes longer than 30s per task | Time out; treat as malformed-JSON case. |
 | SDK CLI requires interactive input the skill can't provide | Try the programmatic API path first (`scripts/invoke_rubric.sh --programmatic`). If that fails too, fall back to skip-and-surface. |

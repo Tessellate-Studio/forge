@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# invoke_rubric.sh — wrapper for @ramsaptami/rubric-sdk
+# invoke_rubric.sh — wrapper for @tessellate-studio/rubric-sdk
 #
 # Takes a single task's input JSON on stdin and returns the SDK's output
 # JSON on stdout. Tries the CLI first, falls back to programmatic API,
@@ -40,11 +40,10 @@ fi
 # rubric-sdk PR #1 (commit 9ff27f2) that meets this skill's contract
 # (4-axis 0-3 scores + total + band + reasoning).
 #
-# Package-name fallback: the package.json on rubric-sdk's master is
-# currently `@company/rubric-sdk`, but the README + this skill use
-# `@ramsaptami/rubric-sdk` (which matches the GitHub owner). Try
-# both names so this wrapper works regardless of which name is
-# installed locally.
+# Package-name fallback: the canonical package is now
+# `@tessellate-studio/rubric-sdk` (repo lives at Tessellate-Studio/rubric-sdk).
+# Older installs may still be under `@ramsaptami/rubric-sdk` or `@company/rubric-sdk`,
+# so the candidates array below tries all three — tessellate-studio first.
 if command -v node >/dev/null 2>&1; then
   # NODE_PATH must include npm's global node_modules so a globally-installed
   # rubric-sdk is resolvable by `require()`. Without this, `npm install -g`

@@ -136,4 +136,4 @@ Default if no convention: strikethrough + `— LANDED <date>` marker.
 
 If a rewrite in BACKLOG.md changes the status of an item that's also referenced in the regression log, **update both atomically**. Same for anti-pattern references. A roadmap-pulse run should leave the corpus internally consistent.
 
-The regression log + anti-patterns memory files live OUTSIDE the repo (in `~/.claude/projects/<slug>/memory/`). Surface those edits to the user separately from the in-repo PR or commit — they need manual verification.
+The regression log + domain anti-patterns live in-repo under `<repo-root>/memory/`, so edits to them are normal in-repo doc changes (same PR/commit as the planning-doc rewrites). The shared cross-app guardrails live in `forge/standards/` and are changed via a forge PR, not here.

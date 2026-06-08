@@ -52,8 +52,8 @@ When invoked, scan **all of these that exist in the project**. Always start by i
 | RELEASE_V2.md | `<repo-root>/RELEASE_V2.md` | Launch state: what's built, what's pending, what flips at launch. **Primary input for Step 2 (current goals).** |
 | USER_PATHS.md | `<repo-root>/USER_PATHS.md` | Happy + edge + still-uncovered user flows |
 | `backlog/*.md` (sub-docs) | `<repo-root>/backlog/<name>.md` | Long-form planning docs for items parked from BACKLOG.md |
-| Regression log | `~/.claude/projects/<project-slug>/memory/project_regression_log.md` | Bug rows with date / root-cause / fix / test columns |
-| Anti-patterns | `~/.claude/projects/<project-slug>/memory/project_anti_patterns.md` | Numbered rules with sourced precedents |
+| Regression log | `<repo-root>/memory/project_regression_log.md` | Bug rows with date / root-cause / fix / test columns |
+| Anti-patterns (domain) | `<repo-root>/memory/project_anti_patterns.md` | App-specific rules; shared guardrails are in `forge/standards/` |
 | User-named markdown | Whatever the user passes | Apply same workflow |
 
 **Inventory step at the start of every invocation:**

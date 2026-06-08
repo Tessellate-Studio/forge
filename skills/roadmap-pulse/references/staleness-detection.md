@@ -78,9 +78,9 @@ This file is the operational manual for Step 1 of the roadmap-pulse workflow —
 
 **Gotchas:**
 
-- **The rationale lives in a memory file outside the repo:** before flagging, grep the user's memory directory for the entry's subject:
+- **The rationale lives in a memory file:** before flagging, grep the in-repo memory directory for the entry's subject:
   ```bash
-  grep -rli "<entry subject>" ~/.claude/projects/<slug>/memory/
+  grep -rli "<entry subject>" memory/
   ```
   If a memory file documents the reason, the BACKLOG entry just needs a reference to it — not new reasoning.
 

@@ -47,20 +47,25 @@ exit it by verifying yourself.
 
 ## Step 0 — Preflight (don't skip)
 
-1. **Bug-fix? Read the regression log first.** If this is fixing reported
-   behaviour, read
-   `~/.claude/projects/C--Users-mailt-Documents-alate/memory/project_regression_log.md`
-   end to end before writing code (per the repo's bug-fix pre-flight rule). Patch
-   from a matching entry rather than re-discovering.
-2. **Branch placement.** If the change doesn't belong on the current branch, cut
-   `feat/<slug>` or `fix/<slug>` off `master` automatically — don't ask (repo
-   rule). Keep code commits separate from doc commits.
-3. **Respect frozen scope.** If the user has said "don't touch X" (e.g. History /
-   Profile are frozen), do not modify those screens — even incidentally.
-4. **Read before editing.** Know the screen's current structure, its theme tokens
-   (`src/constants/theme.ts` — spacing, typography, whiteAlpha, colors), and the
-   anti-patterns (no hardcoded colours/fonts/alphas; no fixed heights in
-   reflowable layouts; WCAG AA). The design vision lives in the project memory.
+1. **Read the platform standards.** Before any code, read the shared guardrails
+   that apply platform-wide:
+   `${CLAUDE_PLUGIN_ROOT}/standards/anti-patterns.md` (no hardcoded
+   colours/fonts/alphas, no hooks below a conditional return, WCAG 2.1 AA, elastic
+   layouts, end-to-end shipping, …) and
+   `${CLAUDE_PLUGIN_ROOT}/standards/authoritative-claims.md` (cite a source or
+   label a hypothesis).
+2. **Bug-fix? Read the app's regression log first.** If this is fixing reported
+   behaviour, read the app's in-repo `memory/project_regression_log.md` end to end
+   and its domain `memory/project_anti_patterns.md`. Patch from a matching entry
+   rather than re-discovering.
+3. **Branch placement.** If the change doesn't belong on the current branch, cut
+   `feat/<slug>` or `fix/<slug>` off the default branch automatically — don't ask.
+   Keep code commits separate from doc commits.
+4. **Respect frozen scope.** If the user has said "don't touch X", do not modify
+   those screens — even incidentally.
+5. **Read before editing.** Know the screen's current structure and its theme
+   tokens (the app's `constants/theme.ts` — spacing, typography, alphas, colors).
+   The app's design vision lives in its `memory/project_design_vision.md`.
 
 ## Step 1 — Turn the ask into ACCEPTANCE CRITERIA, and clarify real forks
 
@@ -199,8 +204,9 @@ true one-liner:
 - Types: `npx tsc --noEmit`.
 - Publish OTA (preview): `eas update --channel preview --environment preview --message "..." --non-interactive`.
 - Device loop details, adb discovery, fingerprint caveat: **`references/device-loop.md`**.
-- Theme tokens: `mobile/src/constants/theme.ts`. Anti-patterns + design vision:
-  `~/.claude/projects/C--Users-mailt-Documents-alate/memory/`.
+- Theme tokens: the app's `constants/theme.ts`. Shared guardrails:
+  `${CLAUDE_PLUGIN_ROOT}/standards/`. App-specific anti-patterns + design vision:
+  the app's in-repo `memory/`.
 - `/design-system` — after the screen renders (Step 2): catch hardcoded
   values / naming drift before an OTA cycle.
 - `/code-review` — before commit (Step 5.5): correctness bugs + cleanups in the diff.
