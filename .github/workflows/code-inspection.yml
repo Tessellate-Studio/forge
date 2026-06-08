@@ -158,6 +158,7 @@ jobs:
 
       - name: Comment on PR with Results
         if: github.event_name == 'pull_request' && steps.inspect.outputs.score != ''
+        continue-on-error: true   # never fail the gate if the token can't comment (advisory)
         uses: actions/github-script@v7
         with:
           script: |
