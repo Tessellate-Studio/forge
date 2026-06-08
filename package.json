@@ -35,7 +35,7 @@
     "validate": "node cli/bp-validate.js",
     "init": "node cli/bp-init.js",
     "docs": "node cli/bp-docs.js",
-    "prepare": "husky install",
+    "prepare": "husky install || true",
     "pre-commit": "lint-staged"
   },
   "keywords": [
