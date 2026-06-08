@@ -8,6 +8,17 @@ before building. App-specific anti-patterns stay in each app's own
 Stable titles, not integers (integers collide across apps). The parenthetical is
 the original alate AP number for traceability.
 
+## Narrative here, thresholds + enforcement in code-standards (single source of truth)
+
+This doc is the **human/agent-facing narrative** — *why* each rule exists and how
+to apply it. The **enforceable numbers** (test-coverage %, WCAG level,
+secret/vuln/perf checks) live once in **code-standards** — its
+`templates/profiles/*.bp-config.yml` and `lib/standards/` — and are enforced
+deterministically in CI by `standards inspect` (the `code-inspection.yml` gate).
+To change a threshold, change it in code-standards (one place); don't restate
+numbers here, so the two can't drift. Rules marked **[enforced]** below have a
+deterministic check; the rest are agent-judgment.
+
 ---
 
 ## TDD-first for data-flow changes (was #7)

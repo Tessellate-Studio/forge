@@ -39,16 +39,24 @@ sibling of the other app repos.
 
 ## Step 2 — Wire the shared platform
 
-1. **Libs as pinned deps** — add at their real current package names:
-   `@tessellate-studio/rubric-sdk`, the code-standards SDK (`bp` CLI), and
-   `@…/guinea-pig` for test utilities/E2E. (One scope once unification lands; until
-   then use each package's actual published name — don't guess variants.)
+1. **Libs as pinned deps** — `@tessellate-studio/rubric-sdk` and `guinea-pig` for
+   test utilities/E2E (use each package's actual published name — don't guess
+   variants). The **code-standards** CLI is installed from GitHub, not npm:
+   `npm install -g github:Tessellate-Studio/code-standards` (gives the `standards`
+   command).
 2. **forge plugin** — write a committed `.claude/settings.json` with
    `extraKnownMarketplaces` (`Tessellate-Studio/forge`) + `enabledPlugins`
    (`forge@tessellate-forge`) **pinned to a version/SHA**, so a fresh clone of this
    repo reproduces the exact shared skills.
-3. **Scaffold** via the trimmed `bp init` for the chosen stack (screens, error
-   boundary, theme tokens, test setup). If RN+Expo, wire the mobile defaults.
+3. **Scaffold** via `standards init --template <type>` (`react-native`,
+   `node-service`, `web`, `api`, `library`) — drops the matching `.bp-config.yml`
+   profile, screens, error boundary, theme tokens, test setup. If RN+Expo, wire
+   the mobile defaults.
+4. **CI inspection gate (advisory)** — add `.github/workflows/code-inspection.yml`
+   that calls
+   `Tessellate-Studio/code-standards/.github/workflows/code-inspection.yml@main`
+   with `fail_on_error: false` on `pull_request`. Non-blocking until the config is
+   proven on the app; the app keeps its own tsc+test gate (don't double-run those).
 
 ## Step 3 — Seed the docs (essentials only)
 
