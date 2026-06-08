@@ -112,8 +112,13 @@ jobs:
           cat inspection-output.txt
 
           if [ "${{ inputs.generate_report }}" = "true" ] && [ -f inspection-report.json ]; then
-            SCORE=$(jq -r '.score // 0' inspection-report.json)
-            PASSED=$(jq -r '.passed // false' inspection-report.json)
+            # Default score to 100 (clean) and passed to true when the SDK
+            # omits those fields — absence means "nothing to score / nothing
+            # to fail on", not "0/100 failed". The previous defaults of 0
+            # and false produced the misleading "Overall Score 0/100" on
+            # clean runs.
+            SCORE=$(jq -r '.score // 100' inspection-report.json)
+            PASSED=$(jq -r '.passed // true' inspection-report.json)
             ISSUES_COUNT=$(jq -r '.issues | length' inspection-report.json)
             FIXES_COUNT=$(jq -r '.fixed | length' inspection-report.json)
 
@@ -134,11 +139,23 @@ jobs:
               jq -r '.issues | group_by(.type) | .[] | "\(length) \(.[0].type) issues"' inspection-report.json >> $GITHUB_STEP_SUMMARY
             fi
           else
-            PASSED=$([ $INSPECT_EXIT_CODE -eq 0 ] && echo "true" || echo "false")
-            echo "passed=$PASSED" >> $GITHUB_OUTPUT
-            echo "score=0" >> $GITHUB_OUTPUT
-            echo "issues_count=0" >> $GITHUB_OUTPUT
-            echo "fixes_count=0" >> $GITHUB_OUTPUT
+            # No report file. Two cases:
+            #   1. SDK exited 0 → it ran fine but had nothing to report
+            #      (no rules matched, no findings). Treat as a clean pass.
+            #   2. SDK exited non-zero → the inspection itself crashed.
+            #      Leave `score` empty so the PR-comment step's `if:` guard
+            #      short-circuits and we don't post "0/100 / 0 issues".
+            if [ "$INSPECT_EXIT_CODE" -eq 0 ]; then
+              echo "passed=true" >> $GITHUB_OUTPUT
+              echo "score=100" >> $GITHUB_OUTPUT
+              echo "issues_count=0" >> $GITHUB_OUTPUT
+              echo "fixes_count=0" >> $GITHUB_OUTPUT
+            else
+              echo "passed=false" >> $GITHUB_OUTPUT
+              echo "score=" >> $GITHUB_OUTPUT
+              echo "issues_count=0" >> $GITHUB_OUTPUT
+              echo "fixes_count=0" >> $GITHUB_OUTPUT
+            fi
           fi
 
           if [ "${{ inputs.fail_on_error }}" = "true" ] && [ "$INSPECT_EXIT_CODE" -ne 0 ]; then
@@ -157,7 +174,17 @@ jobs:
           retention-days: 7
 
       - name: Comment on PR with Results
-        if: github.event_name == 'pull_request' && steps.inspect.outputs.score != ''
+        # Skip the comment when there is nothing useful to say:
+        #   - empty score → SDK crashed; the workflow status already
+        #     surfaces that, no need for a misleading "0/100" comment.
+        #   - issues_count == 0 AND fixes_count == 0 → clean run; stay
+        #     silent. Spamming "0 issues found" on every PR adds noise
+        #     without information.
+        if: |
+          github.event_name == 'pull_request' &&
+          steps.inspect.outputs.score != '' &&
+          (steps.inspect.outputs.issues_count != '0' ||
+           steps.inspect.outputs.fixes_count != '0')
         continue-on-error: true   # never fail the gate if the token can't comment (advisory)
         uses: actions/github-script@v7
         with:
@@ -166,7 +193,16 @@ jobs:
             const passed = '${{ steps.inspect.outputs.passed }}' === 'true';
             const issuesCount = '${{ steps.inspect.outputs.issues_count }}';
             const fixesCount = '${{ steps.inspect.outputs.fixes_count }}';
-            const status = passed ? '✅ PASSED' : '⚠️ ISSUES FOUND';
+            // 3-way status. Previously `passed ? '✅ PASSED' : '⚠️ ISSUES FOUND'`
+            // would say "ISSUES FOUND" even when issuesCount === 0, which
+            // is internally contradictory. Now: explicitly distinguish
+            // "clean", "has findings", and "SDK error".
+            const status =
+              passed && Number(issuesCount) === 0
+                ? '✅ PASSED'
+                : Number(issuesCount) > 0
+                  ? '⚠️ ISSUES FOUND'
+                  : '⚠️ INSPECTION ERROR';
             const scoreColor = score >= 80 ? '🟢' : score >= 60 ? '🟡' : '🔴';
             const comment = `## ${scoreColor} Code Inspection Results
 
