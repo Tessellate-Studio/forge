@@ -1,0 +1,207 @@
+---
+name: build-feature
+description: >-
+  Implement and VERIFY a UI feature or change in the alate React Native (Expo)
+  app end-to-end on a real device, iterating autonomously until the user's ask
+  is objectively met. Use this whenever the user asks to build, change, fix, or
+  redesign a screen/component or its layout, spacing, typography, colours, or
+  copy — e.g. "fix the home screen spacing", "the nav bar is too loud",
+  "redesign the empty state", "the gap is still there", "make the verse bigger",
+  "this doesn't look right on my phone". Trigger even when they don't say
+  "feature" or "skill": any visual/UI change to alate that should be confirmed
+  on-device belongs here. The whole point is to STOP making the user screenshot
+  the same defect repeatedly — this skill measures the result against explicit
+  acceptance criteria from a device screenshot and keeps iterating until it
+  passes.
+---
+
+# Build a feature in alate — implement, then verify on-device until it's actually right
+
+## Why this skill exists
+
+The expensive failure mode when building UI is declaring "done" on a change you
+*believe* works but haven't actually looked at — so the user has to run the app,
+spot the defect, screenshot it, and prompt you again. That round-trip is pure
+waste, and it erodes trust. The whole job of this skill is to flip that: **you**
+look at the rendered result on the real device, **you** measure it against what
+the user asked for, and **you** keep iterating until it objectively passes —
+before you hand it back.
+
+A UI ask is not met when the code compiles and tests pass. It's met when the
+pixels on the device match the user's intent. Those are different bars, and this
+skill holds you to the second one.
+
+## The loop in one picture
+
+```
+clarify ask → acceptance criteria → TDD + implement → tsc + jest green
+   → publish OTA → apply on device → screenshot → MEASURE vs criteria
+       ├─ all criteria pass → commit → report (with the screenshot)
+       └─ any fail → adjust → republish → re-screenshot   (repeat, autonomously)
+```
+
+You own the bottom branch. Don't exit the loop by asking the user to check —
+exit it by verifying yourself.
+
+---
+
+## Step 0 — Preflight (don't skip)
+
+1. **Bug-fix? Read the regression log first.** If this is fixing reported
+   behaviour, read
+   `~/.claude/projects/C--Users-mailt-Documents-alate/memory/project_regression_log.md`
+   end to end before writing code (per the repo's bug-fix pre-flight rule). Patch
+   from a matching entry rather than re-discovering.
+2. **Branch placement.** If the change doesn't belong on the current branch, cut
+   `feat/<slug>` or `fix/<slug>` off `master` automatically — don't ask (repo
+   rule). Keep code commits separate from doc commits.
+3. **Respect frozen scope.** If the user has said "don't touch X" (e.g. History /
+   Profile are frozen), do not modify those screens — even incidentally.
+4. **Read before editing.** Know the screen's current structure, its theme tokens
+   (`src/constants/theme.ts` — spacing, typography, whiteAlpha, colors), and the
+   anti-patterns (no hardcoded colours/fonts/alphas; no fixed heights in
+   reflowable layouts; WCAG AA). The design vision lives in the project memory.
+
+## Step 1 — Turn the ask into ACCEPTANCE CRITERIA, and clarify real forks
+
+Before building, write down 2–5 **objective, checkable** criteria — the things
+you'll measure on the screenshot to decide pass/fail. Vague goals ("looks
+balanced") cause the endless-iteration trap; concrete ones end it. Express them
+as positions/proportions you can eyeball from a screenshot:
+
+- "Wordmark sits within the top ~15% of the screen."
+- "No empty vertical band taller than ~10% between the button and the visual."
+- "Primary action is the highest-contrast element below the hero."
+- "Content fills to ≥~80% of the screen height; bottom margin ≤ ~15%."
+- "Tab labels legible (white text on the pill, no wash-out)."
+
+State these back to the user in one line so they can correct your reading of
+their intent early — that's far cheaper than discovering the misread after a
+build.
+
+**Clarify genuinely ambiguous design decisions up front** with AskUserQuestion —
+the forks where two reasonable answers diverge the whole result (e.g. "button
+high vs button anchored low", "lavender vs deep-purple nav"). Give 2–4 concrete
+options with short ASCII/preview sketches. Don't ask about things with an obvious
+default or that you can verify yourself — pick those and move on. One good
+question now beats three correction rounds later.
+
+If you're in plan mode, this is where the plan + AskUserQuestion belong; exit
+plan mode only once the approach is settled.
+
+## Step 2 — TDD, implement, keep the suite green
+
+Work in `mobile/`.
+
+1. **Write/extend the test first** (`src/__tests__/<Screen>.test.tsx` or
+   `screenSmoke.test.tsx`). Assert the new behaviour — presence/absence of an
+   element by `testID`, gating by state, copy. Watch it fail for the right
+   reason. **Never remove or rename an existing `testID`** without updating
+   guinea-pig's contract — they're the E2E contract.
+2. **Implement** using theme tokens, not literals. For layout that must adapt to
+   screen size, prefer proportional flex over fixed pixels (it's the whole point
+   of flex). For empty/variable states, decide where leftover space goes
+   deliberately — a single flex region, not eyeballed margins.
+   - *Recommended once the screen renders:* run `/design-system` to catch
+     hardcoded colours/fonts/alphas and naming drift against the design system
+     before you burn an OTA cycle — far cheaper to fix pre-device. Reinforces the
+     "theme tokens, not literals" rule above. Skip with a one-line note for a
+     trivial copy-only change.
+3. **Typecheck + test**: `npx tsc --noEmit` then `npx jest --no-coverage`. Both
+   green before you publish — a broken bundle wastes a whole device cycle.
+
+## Step 3 — Verify on the real device (the part people skip)
+
+alate ships JS via **EAS Update (OTA)**. The test device runs a **preview** build
+on the **`preview`** channel — it does NOT connect to Metro/fast-refresh, so the
+only way your change reaches it is an OTA on its channel. Read
+`references/device-loop.md` for the exact commands, the runtime-fingerprint
+caveat, and recovery steps. The essentials:
+
+1. **Publish** to the channel the device actually reads:
+   `eas update --channel preview --environment preview --message "..." --non-interactive`
+   (run `npx tsc --noEmit && npx jest --no-coverage` first — the script
+   `npm run ota:preflight` bundles those gates).
+2. **Apply on device** — expo-updates downloads in the background and swaps in on
+   the *next* launch, so it's a **double-relaunch**: force-stop → launch (wait
+   ~22s for the download) → force-stop → launch (now running the new bundle).
+3. **Screenshot** with `adb exec-out screencap -p` and **Read** the PNG. Confirm
+   the running update is yours (logcat shows the `branchName: preview` +
+   updateGroup you just published) if anything looks stale.
+
+If the device shows the populated state when you need the empty state (or vice
+versa), that's data-dependent — note it and don't wipe the user's data to force a
+state without asking.
+
+## Step 4 — Self-verify against the criteria, and iterate AUTONOMOUSLY
+
+This is the heart of the skill. With the screenshot open:
+
+1. **Measure each acceptance criterion.** Estimate element positions as a % of
+   screen height/width from the image (e.g. "wordmark top edge ≈ 10%", "button
+   centre ≈ 52%", "gap between button and visual ≈ 21%"). Compare to the
+   criteria. Write the verdict per criterion (pass/fail) — actual numbers, not
+   "looks fine".
+2. **If any criterion fails, fix it and run the loop again** — adjust the code,
+   re-run tsc+jest, republish, re-apply, re-screenshot, re-measure. Keep going
+   **without handing back to the user**. The user should not be the one to notice
+   the gap is still there; you should, because you measured it.
+3. **Watch for repeating the same miss.** If two iterations don't move a
+   criterion, your model of the cause is wrong — step back and diagnose from the
+   actual layout (e.g. "the flex spacer is *between* the two elements, so it
+   *creates* the gap"), don't nudge the same knob again.
+4. **Only report done when every criterion passes**, and include the final
+   screenshot + the measured verdicts so the user can confirm against their own
+   eyes. "Done, verified on device: wordmark at ~10%, button at ~50%, no band
+   >8%, content fills ~85%" — that's the shape of a trustworthy report.
+
+## Step 5 — Be honest about structural limits
+
+Some asks can't be satisfied by tweaking spacing because the content is the
+constraint (classic: "fill the screen, no gaps" when there are only two small
+elements — flex can distribute space but can't fill space that has no content).
+When you hit a wall like this, **say so plainly and present options** (grow the
+content, add content, anchor to an edge, accept intentional negative space)
+rather than guessing repeatedly. One honest "here's why, here are the choices"
+beats five silent failed nudges.
+
+## Step 5.5 — Polish the diff before committing (recommended)
+
+Once every acceptance criterion passes on-device, run a quality pass on the diff
+before you commit — when the diff is non-trivial; skip with a one-line note for a
+true one-liner:
+
+1. `/code-review` — surfaces correctness bugs plus reuse/simplification/efficiency
+   cleanups in the current diff. Triage and fix what's real.
+2. `/simplify` — applies reuse/efficiency/altitude cleanups (quality only, no bug
+   hunt). Re-run `npx tsc --noEmit && npx jest --no-coverage` after it touches
+   code, since it edits the working tree.
+
+## Step 6 — Commit and wrap
+
+1. Commit code and docs separately, on the feature branch, with a message that
+   says what changed and why (end with the repo's Co-Authored-By trailer). Only
+   commit/push when the change is verified and the user is happy — don't push to
+   `master` directly.
+2. If the change has reached the user via OTA, remember the
+   pre-production-verification discipline (BACKLOG P1): test on dev/preview, never
+   push UI straight to `production` as the way to find out it's wrong.
+3. Report with the **bottom line first**, the measured verdicts, the screenshot,
+   and only the sections that have real content (per the repo's communication
+   style). If you added a regression-worthy fix, log it.
+
+---
+
+## Quick reference
+
+- Run app commands from `mobile/`.
+- Tests: `npx jest --no-coverage` (must stay green; ~520+ tests).
+- Types: `npx tsc --noEmit`.
+- Publish OTA (preview): `eas update --channel preview --environment preview --message "..." --non-interactive`.
+- Device loop details, adb discovery, fingerprint caveat: **`references/device-loop.md`**.
+- Theme tokens: `mobile/src/constants/theme.ts`. Anti-patterns + design vision:
+  `~/.claude/projects/C--Users-mailt-Documents-alate/memory/`.
+- `/design-system` — after the screen renders (Step 2): catch hardcoded
+  values / naming drift before an OTA cycle.
+- `/code-review` — before commit (Step 5.5): correctness bugs + cleanups in the diff.
+- `/simplify` — before commit (Step 5.5): apply reuse/efficiency/altitude cleanups.
