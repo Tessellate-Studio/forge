@@ -1,0 +1,43 @@
+# Code Standards config — Node service / API profile
+# Dropped onto a new backend by `standards init --template node-service`.
+version: "1.0.0"
+
+project:
+  type: "node-service"
+
+standards:
+  code:
+    enforceComments: true
+    maxFunctionLines: 50
+    testCoverage: 80
+
+  security:                   # highest priority for a server
+    scanSecrets: true
+    vulnerabilityScan: true
+    dependencyCheck: true
+
+  performance:
+    apiTimeout: "5s"          # server-relevant; no browser bundle/load metrics
+    unusedDependencies: true
+    nestedLoops: true
+
+automation:
+  github:
+    autoPR: false
+    autoMerge: false
+  hooks:
+    preCommit: true
+    commitMsg: true
+
+customRules:
+  naming:
+    functions: "camelCase"
+    variables: "camelCase"
+    constants: "UPPER_CASE"
+  project:
+    requireReadme: true
+    requireLicense: true
+
+reporting:
+  format: "json"
+  includeMetrics: true

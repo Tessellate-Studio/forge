@@ -4,12 +4,8 @@
   "description": "AI-powered code directives system for building applications with automated best practices",
   "main": "lib/index.js",
   "bin": {
-    "bp": "cli/index.js",
-    "bp-init": "cli/bp-init.js",
-    "bp-validate": "cli/bp-validate.js",
-    "bp-audit": "cli/bp-audit.js",
-    "bp-docs": "cli/bp-docs.js",
-    "bp-git": "cli/bp-git.js"
+    "standards": "cli/index.js",
+    "bp": "cli/index.js"
   },
   "files": [
     "lib/",
@@ -82,12 +78,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ramsaptami/code-directives.git"
+    "url": "https://github.com/Tessellate-Studio/code-standards.git"
   },
   "bugs": {
-    "url": "https://github.com/ramsaptami/code-directives/issues"
+    "url": "https://github.com/Tessellate-Studio/code-standards/issues"
   },
-  "homepage": "https://github.com/ramsaptami/code-directives#readme",
+  "homepage": "https://github.com/Tessellate-Studio/code-standards#readme",
   "jest": {
     "testEnvironment": "node",
     "collectCoverageFrom": [

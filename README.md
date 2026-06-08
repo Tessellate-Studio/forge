@@ -1,18 +1,20 @@
-# Code Directives SDK
+# Code Standards SDK
 
-> **🚨 REPOSITORY DIRECTIVE: This package lives at `git@github.com:ramsaptami/code-directives.git`**  
-> **All commits and changes MUST be made to the dedicated repository, not to tessellate!**
+> **Repository:** this package lives at `git@github.com:Tessellate-Studio/code-standards.git`
+> (formerly `ramsaptami/code-directives` — old paths redirect).
 
 Automated best practices enforcement for development projects with standardized workflows across all team repositories.
 
 ## Installation
 
 ```bash
-# Global installation
-npm install -g @ramsaptami/code-directives
+# Install the CLI straight from GitHub (no npm publish needed)
+npm install -g github:Tessellate-Studio/code-standards
 
-# Project-level installation
-npm install --save-dev @ramsaptami/code-directives
+# Then:
+standards init my-app --template react-native
+standards inspect --fix
+standards audit --output report.json
 ```
 
 ## Clean Architecture & Dependency Model
@@ -216,14 +218,24 @@ For detailed workflow examples and advanced scenarios, see [../../docs/PR_WORKFL
 ## Quick Start
 
 ```bash
-# Initialize a new project
-bp init my-project --template web-app
+# Initialize a new project (picks an app-type profile)
+standards init my-project --template react-native
 
-# Validate existing project
-bp validate --fix
+# Inspect code: secrets, vulnerable deps, performance, code + a11y standards
+standards inspect --fix
 
 # Generate audit report
-bp audit --output report.json
+standards audit --output report.json
+```
+
+To run the inspection as a CI gate, call the reusable workflow from your repo:
+
+```yaml
+jobs:
+  inspect:
+    uses: Tessellate-Studio/code-standards/.github/workflows/code-inspection.yml@main
+    with:
+      fail_on_error: false   # advisory; flip to true once tuned
 ```
 
 ## Configuration

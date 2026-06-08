@@ -1,8 +1,9 @@
-# Code Directives SDK Configuration
+# Code Standards SDK — this repo's own config (it is itself a library).
+# App profiles live in templates/profiles/{react-native,node-service,web}.bp-config.yml
 version: "1.0.0"
 
 project:
-  name: "code-directives"
+  name: "code-standards"
   type: "library"
   description: "AI-powered code directives system for building applications with automated best practices"
 
