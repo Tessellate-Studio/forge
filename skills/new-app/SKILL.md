@@ -57,6 +57,9 @@ sibling of the other app repos.
    `Tessellate-Studio/code-standards/.github/workflows/code-inspection.yml@main`
    with `fail_on_error: false` on `pull_request`. Non-blocking until the config is
    proven on the app; the app keeps its own tsc+test gate (don't double-run those).
+5. **Ignore worktree dirs** — the app's `.gitignore` must exclude `.worktrees/`
+   and `.claude/worktrees/` (per the concurrent-session isolation rule: tasks run
+   in throwaway worktrees that must never be committed).
 
 ## Step 3 — Seed the docs (essentials only)
 

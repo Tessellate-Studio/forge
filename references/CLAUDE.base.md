@@ -60,7 +60,8 @@ The cross-app build guardrails live in `forge/standards/anti-patterns.md` (TDD-
 first for data-flow, no hardcoded colours/fonts/alphas, no hooks below a
 conditional return, custom-font family names, comment-the-why, diagnose-from-
 source, WCAG 2.1 AA, CI secret hygiene, authority-not-assumption, end-to-end
-shipping, elastic layouts). App-specific anti-patterns live in
+shipping, elastic layouts, concurrent-session isolation). App-specific
+anti-patterns live in
 `memory/project_anti_patterns.md`. Read both before a feature that touches their
 areas.
 
@@ -93,6 +94,28 @@ If a fix already exists as a commit on an unmerged/orphan branch and the current
 task needs it, port it to a fresh branch off the default branch without asking.
 Verify the fix's SHA is reachable from the default branch before marking any
 log/BACKLOG entry shipped.
+
+## Concurrent sessions — isolate the checkout, trust SHAs not HEAD
+
+Several agents (and you) may drive one repo at once. In a shared working copy,
+`HEAD` moves between commands — a commit lands on a stranger's branch, a branch
+forks off a stray commit, a push carries an extra commit.
+
+- **Hand each task to a worktree-isolated session** — check the "new worktree"
+  box on handoff, or launch subagents with `isolation: "worktree"`. That session
+  gets its own working dir + HEAD; the contention is gone. Don't do committable
+  work in the shared main checkout when other sessions may be active.
+- **A fresh worktree has no `node_modules`** — run `npm ci` (each package) before
+  committing so the local gate (tsc / tests) can run; the pre-commit hook says so
+  if they're missing. Don't junction deps into a harness-managed worktree — its
+  automatic cleanup can follow the junction and delete the main checkout's deps.
+- **SHA-explicit git — never trust "current branch".** Verify `git rev-parse
+  --abbrev-ref HEAD` is the branch you intend before the first edit and before
+  every commit/push; if it drifted, stop and surface. Push by refspec
+  (`git push origin <sha>:refs/heads/<branch>`); prefer `git branch -f` /
+  `git branch -m` over checkout-then-act.
+- **Subagents:** the `Edit` tool resolves ABSOLUTE paths to the MAIN checkout, not
+  an isolated worktree — use worktree-relative paths inside isolated subagents.
 
 ## External-tool actions — log DECIDED steps in `docs/user-actions-tracker.md`
 
