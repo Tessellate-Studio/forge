@@ -3,7 +3,7 @@
 The cross-app build guardrails every Tessellate app inherits via the `forge`
 plugin. Each rule is one crisp directive + why + a one-line precedent — read
 before building. App-specific anti-patterns stay in each app's own
-`memory/project_anti_patterns.md`; these are the shared eleven.
+`memory/project_anti_patterns.md`; these are the shared twelve.
 
 Stable titles, not integers (integers collide across apps). The parenthetical is
 the original alate AP number for traceability.
@@ -135,6 +135,23 @@ module-load `Dimensions.get`); don't cap font scaling — accept the larger text
 breaks on a real device. a11y sibling of the WCAG rule. *Precedent: currency
 chips clipped on the Fold cover at large font; dock animated off-screen on tablet
 rotation from a stale dimensions snapshot.*
+
+## Isolate concurrent sessions; don't share one checkout (was #24)
+
+When several agents can touch one working copy, hand each task to a
+worktree-isolated session (the "new worktree" handoff box / `isolation:
+"worktree"`) and stay SHA-explicit — verify `HEAD` before every commit/push, push
+by refspec, prefer `git branch -f/-m` over checkout-then-act. A fresh worktree has
+no `node_modules`: `npm ci` before committing so the local gate runs; never
+junction deps into a harness-managed worktree (its cleanup can delete the main
+checkout's deps).
+**Why:** in a shared checkout `HEAD` moves under you between commands. *Precedent:
+one session landed a commit on a stranger's PR branch, forked a branch off a stray
+commit, and pushed an extra commit — three corruptions caught only by re-reading
+reflog.* Operational sibling of authority-not-assumption (that's the honesty half —
+verify a SHA is on the default branch before claiming shipped; this is the
+don't-corrupt-the-op half). **[enforced]** `.worktrees/` ignore + the pre-commit
+deps-bootstrap guard live in code-standards.
 
 ---
 
