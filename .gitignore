@@ -1,3 +1,8 @@
+# Claude Code worktrees — throwaway per-task isolation dirs, never committed
+# (concurrent-session isolation rule)
+.worktrees/
+.claude/worktrees/
+
 # Dependencies
 node_modules/
 npm-debug.log*
