@@ -42,9 +42,18 @@ Package: `com.tessellate.alate`.
 ```bash
 cd /c/Users/mailt/Documents/alate/mobile
 npx tsc --noEmit && npx jest --no-coverage     # gate — never publish a red build
-eas update --channel preview --environment preview \
+APP_VARIANT=preview eas update --channel preview --environment preview \
   --message "<what changed>" --non-interactive
 ```
+
+**`APP_VARIANT=preview` is MANDATORY when the device runs the "Alate Preview"
+variant APK** (package `com.tessellate.alate.preview`). app.config.js derives
+native config from that env var, and the runtime fingerprint hashes it — an
+update published WITHOUT it computes the production fingerprint, the device
+silently ignores it, and the fixes "don't arrive" with zero errors anywhere.
+Incident: 2026-07-03, three UI fixes published fingerprint-mismatched; verified
+by running `npx expo-updates fingerprint:generate --platform android` with and
+without the var (`8f3b…` vs `767e…`).
 
 Note the printed **Android Runtime version** + **Update group ID** — they let you
 confirm on-device that the running bundle is the one you just shipped. (The
