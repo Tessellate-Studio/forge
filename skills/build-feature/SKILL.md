@@ -195,6 +195,39 @@ true one-liner:
    and only the sections that have real content (per the repo's communication
    style). If you added a regression-worthy fix, log it.
 
+## Step 7 — Closing retro (MANDATORY — answer in the final report, don't skip)
+
+End every feature build by answering these three questions, honestly and
+grounded in evidence from THIS session — not generic hedging. They exist
+because the most expensive failures are the ones the confident final report
+papers over (precedent, 2026-07-03 Mood Layer build: an OAuth flow that was
+unit-tested green on every piece failed on the first real embedded install —
+the least-confident area was known but never said out loud; and the backend
+deploy pipeline had been failing silently for 18 days, which the user had no
+way to know).
+
+1. **What am I least confident about right now?** Name the specific seams that
+   were never exercised for real (integration points, flows verified only by
+   unit tests or mocks, environments never touched). "Nothing" is almost never
+   the honest answer. For each: what would exercise it, and what failure would
+   look like.
+2. **What's the biggest thing the user doesn't realize?** Surface the systemic
+   or situational fact the user can't see from the diff or the demo — a silent
+   pipeline failure, an inert-until-X switch, a dependency chain where failures
+   are indistinguishable, a cost/limit about to be hit. If discovering it needs
+   one cheap check (a workflow-run list, an env listing), RUN the check before
+   answering.
+3. **What would have made this session more efficient?** Concrete, both sides:
+   what the agent should have done differently (e.g. build the smallest
+   end-to-end slice FIRST and verify it against the real external system before
+   stacking chunks on top) and what the user could do differently next time
+   (steps that could have been parallelized, information that arrived late).
+
+Route the answers, don't just state them: an unexercised seam worth
+protecting → regression log or a test; a user-invisible systemic risk → fix it
+or land a tracker/BACKLOG entry; an efficiency lesson that generalizes →
+promote into the relevant skill or standard so the next build inherits it.
+
 ---
 
 ## Quick reference
@@ -211,3 +244,6 @@ true one-liner:
   values / naming drift before an OTA cycle.
 - `/code-review` — before commit (Step 5.5): correctness bugs + cleanups in the diff.
 - `/simplify` — before commit (Step 5.5): apply reuse/efficiency/altitude cleanups.
+- Closing retro (Step 7, mandatory): least-confident seams / what the user
+  can't see / what would've been faster — answered with evidence, then routed
+  (test, tracker entry, or skill update).
