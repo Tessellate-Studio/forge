@@ -66,6 +66,15 @@ exit it by verifying yourself.
 5. **Read before editing.** Know the screen's current structure and its theme
    tokens (the app's `constants/theme.ts` — spacing, typography, alphas, colors).
    The app's design vision lives in its `memory/project_design_vision.md`.
+6. **Greenfield or multi-phase build? Render on a device BEFORE stacking
+   phases.** As soon as the scaffold + theme produce a first screen, put pixels
+   on a real device/emulator — don't build N more phases on top of an unseen
+   base. Unit tests mock every native module, so they cannot catch import-time
+   native crashes, silent font fallbacks, or third-party chrome ignoring theme
+   fonts. Precedent (2026-07-07, The Mood Layer v1): 13 phases built blind on
+   190 green tests; the first real launch red-screened on an IMPORT-time
+   expo-notifications crash in Expo Go, and the entire display typeface had to
+   be swapped after the fact — both visible in minute one on a device.
 
 ## Step 1 — Turn the ask into ACCEPTANCE CRITERIA, and clarify real forks
 
