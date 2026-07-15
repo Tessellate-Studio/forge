@@ -153,6 +153,25 @@ verify a SHA is on the default branch before claiming shipped; this is the
 don't-corrupt-the-op half). **[enforced]** `.worktrees/` ignore + the pre-commit
 deps-bootstrap guard live in code-standards.
 
+## Merge on green by default — don't let PRs sit stale
+
+Open PRs **ready, not draft**, and **merge as soon as CI is green**. A
+green PR left parked for a manual look is the default failure mode: while
+it sits, `master` moves under it, it drifts out of sync, collects
+conflicts, and the work goes cold. Draft is for genuine WIP, not for
+"done but waiting."
+**Carve-outs (hold for a human):** the change is outward-facing or
+hard-to-reverse (a public API, a destructive migration, anything users
+see), it needs review the CI can't give (product/security judgment), or
+the user explicitly asked to hold it. Everything else merges on green.
+**Why:** a stale branch costs a rebase-and-reverify cycle and risks
+shipping from a conflicted tree. *Precedent: a fully-green, fully-tested
+size-finder PR sat as a draft across several hourly check-ins purely
+because no one said "merge" — pure waste, and every commit landing on
+master meanwhile widened the gap it would have to reconcile.* Sibling of
+the concurrent-session rule (that's don't-corrupt-the-op; this is
+don't-let-it-rot).
+
 ---
 
 _Generalized from alate's `project_anti_patterns.md` (the canonical source).

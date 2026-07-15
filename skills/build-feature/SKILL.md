@@ -66,7 +66,19 @@ exit it by verifying yourself.
 5. **Read before editing.** Know the screen's current structure and its theme
    tokens (the app's `constants/theme.ts` — spacing, typography, alphas, colors).
    The app's design vision lives in its `memory/project_design_vision.md`.
-6. **Greenfield or multi-phase build? Render on a device BEFORE stacking
+6. **Verify external dependencies + the smallest shippable slice FIRST.**
+   Before building the full feature, confirm the things that silently sink it:
+   the external env vars/credentials it needs (are `LOOM_API_URL`-shaped secrets
+   actually set?), how many real accounts/stores/devices you can test against,
+   and which flow ships *instantly* vs which needs a release/OTA/deploy. Build
+   and verify that smallest end-to-end slice against the real external system
+   before stacking the rest — it reshapes the phasing (lead with the path that
+   works today) and surfaces the "it no-ops because a var is unset" failures
+   before they cost a full build cycle. *Precedent: a two-phase size-finder
+   built in full before confirming the quiz path shipped instantly while the
+   app-handoff path needed an OTA + a deep-link scheme in the installed binary —
+   knowing that up front would have led with the cheap path.*
+7. **Greenfield or multi-phase build? Render on a device BEFORE stacking
    phases.** As soon as the scaffold + theme produce a first screen, put pixels
    on a real device/emulator — don't build N more phases on top of an unseen
    base. Unit tests mock every native module, so they cannot catch import-time
