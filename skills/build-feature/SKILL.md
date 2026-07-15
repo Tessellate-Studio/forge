@@ -209,7 +209,12 @@ true one-liner:
    says what changed and why (end with the repo's Co-Authored-By trailer). Only
    commit/push when the change is verified and the user is happy — don't push to
    `master` directly.
-2. If the change has reached the user via OTA, remember the
+2. **Open the PR ready (not draft) and merge it on green** — don't park a
+   verified, green PR waiting for a manual look; a stale branch drifts out of
+   sync and collects conflicts. Hold only for the carve-outs (outward-facing /
+   hard-to-reverse, or an explicit user hold). Full rule:
+   `${CLAUDE_PLUGIN_ROOT}/standards/anti-patterns.md` → "Merge on green by default".
+3. If the change has reached the user via OTA, remember the
    pre-production-verification discipline (BACKLOG P1): test on dev/preview, never
    push UI straight to `production` as the way to find out it's wrong.
 3. Report with the **bottom line first**, the measured verdicts, the screenshot,
