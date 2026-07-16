@@ -45,9 +45,10 @@ sibling of the other app repos.
    `npm install -g github:Tessellate-Studio/code-standards` (gives the `standards`
    command).
 2. **forge plugin** — write a committed `.claude/settings.json` with
-   `extraKnownMarketplaces` (`Tessellate-Studio/forge`) + `enabledPlugins`
-   (`forge@tessellate-forge`) **pinned to a version/SHA**, so a fresh clone of this
-   repo reproduces the exact shared skills.
+   `extraKnownMarketplaces` (`Tessellate-Studio/forge`, **`"autoUpdate": true`**)
+   + `enabledPlugins` (`forge@tessellate-forge`), so every session starts on
+   the latest platform skills and standards (platform decision 2026-07-16 — no
+   manual version pins or bumps).
 3. **Scaffold** via `standards init --template <type>` (`react-native`,
    `node-service`, `web`, `api`, `library`) — drops the matching `.bp-config.yml`
    profile, screens, error boundary, theme tokens, test setup. If RN+Expo, wire
