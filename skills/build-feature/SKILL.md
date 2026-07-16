@@ -66,12 +66,20 @@ exit it by verifying yourself.
 5. **Read before editing.** Know the screen's current structure and its theme
    tokens (the app's `constants/theme.ts` — spacing, typography, alphas, colors).
    The app's design vision lives in its `memory/project_design_vision.md`.
-6. **Verify external dependencies + the smallest shippable slice FIRST.**
-   Before building the full feature, confirm the things that silently sink it:
-   the external env vars/credentials it needs (are `LOOM_API_URL`-shaped secrets
-   actually set?), how many real accounts/stores/devices you can test against,
-   and which flow ships *instantly* vs which needs a release/OTA/deploy. Build
-   and verify that smallest end-to-end slice against the real external system
+6. **Map the integrations, then verify the smallest shippable slice FIRST.**
+   Before building the full feature, write a 5-line **integration map** — the
+   things that silently sink a build when discovered late:
+   - **Endpoints** it calls or adds (which repo owns each?)
+   - **DB tables/fields** it reads or writes (check the app's data-ownership
+     contract before adding any column)
+   - **Env vars / secrets** it needs (are `LOOM_API_URL`-shaped secrets
+     actually set, locally AND in CI/deploy?)
+   - **Other repos** whose code or contract this touches (shared types, testID
+     contracts, composed endpoints)
+   - **Breaking changes** to anything an existing consumer reads
+   Then confirm how many real accounts/stores/devices you can test against, and
+   which flow ships *instantly* vs which needs a release/OTA/deploy. Build and
+   verify that smallest end-to-end slice against the real external system
    before stacking the rest — it reshapes the phasing (lead with the path that
    works today) and surfaces the "it no-ops because a var is unset" failures
    before they cost a full build cycle. *Precedent: a two-phase size-finder
@@ -191,17 +199,23 @@ content, add content, anchor to an edge, accept intentional negative space)
 rather than guessing repeatedly. One honest "here's why, here are the choices"
 beats five silent failed nudges.
 
-## Step 5.5 — Polish the diff before committing (recommended)
+## Step 5.5 — Polish the diff before committing (quality pass)
 
 Once every acceptance criterion passes on-device, run a quality pass on the diff
-before you commit — when the diff is non-trivial; skip with a one-line note for a
-true one-liner:
+before you commit. **This step is not UI-specific — it applies to every
+non-trivial diff this skill or any other work produces (backend, data-flow,
+tooling included);** skip with a one-line note for a true one-liner:
 
 1. `/code-review` — surfaces correctness bugs plus reuse/simplification/efficiency
    cleanups in the current diff. Triage and fix what's real.
 2. `/simplify` — applies reuse/efficiency/altitude cleanups (quality only, no bug
    hunt). Re-run `npx tsc --noEmit && npx jest --no-coverage` after it touches
    code, since it edits the working tree.
+3. Commit the cleanups separately (`chore: simplify <scope>`) — don't fold them
+   into the feature/fix commit.
+
+Full platform rule: `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Quality
+pass before commit".
 
 ## Step 6 — Commit and wrap
 
@@ -214,10 +228,17 @@ true one-liner:
    sync and collects conflicts. Hold only for the carve-outs (outward-facing /
    hard-to-reverse, or an explicit user hold). Full rule:
    `${CLAUDE_PLUGIN_ROOT}/standards/anti-patterns.md` → "Merge on green by default".
-3. If the change has reached the user via OTA, remember the
+3. **Update the source doc in the SAME PR.** If this feature/fix originated
+   from a tracked item — a BACKLOG.md entry, a regression-log row, a RELEASE
+   checklist line, a tracker TODO — update that entry before reporting done:
+   status (DONE + date) + PR number, and the merged SHA once it lands. A shipped
+   change whose entry still says "open" is how work gets re-done and the user
+   has to re-ask. Full rule: `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` →
+   "Status update on completion".
+4. If the change has reached the user via OTA, remember the
    pre-production-verification discipline (BACKLOG P1): test on dev/preview, never
    push UI straight to `production` as the way to find out it's wrong.
-3. Report with the **bottom line first**, the measured verdicts, the screenshot,
+5. Report with the **bottom line first**, the measured verdicts, the screenshot,
    and only the sections that have real content (per the repo's communication
    style). If you added a regression-worthy fix, log it.
 
@@ -270,6 +291,9 @@ promote into the relevant skill or standard so the next build inherits it.
   values / naming drift before an OTA cycle.
 - `/code-review` — before commit (Step 5.5): correctness bugs + cleanups in the diff.
 - `/simplify` — before commit (Step 5.5): apply reuse/efficiency/altitude cleanups.
+  Step 5.5 applies to ANY non-trivial diff, not just UI.
+- Status update (Step 6): BACKLOG / regression-log / tracker entry that spawned
+  this work gets its status + PR + SHA updated in the same PR.
 - Closing retro (Step 7, mandatory): least-confident seams / what the user
   can't see / what would've been faster — answered with evidence, then routed
   (test, tracker entry, or skill update).
