@@ -50,16 +50,12 @@ jobs:
       - name: Run tests (standards-cli + rubric)
         run: npm test
 
-  # Security scanning
+  # Security scanning. No CodeQL — code scanning requires GitHub Advanced
+  # Security, unavailable on this private repo; npm audit + the standards
+  # security self-inspect (inspect job) cover deps + secrets.
   security:
     name: Security Scan
     runs-on: ubuntu-latest
-    permissions:
-      # A job-level permissions block zeroes everything unlisted — contents:read
-      # must be explicit or checkout fails on this private repo.
-      contents: read
-      actions: read
-      security-events: write
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js 18.x
@@ -70,11 +66,4 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Run npm audit
-        run: npm audit --audit-level=moderate
-        continue-on-error: true
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: javascript
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        run: npm audit --audit-level=high
