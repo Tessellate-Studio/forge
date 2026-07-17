@@ -53,7 +53,13 @@ if command -v node >/dev/null 2>&1; then
   if command -v npm >/dev/null 2>&1; then
     GLOBAL_NODE_MODULES="$(npm root -g 2>/dev/null)"
     if [[ -n "$GLOBAL_NODE_MODULES" ]]; then
-      export NODE_PATH="$GLOBAL_NODE_MODULES${NODE_PATH:+:$NODE_PATH}"
+      # NODE_PATH's entry separator is platform-specific (';' on Windows,
+      # ':' elsewhere). A hardcoded ':' corrupts every entry on Windows.
+      case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*) NP_SEP=';' ;;
+        *) NP_SEP=':' ;;
+      esac
+      export NODE_PATH="$GLOBAL_NODE_MODULES${NODE_PATH:+$NP_SEP$NODE_PATH}"
     fi
   fi
   RESULT="$(node -e '
