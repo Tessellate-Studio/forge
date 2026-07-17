@@ -1,0 +1,325 @@
+# PR Validation Workflow
+# Runs comprehensive validation on all pull requests
+
+name: PR Validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main, master, develop]
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    branches: [main, master, develop]
+
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # Initial PR checks
+  pr-checks:
+    name: PR Initial Checks
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    
+    outputs:
+      has_tests: ${{ steps.check-tests.outputs.has_tests }}
+      has_package_json: ${{ steps.check-structure.outputs.has_package_json }}
+      is_typescript: ${{ steps.check-structure.outputs.is_typescript }}
+      framework: ${{ steps.check-structure.outputs.framework }}
+    
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      
+      - name: Check Project Structure
+        id: check-structure
+        run: |
+          echo "🔍 Analyzing project structure..."
+          
+          # Check for package.json
+          if [ -f "package.json" ]; then
+            echo "has_package_json=true" >> $GITHUB_OUTPUT
+            echo "✅ Found package.json"
+          else
+            echo "has_package_json=false" >> $GITHUB_OUTPUT
+            echo "⚠️ No package.json found"
+          fi
+          
+          # Check for TypeScript
+          if [ -f "tsconfig.json" ] || grep -q '"typescript"' package.json 2>/dev/null; then
+            echo "is_typescript=true" >> $GITHUB_OUTPUT
+            echo "✅ TypeScript project detected"
+          else
+            echo "is_typescript=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Detect framework
+          FRAMEWORK="none"
+          if grep -q '"next"' package.json 2>/dev/null; then
+            FRAMEWORK="nextjs"
+          elif grep -q '"react"' package.json 2>/dev/null; then
+            FRAMEWORK="react"
+          elif grep -q '"vue"' package.json 2>/dev/null; then
+            FRAMEWORK="vue"
+          fi
+          
+          echo "framework=$FRAMEWORK" >> $GITHUB_OUTPUT
+          echo "🚀 Framework detected: $FRAMEWORK"
+      
+      - name: Check for Tests
+        id: check-tests
+        run: |
+          echo "🧪 Checking for test files..."
+          
+          TEST_COUNT=0
+          
+          # Count test files in common locations
+          if [ -d "tests" ]; then
+            TEST_COUNT=$((TEST_COUNT + $(find tests -name "*.test.*" -o -name "*.spec.*" | wc -l)))
+          fi
+          
+          if [ -d "test" ]; then
+            TEST_COUNT=$((TEST_COUNT + $(find test -name "*.test.*" -o -name "*.spec.*" | wc -l)))
+          fi
+          
+          if [ -d "__tests__" ]; then
+            TEST_COUNT=$((TEST_COUNT + $(find __tests__ -name "*.test.*" -o -name "*.spec.*" | wc -l)))
+          fi
+          
+          # Check for test files in src directory
+          if [ -d "src" ]; then
+            TEST_COUNT=$((TEST_COUNT + $(find src -name "*.test.*" -o -name "*.spec.*" | wc -l)))
+          fi
+          
+          if [ $TEST_COUNT -gt 0 ]; then
+            echo "has_tests=true" >> $GITHUB_OUTPUT
+            echo "✅ Found $TEST_COUNT test files"
+          else
+            echo "has_tests=false" >> $GITHUB_OUTPUT
+            echo "⚠️ No test files found"
+          fi
+      
+      - name: PR Size Check
+        run: |
+          echo "📊 Checking PR size..."
+          
+          # Get changed files count
+          CHANGED_FILES=$(gh pr view ${{ github.event.pull_request.number }} --json changedFiles --jq '.changedFiles')
+          
+          if [ "$CHANGED_FILES" -gt 50 ]; then
+            echo "⚠️ Large PR detected: $CHANGED_FILES files changed"
+            gh pr comment ${{ github.event.pull_request.number }} --body "⚠️ **Large PR Warning**
+            
+            This PR modifies $CHANGED_FILES files. Consider breaking it into smaller, focused PRs for easier review.
+            
+            **Benefits of smaller PRs:**
+            - Faster review cycles
+            - Reduced risk of conflicts
+            - Easier to identify issues
+            - Better commit history"
+          else
+            echo "✅ PR size is reasonable: $CHANGED_FILES files changed"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
+  # Run comprehensive tests
+  comprehensive-tests:
+    name: Comprehensive Testing
+    needs: pr-checks
+    uses: ./.github/workflows/comprehensive-test.yml
+    with:
+      node_version: '18'
+      run_coverage: true
+      coverage_threshold: 80
+      fail_on_coverage: false
+      skip_e2e: false
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
+  # Security and quality checks
+  security-quality:
+    name: Security & Quality
+    runs-on: ubuntu-latest
+    needs: pr-checks
+    if: needs.pr-checks.outputs.has_package_json == 'true'
+    
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install Dependencies
+        run: npm ci
+      
+      - name: Run Security Audit
+        id: security
+        run: |
+          echo "🔒 Running security audit..."
+          
+          # Run npm audit with different levels
+          npm audit --audit-level=critical --json > audit-critical.json || true
+          npm audit --audit-level=high --json > audit-high.json || true
+          npm audit --audit-level=moderate --json > audit-moderate.json || true
+          
+          # Count vulnerabilities
+          CRITICAL=$(jq '.vulnerabilities | length' audit-critical.json 2>/dev/null || echo 0)
+          HIGH=$(jq '.vulnerabilities | length' audit-high.json 2>/dev/null || echo 0)
+          MODERATE=$(jq '.vulnerabilities | length' audit-moderate.json 2>/dev/null || echo 0)
+          
+          echo "Critical vulnerabilities: $CRITICAL"
+          echo "High vulnerabilities: $HIGH"
+          echo "Moderate vulnerabilities: $MODERATE"
+          
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "❌ Critical vulnerabilities found!"
+            echo "security_status=failed" >> $GITHUB_OUTPUT
+            exit 1
+          elif [ "$HIGH" -gt 0 ]; then
+            echo "⚠️ High severity vulnerabilities found"
+            echo "security_status=warning" >> $GITHUB_OUTPUT
+          else
+            echo "✅ No critical or high vulnerabilities found"
+            echo "security_status=passed" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Code Quality Scan
+        run: |
+          echo "📋 Running code quality scan..."
+          
+          # Run ESLint if available
+          if npm run lint --silent 2>/dev/null; then
+            echo "✅ Code linting passed"
+          else
+            echo "⚠️ Code linting issues found or no lint script"
+          fi
+          
+          # Run Prettier if available
+          if npm run format:check --silent 2>/dev/null; then
+            echo "✅ Code formatting is consistent"
+          elif npx prettier --check . 2>/dev/null; then
+            echo "✅ Code formatting is consistent"
+          else
+            echo "⚠️ Code formatting issues found"
+          fi
+  
+  # Update PR with test status
+  pr-status-update:
+    name: Update PR Status
+    runs-on: ubuntu-latest
+    needs: [pr-checks, comprehensive-tests, security-quality]
+    if: always()
+    
+    steps:
+      - name: Update PR with Status
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const prNumber = context.issue.number;
+            const hasTests = '${{ needs.pr-checks.outputs.has_tests }}';
+            const testStatus = '${{ needs.comprehensive-tests.outputs.test_status }}';
+            const securityStatus = '${{ needs.security-quality.result }}';
+            const coverage = '${{ needs.comprehensive-tests.outputs.coverage_percentage }}';
+            
+            let statusIcon = '✅';
+            let statusText = 'All Checks Passed';
+            
+            if (testStatus === 'failed' || securityStatus === 'failure') {
+              statusIcon = '❌';
+              statusText = 'Some Checks Failed';
+            } else if (hasTests === 'false') {
+              statusIcon = '⚠️';
+              statusText = 'No Tests Found';
+            }
+            
+            const comment = `## ${statusIcon} PR Validation Status: ${statusText}
+            
+            ### Test Coverage Report
+            ${hasTests === 'true' ? 
+              `- 🧪 **Tests Found:** Yes\n- 📋 **Test Status:** ${testStatus}\n${coverage ? `- 📊 **Coverage:** ${coverage}%\n` : ''}` :
+              '- ⚠️ **Tests Found:** No test files detected'
+            }
+            
+            ### Security & Quality
+            - 🔒 **Security Scan:** ${securityStatus === 'success' ? '✅ Passed' : securityStatus === 'failure' ? '❌ Failed' : '⚠️ Warning'}
+            
+            ### Next Steps
+            ${testStatus === 'passed' && securityStatus === 'success' ? 
+              '✅ **Ready for Review** - All automated checks have passed!' :
+              '⚠️ **Action Required** - Please address the failing checks before review.'
+            }
+            
+            ${hasTests === 'false' ? 
+              '\n📝 **Recommendation:** Consider adding tests to improve code quality and prevent regressions.' :
+              ''
+            }
+            
+            ---
+            *Last updated: ${new Date().toISOString()}*
+            *Automated by PR Validation Workflow*`;
+            
+            // Find existing status comment and update it, or create new one
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber
+            });
+            
+            const existingComment = comments.find(comment => 
+              comment.body.includes('PR Validation Status') && 
+              comment.user.login === 'github-actions[bot]'
+            );
+            
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: comment
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: comment
+              });
+            }
+
+  # Final status check for merge requirements
+  merge-readiness:
+    name: Merge Readiness Check
+    runs-on: ubuntu-latest
+    needs: [comprehensive-tests, security-quality]
+    if: always()
+    
+    outputs:
+      ready_to_merge: ${{ steps.check.outputs.ready }}
+    
+    steps:
+      - name: Evaluate Merge Readiness
+        id: check
+        run: |
+          TEST_STATUS="${{ needs.comprehensive-tests.outputs.test_status }}"
+          SECURITY_STATUS="${{ needs.security-quality.result }}"
+          
+          if [ "$TEST_STATUS" = "passed" ] && [ "$SECURITY_STATUS" = "success" ]; then
+            echo "ready=true" >> $GITHUB_OUTPUT
+            echo "✅ PR is ready for merge"
+          else
+            echo "ready=false" >> $GITHUB_OUTPUT
+            echo "❌ PR is not ready for merge"
+            echo "  Test Status: $TEST_STATUS"
+            echo "  Security Status: $SECURITY_STATUS"
+          fi

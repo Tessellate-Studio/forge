@@ -1,0 +1,109 @@
+{
+  "name": "@company/code-directives",
+  "version": "1.0.0",
+  "description": "AI-powered code directives system for building applications with automated best practices",
+  "main": "lib/index.js",
+  "bin": {
+    "standards": "cli/index.js",
+    "bp": "cli/index.js"
+  },
+  "files": [
+    "lib/",
+    "cli/",
+    "templates/",
+    "docs/"
+  ],
+  "exports": {
+    ".": {
+      "import": "./lib/index.js",
+      "require": "./lib/index.js"
+    },
+    "./validators": "./lib/validators/index.js",
+    "./integrations": "./lib/integrations/index.js",
+    "./standards": "./lib/standards/index.js"
+  },
+  "scripts": {
+    "start": "node lib/index.js",
+    "test": "jest",
+    "test:unit": "jest tests/unit",
+    "test:integration": "jest tests/integration",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint lib/ cli/ --fix",
+    "lint:check": "eslint lib/ cli/",
+    "audit": "npm audit --audit-level=high",
+    "build": "echo 'Build completed'",
+    "validate": "node cli/bp-validate.js",
+    "init": "node cli/bp-init.js",
+    "docs": "node cli/bp-docs.js",
+    "prepare": "husky install || true",
+    "pre-commit": "lint-staged"
+  },
+  "keywords": [
+    "code-directives",
+    "ai-development",
+    "automation",
+    "code-generation",
+    "github-integration",
+    "claude-integration",
+    "development-framework",
+    "best-practices",
+    "code-quality",
+    "security-scanning",
+    "performance-optimization",
+    "ci-cd",
+    "sdk",
+    "developer-tools"
+  ],
+  "author": "Your Company",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^11.0.0",
+    "chalk": "^4.1.2",
+    "fs-extra": "^11.0.0",
+    "inquirer": "^8.0.0",
+    "yaml": "^2.3.0",
+    "glob": "^10.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "eslint": "^8.0.0",
+    "eslint-config-standard": "^17.0.0",
+    "prettier": "^2.8.0",
+    "husky": "^8.0.0",
+    "lint-staged": "^13.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=7.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Tessellate-Studio/code-standards.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Tessellate-Studio/code-standards/issues"
+  },
+  "homepage": "https://github.com/Tessellate-Studio/code-standards#readme",
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "lib/**/*.js",
+      "cli/**/*.js",
+      "!**/node_modules/**"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 80,
+        "functions": 80,
+        "lines": 80,
+        "statements": 80
+      }
+    }
+  },
+  "lint-staged": {
+    "*.js": [
+      "eslint --fix",
+      "prettier --write"
+    ]
+  }
+}

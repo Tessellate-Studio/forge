@@ -1,0 +1,47 @@
+# Code Standards config — Web app profile
+# Dropped onto a new web app by `standards init --template web`.
+version: "1.0.0"
+
+project:
+  type: "web"
+
+standards:
+  code:
+    enforceComments: true
+    maxFunctionLines: 50
+    testCoverage: 80
+
+  security:
+    scanSecrets: true
+    vulnerabilityScan: true
+    dependencyCheck: true
+
+  performance:                # browser metrics belong here
+    bundleSize: "500KB"
+    loadTime: "2s"
+    unusedDependencies: true
+
+  accessibility:
+    enabled: true
+    level: "AA"
+
+automation:
+  github:
+    autoPR: false
+    autoMerge: false
+  hooks:
+    preCommit: true
+    commitMsg: true
+
+customRules:
+  naming:
+    functions: "camelCase"
+    variables: "camelCase"
+    constants: "UPPER_CASE"
+  project:
+    requireReadme: true
+    requireLicense: true
+
+reporting:
+  format: "json"
+  includeMetrics: true

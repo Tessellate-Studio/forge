@@ -1,0 +1,8 @@
+node_modules/
+coverage/
+dist/
+build/
+*.min.js
+*.bundle.js
+CHANGELOG.md
+LICENSE

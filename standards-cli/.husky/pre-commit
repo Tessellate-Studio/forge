@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Worktree bootstrap guard: a fresh git worktree (e.g. a handed-off task
+# session under isolation:"worktree") has no node_modules, so the hooks below
+# fail with a cryptic error. Fail early with the fix instead. Part of the
+# concurrent-session isolation rule — see forge CLAUDE base "Concurrent sessions".
+if [ ! -d node_modules ]; then
+  echo "node_modules missing - this worktree isn't bootstrapped."
+  echo "A fresh worktree has no deps. Run 'npm ci' before committing."
+  exit 1
+fi
+
+npm run pre-commit
