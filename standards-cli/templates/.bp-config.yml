@@ -1,0 +1,78 @@
+# Code Directives SDK Configuration
+# This file defines the standards and automation rules for your project
+
+version: "1.0.0"
+project:
+  name: "my-project"
+  type: "web-app"  # web-app, api, library, cli
+  description: "My awesome project following best practices"
+
+# Standards configuration
+standards:
+  code:
+    enforceComments: true      # Require inline comments for functions
+    maxFunctionLines: 50       # Maximum lines per function
+    testCoverage: 80           # Minimum test coverage percentage
+    
+  security:
+    scanSecrets: true          # Scan for exposed secrets/keys
+    vulnerabilityScan: true    # Scan dependencies for vulnerabilities
+    dependencyCheck: true      # Check for outdated/insecure packages
+    
+  performance:
+    bundleSize: "500KB"        # Maximum bundle size (frontend)
+    loadTime: "2s"             # Maximum page load time
+    apiTimeout: "5s"           # Maximum API response time
+
+# Automation configuration  
+automation:
+  github:
+    autoPR: true               # Auto-create PRs for feature branches
+    claudeReview: true         # Request Claude reviews automatically
+    autoMerge: true            # Auto-merge approved PRs
+    branchProtection: true     # Enable branch protection rules
+    
+  hooks:
+    preCommit: true            # Run validation before commits
+    prePush: false             # Run validation before pushes
+    commitMsg: true            # Validate commit message format
+
+# Custom validation rules (optional)
+customRules:
+  # Example: Enforce specific naming conventions
+  naming:
+    functions: "camelCase"     # camelCase, snake_case, PascalCase
+    variables: "camelCase"
+    constants: "UPPER_CASE"
+    
+  # Example: Project-specific requirements
+  project:
+    requireReadme: true
+    requireChangelog: true
+    requireLicense: true
+
+# Tool configurations
+tools:
+  eslint:
+    extends: ["@company/eslint-config"]
+    rules:
+      "no-console": "warn"
+      
+  prettier:
+    singleQuote: true
+    trailingComma: "es5"
+    
+  jest:
+    coverageThreshold:
+      global:
+        branches: 80
+        functions: 80
+        lines: 80
+        statements: 80
+
+# Reporting configuration
+reporting:
+  format: "json"             # json, html, markdown
+  includeMetrics: true       # Include detailed metrics
+  saveToDisk: true           # Save reports to files
+  uploadArtifacts: true      # Upload as CI artifacts

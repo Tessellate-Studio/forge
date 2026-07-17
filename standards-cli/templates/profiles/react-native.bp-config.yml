@@ -1,0 +1,56 @@
+# Code Standards config — React Native / Expo profile
+# Dropped onto a new RN app by `standards init --template react-native`.
+# Tuned for mobile: no web bundle/load targets, accessibility on, E2E lives in
+# the shared guinea-pig repo (not in-repo).
+version: "1.0.0"
+
+project:
+  type: "react-native"
+
+standards:
+  code:
+    enforceComments: true
+    maxFunctionLines: 60
+    testCoverage: 70          # RN apps: unit-test logic, not pixels
+
+  security:                   # the crown jewels — keep all on
+    scanSecrets: true
+    vulnerabilityScan: true
+    dependencyCheck: true
+
+  performance:
+    # No web bundleSize/loadTime here — APK/AAB size is checked at build time,
+    # not by a static scan. Keep the code-level perf checks only.
+    unusedDependencies: true
+    nestedLoops: true
+
+  accessibility:              # WCAG 2.1 AA matters on mobile
+    enabled: true
+    level: "AA"
+
+# E2E is NOT in-repo for Tessellate apps — it runs in guinea-pig.
+testing:
+  e2e:
+    inRepo: false
+    runner: "guinea-pig"
+
+automation:
+  github:
+    autoPR: false             # handled by the agent + branch rules / native auto-merge
+    autoMerge: false
+  hooks:
+    preCommit: true
+    commitMsg: true
+
+customRules:
+  naming:
+    functions: "camelCase"
+    variables: "camelCase"
+    constants: "UPPER_CASE"
+  project:
+    requireReadme: true
+    requireLicense: true
+
+reporting:
+  format: "json"
+  includeMetrics: true

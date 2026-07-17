@@ -1,0 +1,78 @@
+# Code Standards SDK — this repo's own config (it is itself a library).
+# App profiles live in templates/profiles/{react-native,node-service,web}.bp-config.yml
+version: "1.0.0"
+
+project:
+  name: "code-standards"
+  type: "library"
+  description: "AI-powered code directives system for building applications with automated best practices"
+
+# Standards configuration
+standards:
+  code:
+    enforceComments: true
+    maxFunctionLines: 50
+    testCoverage: 80
+    
+  security:
+    scanSecrets: true
+    vulnerabilityScan: true
+    dependencyCheck: true
+    
+  performance:
+    bundleSize: "500KB"
+    loadTime: "2s"
+    apiTimeout: "5s"
+
+# Automation configuration  
+automation:
+  github:
+    autoPR: true
+    claudeReview: true
+    autoMerge: true
+    branchProtection: true
+    
+  hooks:
+    preCommit: true
+    prePush: false
+    commitMsg: true
+
+# Custom validation rules
+customRules:
+  naming:
+    functions: "camelCase"
+    variables: "camelCase"
+    constants: "UPPER_CASE"
+    
+  project:
+    requireReadme: true
+    requireChangelog: true
+    requireLicense: true
+
+# Tool configurations
+tools:
+  eslint:
+    extends: ["eslint:recommended", "standard"]
+    rules:
+      "no-console": "warn"
+      "no-unused-vars": "error"
+      
+  prettier:
+    singleQuote: true
+    trailingComma: "es5"
+    tabWidth: 2
+    
+  jest:
+    coverageThreshold:
+      global:
+        branches: 80
+        functions: 80
+        lines: 80
+        statements: 80
+
+# Reporting configuration
+reporting:
+  format: "json"
+  includeMetrics: true
+  saveToDisk: true
+  uploadArtifacts: true

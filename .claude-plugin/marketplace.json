@@ -5,14 +5,14 @@
     "url": "https://github.com/Tessellate-Studio"
   },
   "metadata": {
-    "description": "Private build platform for Tessellate apps — shared skills, standards, and app scaffolding.",
-    "version": "0.1.0"
+    "description": "Private build platform for Tessellate apps — shared skills, standards, CLIs, and app scaffolding.",
+    "version": "0.2.0"
   },
   "plugins": [
     {
       "name": "forge",
       "source": "./",
-      "description": "Shared build skills (build-feature, roadmap-pulse, new-app), platform standards, and the cross-app anti-pattern set."
+      "description": "Shared build skills (build-feature, roadmap-pulse, new-app), platform standards, the cross-app anti-pattern set, and the standards/bp + rubric CLIs."
     }
   ]
 }

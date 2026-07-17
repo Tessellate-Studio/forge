@@ -1,0 +1,69 @@
+# forge — this repo's own CI (self-inspect + both test suites + security).
+# Consumer apps do NOT copy this; they call only the reusable
+# code-inspection.yml gate from their existing CI (see README).
+
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  NODE_VERSION: '18'
+
+jobs:
+  # Self-inspect with the LOCAL CLI (advisory). We can't use the reusable
+  # code-inspection.yml here — it installs the CLI from @master, which wouldn't
+  # have this PR's code yet. Run the checked-out code directly.
+  inspect:
+    name: Code Inspection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Self-inspect (advisory)
+        run: node standards-cli/cli/index.js inspect --standards security --path . || true
+
+  # Both test suites (standards-cli + rubric), each with its own 80% gate
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests (standards-cli + rubric)
+        run: npm test
+
+  # Security scanning. No CodeQL — code scanning requires GitHub Advanced
+  # Security, unavailable on this private repo; npm audit + the standards
+  # security self-inspect (inspect job) cover deps + secrets.
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 18.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18.x
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run npm audit
+        run: npm audit --audit-level=high

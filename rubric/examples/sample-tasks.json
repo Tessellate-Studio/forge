@@ -1,0 +1,68 @@
+[
+  {
+    "description": "Implement user authentication system",
+    "scores": {
+      "impact": 5,
+      "complexity": 4, 
+      "reusability": 4,
+      "strategic": 5
+    },
+    "evaluator": "Tech Lead",
+    "notes": "Critical for user security and onboarding flow. Can reuse across all applications."
+  },
+  {
+    "description": "Add dark mode toggle",
+    "scores": {
+      "impact": 2,
+      "complexity": 2,
+      "reusability": 3,
+      "strategic": 2
+    },
+    "evaluator": "UX Designer", 
+    "notes": "Nice-to-have feature requested by some users. Relatively simple CSS implementation."
+  },
+  {
+    "description": "Optimize database query performance",
+    "scores": {
+      "impact": 4,
+      "complexity": 3,
+      "reusability": 3,
+      "strategic": 3
+    },
+    "evaluator": "Backend Engineer",
+    "notes": "Will improve response times significantly. Knowledge applies to other services."
+  },
+  {
+    "description": "Create component design system",
+    "scores": {
+      "impact": 3,
+      "complexity": 4,
+      "reusability": 5,
+      "strategic": 4
+    },
+    "evaluator": "Frontend Lead",
+    "notes": "High reusability across all frontend projects. Significant upfront effort but long-term benefits."
+  },
+  {
+    "description": "Implement real-time notifications",
+    "scores": {
+      "impact": 4,
+      "complexity": 4,
+      "reusability": 4,
+      "strategic": 3
+    },
+    "evaluator": "Full-stack Developer",
+    "notes": "Users have been requesting this. WebSocket implementation with fallbacks needed."
+  },
+  {
+    "description": "Add social media integration",
+    "scores": {
+      "impact": 2,
+      "complexity": 3,
+      "reusability": 2,
+      "strategic": 1
+    },
+    "evaluator": "Product Manager",
+    "notes": "Marketing requested but unclear user demand. Multiple API integrations required."
+  }
+]

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Web application built with Best Practices SDK">
+    <title>Best Practices Web App</title>
+    <style>
+        /* Modern, responsive CSS with best practices */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding: 2rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+        
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+        
+        .feature-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+        }
+        
+        .feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .feature-card h3 {
+            color: #2d3748;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+        
+        .feature-card p {
+            color: #64748b;
+            line-height: 1.7;
+        }
+        
+        .api-demo {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+        
+        .api-demo h2 {
+            margin-bottom: 1rem;
+            color: #2d3748;
+        }
+        
+        .button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: opacity 0.2s ease;
+            margin-right: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .button:hover {
+            opacity: 0.9;
+        }
+        
+        .button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .response-area {
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.9rem;
+            min-height: 100px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-healthy {
+            background-color: #10b981;
+        }
+        
+        .status-error {
+            background-color: #ef4444;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .features {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🚀 Best Practices Web App</h1>
+            <p>Built with security, performance, and maintainability in mind</p>
+        </header>
+
+        <section class="features">
+            <div class="feature-card">
+                <div class="feature-icon">🛡️</div>
+                <h3>Security First</h3>
+                <p>Protected against common vulnerabilities with helmet.js, input validation, and secure defaults.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <h3>High Performance</h3>
+                <p>Optimized bundle sizes, efficient algorithms, and performance monitoring built-in.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">📝</div>
+                <h3>Clean Code</h3>
+                <p>Every function documented with in-line comments, proper error handling, and maintainable structure.</p>
+            </div>
+        </section>
+
+        <section class="api-demo">
+            <h2>API Demo</h2>
+            <p>Test the backend API endpoints:</p>
+            
+            <button class="button" onclick="testHealthCheck()">Health Check</button>
+            <button class="button" onclick="testStatus()">App Status</button>
+            <button class="button" onclick="testGetUsers()">Get Users</button>
+            <button class="button" onclick="testCreateUser()">Create User</button>
+            
+            <div id="response" class="response-area">
+                Click a button above to test the API endpoints...
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // API testing functions with proper error handling
+        
+        // Test health check endpoint
+        async function testHealthCheck() {
+            await makeApiCall('/health', 'GET');
+        }
+        
+        // Test application status endpoint
+        async function testStatus() {
+            await makeApiCall('/api/status', 'GET');
+        }
+        
+        // Test get users endpoint
+        async function testGetUsers() {
+            await makeApiCall('/api/users', 'GET');
+        }
+        
+        // Test create user endpoint with sample data
+        async function testCreateUser() {
+            const userData = {
+                name: 'Test User',
+                email: 'test@example.com'
+            };
+            
+            await makeApiCall('/api/users', 'POST', userData);
+        }
+        
+        // Generic API call function with error handling
+        async function makeApiCall(endpoint, method, data = null) {
+            const responseArea = document.getElementById('response');
+            responseArea.textContent = 'Loading...';
+            
+            try {
+                const options = {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                };
+                
+                // Add request body for POST requests
+                if (data && method === 'POST') {
+                    options.body = JSON.stringify(data);
+                }
+                
+                const response = await fetch(endpoint, options);
+                const result = await response.json();
+                
+                // Format response for display
+                const formattedResponse = {
+                    status: response.status,
+                    statusText: response.statusText,
+                    data: result,
+                    timestamp: new Date().toISOString()
+                };
+                
+                responseArea.textContent = JSON.stringify(formattedResponse, null, 2);
+                
+            } catch (error) {
+                // Display error information
+                const errorResponse = {
+                    error: true,
+                    message: error.message,
+                    endpoint,
+                    method,
+                    timestamp: new Date().toISOString()
+                };
+                
+                responseArea.textContent = JSON.stringify(errorResponse, null, 2);
+            }
+        }
+        
+        // Initialize page with connection status check
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('🎉 Best Practices Web App initialized');
+            
+            // Test initial connection
+            try {
+                const response = await fetch('/health');
+                const status = response.ok ? 'healthy' : 'error';
+                updateConnectionStatus(status);
+            } catch (error) {
+                updateConnectionStatus('error');
+            }
+        });
+        
+        // Update connection status indicator
+        function updateConnectionStatus(status) {
+            const statusClass = status === 'healthy' ? 'status-healthy' : 'status-error';
+            const statusText = status === 'healthy' ? 'Connected' : 'Disconnected';
+            
+            // Add status indicator to header if it doesn't exist
+            let statusIndicator = document.querySelector('.connection-status');
+            if (!statusIndicator) {
+                statusIndicator = document.createElement('div');
+                statusIndicator.className = 'connection-status';
+                statusIndicator.style.marginTop = '1rem';
+                document.querySelector('.header').appendChild(statusIndicator);
+            }
+            
+            statusIndicator.innerHTML = `
+                <span class="status-indicator ${statusClass}"></span>
+                Backend: ${statusText}
+            `;
+        }
+    </script>
+</body>
+</html>

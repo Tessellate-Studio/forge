@@ -41,9 +41,10 @@ fi
 # (4-axis 0-3 scores + total + band + reasoning).
 #
 # Package-name fallback: the canonical package is now
-# `@tessellate-studio/rubric-sdk` (repo lives at Tessellate-Studio/rubric-sdk).
-# Older installs may still be under `@ramsaptami/rubric-sdk` or `@company/rubric-sdk`,
-# so the candidates array below tries all three — tessellate-studio first.
+# `@tessellate-studio/forge` (rubric-sdk merged into the forge repo,
+# 2026-07-17 — the rubric lib is forge's root export). Older installs may
+# still be under `@tessellate-studio/rubric-sdk` or `@ramsaptami/rubric-sdk`,
+# so the candidates array below tries all three — forge first.
 if command -v node >/dev/null 2>&1; then
   # NODE_PATH must include npm's global node_modules so a globally-installed
   # rubric-sdk is resolvable by `require()`. Without this, `npm install -g`
@@ -52,12 +53,18 @@ if command -v node >/dev/null 2>&1; then
   if command -v npm >/dev/null 2>&1; then
     GLOBAL_NODE_MODULES="$(npm root -g 2>/dev/null)"
     if [[ -n "$GLOBAL_NODE_MODULES" ]]; then
-      export NODE_PATH="$GLOBAL_NODE_MODULES${NODE_PATH:+:$NODE_PATH}"
+      # NODE_PATH's entry separator is platform-specific (';' on Windows,
+      # ':' elsewhere). A hardcoded ':' corrupts every entry on Windows.
+      case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*) NP_SEP=';' ;;
+        *) NP_SEP=':' ;;
+      esac
+      export NODE_PATH="$GLOBAL_NODE_MODULES${NODE_PATH:+$NP_SEP$NODE_PATH}"
     fi
   fi
   RESULT="$(node -e '
     const input = JSON.parse(require("fs").readFileSync(0, "utf-8"));
-    const candidates = ["@tessellate-studio/rubric-sdk", "@ramsaptami/rubric-sdk", "@company/rubric-sdk"];
+    const candidates = ["@tessellate-studio/forge", "@tessellate-studio/rubric-sdk", "@ramsaptami/rubric-sdk"];
     let sdk = null;
     let lastErr = null;
     for (const name of candidates) {

@@ -1,0 +1,229 @@
+# Reusable Code Inspection workflow.
+# Other repos call this to scan their code with the Code Standards SDK
+# (committed secrets, vulnerable deps, performance smells, code + a11y rules).
+#
+#   jobs:
+#     inspect:
+#       uses: Tessellate-Studio/forge/.github/workflows/code-inspection.yml@master
+#       with:
+#         fail_on_error: false   # advisory; flip to true once tuned
+
+name: Code Inspection
+
+on:
+  workflow_call:
+    inputs:
+      path:
+        description: 'Path to inspect (default: ./)'
+        required: false
+        type: string
+        default: './'
+      standards:
+        description: 'Standards to check (comma-separated: code,security,performance)'
+        required: false
+        type: string
+        default: 'code,security,performance'
+      auto_fix:
+        description: 'Automatically fix issues where possible'
+        required: false
+        type: boolean
+        default: false
+      node_version:
+        description: 'Node.js version to use'
+        required: false
+        type: string
+        default: '18'
+      fail_on_error:
+        description: 'Fail the workflow if inspection fails (advisory when false)'
+        required: false
+        type: boolean
+        default: true
+      generate_report:
+        description: 'Generate inspection report'
+        required: false
+        type: boolean
+        default: true
+    outputs:
+      inspection_score:
+        description: 'Overall inspection score (0-100)'
+        value: ${{ jobs.inspect.outputs.score }}
+      inspection_passed:
+        description: 'Whether inspection passed'
+        value: ${{ jobs.inspect.outputs.passed }}
+      issues_count:
+        description: 'Number of issues found'
+        value: ${{ jobs.inspect.outputs.issues_count }}
+      fixes_count:
+        description: 'Number of issues automatically fixed'
+        value: ${{ jobs.inspect.outputs.fixes_count }}
+
+env:
+  NODE_VERSION: ${{ inputs.node_version }}
+
+jobs:
+  inspect:
+    name: Inspect with Code Standards
+    runs-on: ubuntu-latest
+
+    outputs:
+      score: ${{ steps.inspect.outputs.score }}
+      passed: ${{ steps.inspect.outputs.passed }}
+      issues_count: ${{ steps.inspect.outputs.issues_count }}
+      fixes_count: ${{ steps.inspect.outputs.fixes_count }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: |
+          if [ -f package.json ]; then
+            npm ci
+          fi
+          # Install the standards CLI straight from the forge repo (no npm publish needed)
+          npm install -g github:Tessellate-Studio/forge
+
+      - name: Run Code Inspection
+        id: inspect
+        run: |
+          echo "🔍 Running Code Standards inspection..."
+          echo "Path: ${{ inputs.path }} | Standards: ${{ inputs.standards }} | Auto-fix: ${{ inputs.auto_fix }}"
+
+          INSPECT_CMD="standards inspect --path '${{ inputs.path }}' --standards '${{ inputs.standards }}'"
+          if [ "${{ inputs.auto_fix }}" = "true" ]; then
+            INSPECT_CMD="$INSPECT_CMD --fix"
+          fi
+          if [ "${{ inputs.generate_report }}" = "true" ]; then
+            INSPECT_CMD="$INSPECT_CMD --report --output inspection-report.json"
+          fi
+
+          set +e
+          eval $INSPECT_CMD > inspection-output.txt 2>&1
+          INSPECT_EXIT_CODE=$?
+          set -e
+          cat inspection-output.txt
+
+          if [ "${{ inputs.generate_report }}" = "true" ] && [ -f inspection-report.json ]; then
+            # Default score to 100 (clean) and passed to true when the SDK
+            # omits those fields — absence means "nothing to score / nothing
+            # to fail on", not "0/100 failed". The previous defaults of 0
+            # and false produced the misleading "Overall Score 0/100" on
+            # clean runs.
+            SCORE=$(jq -r '.score // 100' inspection-report.json)
+            PASSED=$(jq -r '.passed // true' inspection-report.json)
+            ISSUES_COUNT=$(jq -r '.issues | length' inspection-report.json)
+            FIXES_COUNT=$(jq -r '.fixed | length' inspection-report.json)
+
+            echo "score=$SCORE" >> $GITHUB_OUTPUT
+            echo "passed=$PASSED" >> $GITHUB_OUTPUT
+            echo "issues_count=$ISSUES_COUNT" >> $GITHUB_OUTPUT
+            echo "fixes_count=$FIXES_COUNT" >> $GITHUB_OUTPUT
+
+            echo "## 📊 Code Inspection Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Overall Score:** $SCORE/100" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** $([ "$PASSED" = "true" ] && echo "✅ PASSED" || echo "❌ FAILED")" >> $GITHUB_STEP_SUMMARY
+            echo "**Issues Found:** $ISSUES_COUNT" >> $GITHUB_STEP_SUMMARY
+            echo "**Issues Fixed:** $FIXES_COUNT" >> $GITHUB_STEP_SUMMARY
+            if [ "$ISSUES_COUNT" -gt 0 ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### 🔍 Issue Breakdown" >> $GITHUB_STEP_SUMMARY
+              jq -r '.issues | group_by(.type) | .[] | "\(length) \(.[0].type) issues"' inspection-report.json >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            # No report file. Two cases:
+            #   1. SDK exited 0 → it ran fine but had nothing to report
+            #      (no rules matched, no findings). Treat as a clean pass.
+            #   2. SDK exited non-zero → the inspection itself crashed.
+            #      Leave `score` empty so the PR-comment step's `if:` guard
+            #      short-circuits and we don't post "0/100 / 0 issues".
+            if [ "$INSPECT_EXIT_CODE" -eq 0 ]; then
+              echo "passed=true" >> $GITHUB_OUTPUT
+              echo "score=100" >> $GITHUB_OUTPUT
+              echo "issues_count=0" >> $GITHUB_OUTPUT
+              echo "fixes_count=0" >> $GITHUB_OUTPUT
+            else
+              echo "passed=false" >> $GITHUB_OUTPUT
+              echo "score=" >> $GITHUB_OUTPUT
+              echo "issues_count=0" >> $GITHUB_OUTPUT
+              echo "fixes_count=0" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+          if [ "${{ inputs.fail_on_error }}" = "true" ] && [ "$INSPECT_EXIT_CODE" -ne 0 ]; then
+            echo "❌ Inspection failed and fail_on_error is true"
+            exit $INSPECT_EXIT_CODE
+          fi
+
+      - name: Upload Inspection Report
+        uses: actions/upload-artifact@v4
+        if: inputs.generate_report == true
+        with:
+          name: code-standards-inspection-report
+          path: |
+            inspection-report.json
+            inspection-output.txt
+          retention-days: 7
+
+      - name: Comment on PR with Results
+        # Skip the comment when there is nothing useful to say:
+        #   - empty score → SDK crashed; the workflow status already
+        #     surfaces that, no need for a misleading "0/100" comment.
+        #   - issues_count == 0 AND fixes_count == 0 → clean run; stay
+        #     silent. Spamming "0 issues found" on every PR adds noise
+        #     without information.
+        if: |
+          github.event_name == 'pull_request' &&
+          steps.inspect.outputs.score != '' &&
+          (steps.inspect.outputs.issues_count != '0' ||
+           steps.inspect.outputs.fixes_count != '0')
+        continue-on-error: true   # never fail the gate if the token can't comment (advisory)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const score = '${{ steps.inspect.outputs.score }}';
+            const passed = '${{ steps.inspect.outputs.passed }}' === 'true';
+            const issuesCount = '${{ steps.inspect.outputs.issues_count }}';
+            const fixesCount = '${{ steps.inspect.outputs.fixes_count }}';
+            // 3-way status. Previously `passed ? '✅ PASSED' : '⚠️ ISSUES FOUND'`
+            // would say "ISSUES FOUND" even when issuesCount === 0, which
+            // is internally contradictory. Now: explicitly distinguish
+            // "clean", "has findings", and "SDK error".
+            const status =
+              passed && Number(issuesCount) === 0
+                ? '✅ PASSED'
+                : Number(issuesCount) > 0
+                  ? '⚠️ ISSUES FOUND'
+                  : '⚠️ INSPECTION ERROR';
+            const scoreColor = score >= 80 ? '🟢' : score >= 60 ? '🟡' : '🔴';
+            const comment = `## ${scoreColor} Code Inspection Results
+
+            **Overall Score:** ${score}/100
+            **Status:** ${status}
+            **Issues Found:** ${issuesCount}
+            **Issues Fixed:** ${fixesCount}
+
+            ### Standards Checked
+            - ${{ inputs.standards }}
+
+            ${passed ?
+              '🎉 No issues — code meets the standards.' :
+              '💡 Advisory: review the inspection report. (This check is non-blocking until the config is tuned.)'
+            }
+
+            ---
+            *Inspected by [forge code standards](https://github.com/Tessellate-Studio/forge)*`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

@@ -39,11 +39,11 @@ sibling of the other app repos.
 
 ## Step 2 — Wire the shared platform
 
-1. **Libs as pinned deps** — `@tessellate-studio/rubric-sdk` and `guinea-pig` for
-   test utilities/E2E (use each package's actual published name — don't guess
-   variants). The **code-standards** CLI is installed from GitHub, not npm:
-   `npm install -g github:Tessellate-Studio/code-standards` (gives the `standards`
-   command).
+1. **Platform tooling** — one GitHub install gives the whole platform:
+   `npm install -g github:Tessellate-Studio/forge` (provides the `standards`,
+   `bp`, and `rubric` CLIs — nothing is on the npm registry). For E2E/test
+   utilities add `guinea-pig` (`github:Tessellate-Studio/guinea-pig`) as a
+   devDep; see `${CLAUDE_PLUGIN_ROOT}/standards/testing.md` for when.
 2. **forge plugin** — write a committed `.claude/settings.json` with
    `extraKnownMarketplaces` (`Tessellate-Studio/forge`, **`"autoUpdate": true`**)
    + `enabledPlugins` (`forge@tessellate-forge`), so every session starts on
@@ -55,7 +55,7 @@ sibling of the other app repos.
    the mobile defaults.
 4. **CI inspection gate (advisory)** — add `.github/workflows/code-inspection.yml`
    that calls
-   `Tessellate-Studio/code-standards/.github/workflows/code-inspection.yml@main`
+   `Tessellate-Studio/forge/.github/workflows/code-inspection.yml@master`
    with `fail_on_error: false` on `pull_request`. Non-blocking until the config is
    proven on the app; the app keeps its own tsc+test gate (don't double-run those).
 5. **Ignore worktree dirs** — the app's `.gitignore` must exclude `.worktrees/`
