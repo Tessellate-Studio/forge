@@ -55,6 +55,10 @@ jobs:
     name: Security Scan
     runs-on: ubuntu-latest
     permissions:
+      # A job-level permissions block zeroes everything unlisted — contents:read
+      # must be explicit or checkout fails on this private repo.
+      contents: read
+      actions: read
       security-events: write
     steps:
       - uses: actions/checkout@v4
