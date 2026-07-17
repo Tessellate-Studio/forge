@@ -108,6 +108,19 @@ whose entry still says "open" is how work gets re-done and users re-ask.
 branch — see "Speak from authority" in
 [`authoritative-claims.md`](./authoritative-claims.md).)
 
+## Docs stay lean — shipped items collapse to a one-line tombstone
+
+The PR is the permanent home of implementation detail (diff, decisions,
+verification); planning docs are for OPEN work. So when an item ships, don't
+leave its full body in the doc — **collapse the entry to one line**:
+`~~<title>~~ — shipped <date>, PR #<n> (<SHA>)`. Delete the body (acceptance
+criteria, design notes, discussion): anyone who needs it follows the PR link.
+Long-form docs in `backlog/` for shipped items get deleted outright, with the
+tombstone line in BACKLOG.md pointing at the PR. This applies to every repo;
+roadmap-pulse's honesty pass enforces it weekly (it tombstones confirmed-shipped
+entries as part of Step 1). A doc that keeps growing after its work ships is a
+word block nobody reads — the failure mode this rule exists to prevent.
+
 ## External-tool actions — log DECIDED steps
 
 When a session decides which external tool/provider to use for a setup (DNS,
