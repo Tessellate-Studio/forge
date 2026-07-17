@@ -19,7 +19,7 @@ inherits it — interchangeable, inter-usable, self-learning (via reviewed PRs).
 
 | Path | What |
 |---|---|
-| `.claude-plugin/marketplace.json` | Marketplace manifest (this repo is a private marketplace). |
+| `.claude-plugin/marketplace.json` | Marketplace manifest (this repo is its own marketplace). |
 | `.claude-plugin/plugin.json` | The `forge` plugin manifest. |
 | `skills/build-feature/` | Implement + verify a change end-to-end on-device until it objectively passes. |
 | `skills/roadmap-pulse/` | Weekly planning-doc honesty pass + rubric-scored priorities. |
