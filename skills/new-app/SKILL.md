@@ -52,7 +52,10 @@ sibling of the other app repos.
 3. **Scaffold** via `standards init --template <type>` (`react-native`,
    `node-service`, `web`, `api`, `library`) — drops the matching `.bp-config.yml`
    profile, screens, error boundary, theme tokens, test setup. If RN+Expo, wire
-   the mobile defaults.
+   the mobile defaults. **Design pass on the first screens:** build any user-facing
+   web surface with `/frontend-design` (not the generic scaffold look), and run
+   `/design-critique` on the first rendered screen before the setup PR — a new
+   app's visual baseline is set on day one.
 4. **CI inspection gate (advisory)** — add `.github/workflows/code-inspection.yml`
    that calls
    `Tessellate-Studio/forge/.github/workflows/code-inspection.yml@master`

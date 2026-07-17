@@ -185,6 +185,27 @@ Append a dated section to `<repo-root>/WEEKLY_DIGEST.md`. Format defined in [`re
 
 If `WEEKLY_DIGEST.md` doesn't exist, create it with a brief header explaining what the file is for.
 
+**Roadmap Artifact (visual layer — the user prefers a table over word blocks):**
+
+Publish the prioritized list as an Artifact page and **refresh the same URL
+every run — never mint a new artifact**:
+
+1. Read `artifactUrl` from `<repo-root>/.roadmap-pulse-state.json`. If present,
+   pass it as the Artifact tool's `url` parameter; if absent (first run),
+   publish fresh and then **save the returned URL into the state file** under
+   `artifactUrl`.
+2. Use a stable file path (`<scratchpad>/roadmap-<repo-name>.html`), a stable
+   `<title>` ("<Repo> roadmap pulse"), and a stable favicon (`🗺️`) so
+   redeploys land on the same page.
+3. Content: one table — Rank | ☐ | Task | Score | Band | Source (link to the
+   BACKLOG line / PR) | Why — plus the run date and a small "changed since
+   last run" strip. Checkboxes persist in the page via `localStorage` only:
+   they are the user's visual scratchpad. State the canonical rule on the page
+   footer: *checking a box here doesn't edit the docs — tell Claude "mark N
+   done" or let the next pulse pick it up from git*.
+4. Load the `artifact-design` skill before writing the page (required by the
+   Artifact tool); keep it theme-aware and self-contained.
+
 ### Step 6 — Summary + next-run confirmation
 
 End the run with the user's project-CLAUDE.md communication structure (for Alate that's the 5-part format). Surface:
@@ -193,13 +214,13 @@ End the run with the user's project-CLAUDE.md communication structure (for Alate
 2. **What you (user) need to do** — anything that requires the user (e.g. "confirm dependency suggestions from Step 3 that we marked SUGGESTED").
 3. **What I (Claude) can do** — anything the skill can take off the user's hands (e.g. "start on Task #1 now").
 4. **Summary of what changed this run** — items struck through, dependencies persisted, scores shifted vs last run (read prior `WEEKLY_DIGEST.md` section for diff).
-5. **Docs updated** — BACKLOG.md (struck-through items + persisted Depends-on lines), WEEKLY_DIGEST.md (new section), maybe memory files.
+5. **Docs updated** — BACKLOG.md (tombstoned items + persisted Depends-on lines), WEEKLY_DIGEST.md (new section), the refreshed roadmap Artifact link, maybe memory files.
 
 Confirm the next scheduled run is on the calendar; surface the next-run timestamp.
 
 ## What this skill does NOT do
 
-- It does not delete entries. Confirmed-shipped items get **struck through with a tombstone** (preserves history).
+- It does not silently delete open entries. Confirmed-SHIPPED items get **collapsed to a one-line tombstone** (title + PR link + ship date — the implementation detail lives in the PR, not the docs; see `standards/workflows.md` → "Docs stay lean").
 - It does not invent SHAs or rubric scores. If rubric-sdk fails to return a score, the entry is surfaced as "unscored, manual review needed" — never fabricated.
 - It does not re-sort BACKLOG.md's P-tier sections or write inline scores into entries. (Both are opt-in extensions you can add later — for now, the digest + inline list is the visibility layer.)
 - It does not run on docs the user didn't include in the inventory's confirmed scope.

@@ -211,7 +211,13 @@ tooling included);** skip with a one-line note for a true one-liner:
 2. `/simplify` — applies reuse/efficiency/altitude cleanups (quality only, no bug
    hunt). Re-run `npx tsc --noEmit && npx jest --no-coverage` after it touches
    code, since it edits the working tree.
-3. Commit the cleanups separately (`chore: simplify <scope>`) — don't fold them
+3. **UI diffs only:** `/design-critique` on the final device screenshot —
+   structured feedback on hierarchy, spacing, consistency against the app's
+   design vision (for alate: glassmorphic, theme tokens, Marcellus headings).
+   Fix what's real, re-verify on-device. (For NEW web/screen surfaces built
+   from scratch, `/frontend-design` guides the initial build back in Step 2 —
+   not a post-hoc check.)
+4. Commit the cleanups separately (`chore: simplify <scope>`) — don't fold them
    into the feature/fix commit.
 
 Full platform rule: `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Quality
@@ -292,6 +298,10 @@ promote into the relevant skill or standard so the next build inherits it.
 - `/code-review` — before commit (Step 5.5): correctness bugs + cleanups in the diff.
 - `/simplify` — before commit (Step 5.5): apply reuse/efficiency/altitude cleanups.
   Step 5.5 applies to ANY non-trivial diff, not just UI.
+- `/design-critique` — before commit (Step 5.5, UI diffs): critique the final
+  device screenshot against the design vision; fix + re-verify.
+- `/frontend-design` — during build (Step 2, NEW web/screen surfaces): design
+  guidance for the initial implementation, not a post-hoc check.
 - Status update (Step 6): BACKLOG / regression-log / tracker entry that spawned
   this work gets its status + PR + SHA updated in the same PR.
 - Closing retro (Step 7, mandatory): least-confident seams / what the user
