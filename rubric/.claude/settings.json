@@ -1,0 +1,14 @@
+{
+  "extraKnownMarketplaces": {
+    "tessellate-forge": {
+      "source": {
+        "source": "github",
+        "repo": "Tessellate-Studio/forge"
+      },
+      "autoUpdate": true
+    }
+  },
+  "enabledPlugins": {
+    "forge@tessellate-forge": true
+  }
+}

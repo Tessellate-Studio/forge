@@ -1,0 +1,53 @@
+# Rubric SDK Configuration Template
+# Customize scoring weights and thresholds for your project
+
+version: "1.0.0"
+
+# Scoring weights (must sum to 1.0)
+weights:
+  impact: 0.35        # How much value it adds to users/business
+  complexity: 0.25    # Level of effort/resources needed (inverted for scoring)
+  reusability: 0.20   # Can this be used across multiple apps/projects?
+  strategic: 0.20     # Alignment with vision, SDK-first modularity, and roadmap
+
+# Priority thresholds (0-3 scale)
+thresholds:
+  high_priority: 3      # Auto-approve threshold
+  medium_priority: 2    # Review required  
+  low_priority: 1       # Consider for backlog
+
+# Predefined profiles for different contexts
+profiles:
+  startup:
+    name: "Startup Profile (Speed Focused)"
+    description: "Prioritizes quick wins and user impact"
+    weights:
+      impact: 0.50
+      complexity: 0.30
+      reusability: 0.10
+      strategic: 0.10
+      
+  enterprise:
+    name: "Enterprise Profile (Stability Focused)"  
+    description: "Emphasizes long-term maintainability and reuse"
+    weights:
+      impact: 0.25
+      complexity: 0.20
+      reusability: 0.30
+      strategic: 0.25
+      
+  research:
+    name: "Research Profile (Innovation Focused)"
+    description: "Values strategic alignment and breakthrough potential"
+    weights:
+      impact: 0.30
+      complexity: 0.10
+      reusability: 0.25
+      strategic: 0.35
+
+# SDK settings
+settings:
+  autoSave: true           # Automatically save evaluations to history
+  defaultFormat: "json"    # Default report format (json, markdown, csv, html)
+  enableAI: false         # Enable AI-assisted scoring (future feature)
+  trackHistory: true      # Maintain evaluation history for analytics
