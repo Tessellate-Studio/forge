@@ -1,4 +1,8 @@
-# forge — Tessellate build platform (private Claude Code plugin)
+# forge — Tessellate build platform (Claude Code plugin + CLIs)
+
+> Public repo (since 2026-07-17): CI runners and `npm install github:` need
+> anonymous read access — same posture code-standards had. No secrets live
+> here; the standards are generic build process, not business data.
 
 One repo = the whole build platform. The Claude Code plugin every Tessellate
 app installs (shared build **skills**, platform **standards**, a CLAUDE.md
