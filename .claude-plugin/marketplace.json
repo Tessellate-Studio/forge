@@ -5,7 +5,7 @@
     "url": "https://github.com/Tessellate-Studio"
   },
   "metadata": {
-    "description": "Private build platform for Tessellate apps — shared skills, standards, CLIs, and app scaffolding.",
+    "description": "Build platform for Tessellate apps — shared skills, standards, CLIs, and app scaffolding.",
     "version": "0.2.0"
   },
   "plugins": [
