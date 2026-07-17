@@ -254,8 +254,10 @@ This project follows automated code quality standards:
         packageJson.devDependencies = {};
       }
 
-      packageJson.devDependencies['@company/code-directives'] = '^1.0.0';
-      packageJson.devDependencies['@company/rubric-sdk'] = '^1.0.0';
+      // One platform dep gives the standards/bp + rubric CLIs (installed from
+      // GitHub — the package is not on the npm registry)
+      packageJson.devDependencies['@tessellate-studio/forge'] =
+        'github:Tessellate-Studio/forge';
 
       // Update validate script to use proper CLI command
       if (packageJson.scripts) {

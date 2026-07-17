@@ -14,7 +14,7 @@ const program = new Command();
 program
   .name('bp')
   .description('Code Standards - AI-powered development framework')
-  .version(require('../package.json').version);
+  .version(require('../../package.json').version);
 
 // Initialize new project command
 program

@@ -41,9 +41,10 @@ fi
 # (4-axis 0-3 scores + total + band + reasoning).
 #
 # Package-name fallback: the canonical package is now
-# `@tessellate-studio/rubric-sdk` (repo lives at Tessellate-Studio/rubric-sdk).
-# Older installs may still be under `@ramsaptami/rubric-sdk` or `@company/rubric-sdk`,
-# so the candidates array below tries all three — tessellate-studio first.
+# `@tessellate-studio/forge` (rubric-sdk merged into the forge repo,
+# 2026-07-17 — the rubric lib is forge's root export). Older installs may
+# still be under `@tessellate-studio/rubric-sdk` or `@ramsaptami/rubric-sdk`,
+# so the candidates array below tries all three — forge first.
 if command -v node >/dev/null 2>&1; then
   # NODE_PATH must include npm's global node_modules so a globally-installed
   # rubric-sdk is resolvable by `require()`. Without this, `npm install -g`
@@ -57,7 +58,7 @@ if command -v node >/dev/null 2>&1; then
   fi
   RESULT="$(node -e '
     const input = JSON.parse(require("fs").readFileSync(0, "utf-8"));
-    const candidates = ["@tessellate-studio/rubric-sdk", "@ramsaptami/rubric-sdk", "@company/rubric-sdk"];
+    const candidates = ["@tessellate-studio/forge", "@tessellate-studio/rubric-sdk", "@ramsaptami/rubric-sdk"];
     let sdk = null;
     let lastErr = null;
     for (const name of candidates) {

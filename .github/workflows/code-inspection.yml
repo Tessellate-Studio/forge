@@ -4,7 +4,7 @@
 #
 #   jobs:
 #     inspect:
-#       uses: Tessellate-Studio/code-standards/.github/workflows/code-inspection.yml@main
+#       uses: Tessellate-Studio/forge/.github/workflows/code-inspection.yml@master
 #       with:
 #         fail_on_error: false   # advisory; flip to true once tuned
 
@@ -88,8 +88,8 @@ jobs:
           if [ -f package.json ]; then
             npm ci
           fi
-          # Install the Code Standards CLI straight from the repo (no npm publish needed)
-          npm install -g github:Tessellate-Studio/code-standards
+          # Install the standards CLI straight from the forge repo (no npm publish needed)
+          npm install -g github:Tessellate-Studio/forge
 
       - name: Run Code Inspection
         id: inspect
@@ -220,7 +220,7 @@ jobs:
             }
 
             ---
-            *Inspected by [Code Standards](https://github.com/Tessellate-Studio/code-standards)*`;
+            *Inspected by [forge code standards](https://github.com/Tessellate-Studio/forge)*`;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,

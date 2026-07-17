@@ -1,22 +1,22 @@
-# code-standards — this repo's own CI (inspect + test + security + build).
-# Consumer apps do NOT copy this; they add only the reusable code-inspection.yml
-# gate to their existing CI (see README).
+# forge — this repo's own CI (self-inspect + both test suites + security).
+# Consumer apps do NOT copy this; they call only the reusable
+# code-inspection.yml gate from their existing CI (see README).
 
 name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 env:
   NODE_VERSION: '18'
 
 jobs:
   # Self-inspect with the LOCAL CLI (advisory). We can't use the reusable
-  # code-inspection.yml here — it installs the CLI from @main, which wouldn't
-  # have `standards` until this PR merges. Run the checked-out code directly.
+  # code-inspection.yml here — it installs the CLI from @master, which wouldn't
+  # have this PR's code yet. Run the checked-out code directly.
   inspect:
     name: Code Inspection
     runs-on: ubuntu-latest
@@ -29,15 +29,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Self-inspect (advisory)
-        run: node cli/index.js inspect --standards security --path . || true
+        run: node standards-cli/cli/index.js inspect --standards security --path . || true
 
-  # Standard CI tests
+  # Both test suites (standards-cli + rubric), each with its own 80% gate
   test:
     name: Test Suite
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [16.x, 18.x, 20.x]
+        node-version: [18.x, 20.x]
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js ${{ matrix.node-version }}
@@ -47,14 +47,8 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
-      - name: Run tests
+      - name: Run tests (standards-cli + rubric)
         run: npm test
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        if: matrix.node-version == '18.x'
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
 
   # Security scanning
   security:
@@ -80,23 +74,3 @@ jobs:
           languages: javascript
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
-
-  # Build (main only)
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    needs: [inspect, test, security]
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-      - name: Use Node.js 18.x
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18.x
-          cache: 'npm'
-      - name: Install dependencies
-        run: npm ci
-      - name: Build project
-        run: npm run build
-      - name: Final performance inspection
-        run: node cli/index.js inspect --standards performance

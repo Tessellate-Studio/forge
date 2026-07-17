@@ -2,12 +2,14 @@
 
 Score, compare, and prioritize tasks before you build them — a consistent 4-dimension framework to replace gut-feel backlog decisions.
 
-> Repo: `git@github.com:ramsaptami/rubric-sdk.git`. Package: `@tessellate-studio/rubric-sdk`. Commit changes to this repo, not to consuming projects.
+> Part of the **forge** platform repo (`Tessellate-Studio/forge`, `rubric/`
+> subdir) since 2026-07-17 — formerly the separate `rubric-sdk` repo. Commit
+> changes here, not to consuming projects.
 
 ## Install
 
 ```bash
-npm install -g @tessellate-studio/rubric-sdk
+npm install -g github:Tessellate-Studio/forge   # gives the `rubric` CLI (+ standards/bp)
 ```
 
 ## Scoring framework

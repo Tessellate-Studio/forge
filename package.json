@@ -1,0 +1,95 @@
+{
+  "name": "@tessellate-studio/forge",
+  "version": "0.2.0",
+  "description": "Tessellate build platform: Claude Code plugin (skills + standards) plus the standards/bp and rubric CLIs — one repo, installed from GitHub.",
+  "main": "index.js",
+  "bin": {
+    "standards": "standards-cli/cli/index.js",
+    "bp": "standards-cli/cli/index.js",
+    "rubric": "rubric/cli/index.js"
+  },
+  "files": [
+    "index.js",
+    "standards-cli/lib/",
+    "standards-cli/cli/",
+    "standards-cli/templates/",
+    "standards-cli/docs/",
+    "rubric/lib/",
+    "rubric/cli/",
+    "rubric/templates/",
+    "rubric/docs/",
+    "standards/",
+    "skills/",
+    "references/",
+    ".claude-plugin/"
+  ],
+  "exports": {
+    ".": "./index.js",
+    "./rubric": "./rubric/lib/index.js",
+    "./standards": "./standards-cli/lib/index.js",
+    "./validators": "./standards-cli/lib/validators/index.js",
+    "./integrations": "./standards-cli/lib/integrations/index.js"
+  },
+  "scripts": {
+    "test": "npm run test:standards && npm run test:rubric",
+    "test:standards": "jest --config standards-cli/jest.config.js --coverage",
+    "test:rubric": "jest --config rubric/jest.config.js --coverage",
+    "lint": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ --fix",
+    "lint:check": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/",
+    "audit": "npm audit --audit-level=high",
+    "validate": "node standards-cli/cli/bp-validate.js",
+    "init": "node standards-cli/cli/bp-init.js",
+    "docs": "node standards-cli/cli/bp-docs.js",
+    "prepare": "husky install || true",
+    "pre-commit": "lint-staged"
+  },
+  "keywords": [
+    "tessellate",
+    "build-platform",
+    "code-standards",
+    "rubric",
+    "scoring",
+    "prioritization",
+    "best-practices",
+    "code-quality",
+    "claude-code-plugin",
+    "developer-tools"
+  ],
+  "author": "Tessellate Studio",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^11.0.0",
+    "chalk": "^4.1.2",
+    "fs-extra": "^11.0.0",
+    "inquirer": "^8.0.0",
+    "yaml": "^2.3.0",
+    "glob": "^10.0.0",
+    "json2csv": "^5.0.7"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "eslint": "^8.0.0",
+    "eslint-config-standard": "^17.0.0",
+    "prettier": "^2.8.0",
+    "husky": "^8.0.0",
+    "lint-staged": "^13.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=7.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Tessellate-Studio/forge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Tessellate-Studio/forge/issues"
+  },
+  "homepage": "https://github.com/Tessellate-Studio/forge#readme",
+  "lint-staged": {
+    "*.js": [
+      "eslint --fix",
+      "prettier --write"
+    ]
+  }
+}

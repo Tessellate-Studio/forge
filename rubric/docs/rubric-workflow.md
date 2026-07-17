@@ -235,7 +235,7 @@ rubric simulate --iterations 1000 --task "Complex migration"
 
 1. **Install the SDK**
 ```bash
-npm install -g @company/rubric-sdk
+npm install -g github:Tessellate-Studio/forge
 ```
 
 2. **Initialize project**

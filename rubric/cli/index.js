@@ -3,7 +3,7 @@
 // Main CLI entry point for Rubric SDK
 const { program } = require('commander');
 const chalk = require('chalk');
-const packageInfo = require('../package.json');
+const packageInfo = require('../../package.json');
 
 // Import CLI command modules
 const evaluateCommand = require('./commands/evaluate');

@@ -1,7 +1,7 @@
 {
   "name": "forge",
-  "version": "0.1.0",
-  "description": "Tessellate build platform: shared skills + standards installed per app, plus /new-app scaffolding.",
+  "version": "0.2.0",
+  "description": "Tessellate build platform: shared skills + standards installed per app, the standards/bp + rubric CLIs, and /new-app scaffolding.",
   "author": {
     "name": "Tessellate Studio"
   }

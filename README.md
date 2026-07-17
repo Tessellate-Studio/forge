@@ -1,9 +1,15 @@
 # forge — Tessellate build platform (private Claude Code plugin)
 
-One private plugin every Tessellate app installs. Carries the shared build
-**skills**, the platform **standards**, a CLAUDE.md **template**, and the
-`/new-app` scaffolder, so build know-how lives once and every app inherits
-it — interchangeable, inter-usable, self-learning (via reviewed PRs).
+One repo = the whole build platform. The Claude Code plugin every Tessellate
+app installs (shared build **skills**, platform **standards**, a CLAUDE.md
+**template**, the `/new-app` scaffolder) plus the platform **CLIs**
+(`standards`/`bp` for scaffolding + inspection, `rubric` for task scoring) and
+the reusable **CI workflows**. Build know-how lives once and every app
+inherits it — interchangeable, inter-usable, self-learning (via reviewed PRs).
+
+> Absorbed the former `code-standards` and `rubric-sdk` repos on 2026-07-17
+> (histories preserved; old repos archived). guinea-pig (the E2E device lab)
+> deliberately stays separate — see `standards/testing.md`.
 
 ## What's inside
 
@@ -19,9 +25,15 @@ it — interchangeable, inter-usable, self-learning (via reviewed PRs).
 | `standards/authoritative-claims.md` | The core rule: cite a source or label a hypothesis. |
 | `standards/security-triage.md` | `npm audit` / Dependabot triage policy. |
 | `standards/doc-placement.md` | Where each doc type lives in a Tessellate app. |
+| `standards/testing.md` | Unit vs E2E (guinea-pig) vs UAT — tiers, testID contract, trigger flow. |
 | `references/CLAUDE.base.md` | One-page CLAUDE.md template for new apps (used by `/new-app`). |
+| `standards-cli/` | The code-standards SDK: `standards`/`bp` CLI, validators, scaffolding templates. |
+| `rubric/` | The rubric SDK: `rubric` CLI + `evaluateFromContext` scoring API (root export). |
+| `.github/workflows/code-inspection.yml` | **Reusable** advisory inspection gate apps call from their CI. |
 
-## Install (per app)
+## Install
+
+**Claude Code plugin (per app):**
 
 ```
 /plugin marketplace add Tessellate-Studio/forge
@@ -32,6 +44,22 @@ Then commit the app's `.claude/settings.json` (`extraKnownMarketplaces` +
 `enabledPlugins` **with `"autoUpdate": true`** on the marketplace entry) so
 every session starts on the latest platform skills and standards — no manual
 version pins or bumps (platform decision 2026-07-16).
+
+**CLIs (machine-global, from GitHub — nothing is on the npm registry):**
+
+```bash
+npm install -g github:Tessellate-Studio/forge   # standards, bp, rubric
+```
+
+**CI gate (per app):**
+
+```yaml
+jobs:
+  inspect:
+    uses: Tessellate-Studio/forge/.github/workflows/code-inspection.yml@master
+    with:
+      fail_on_error: false   # advisory; flip to true once tuned
+```
 
 ## Layering rule
 
