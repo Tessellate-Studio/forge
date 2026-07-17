@@ -105,10 +105,13 @@ class CodeDirectivesSDK {
     let projectPath = providedPath;
     if (!projectPath) {
       if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID) {
-        // In test environment, check if fixtures directory should be used
+        // In test environment, use the SDK's own tests/fixtures dir. Anchored
+        // to __dirname (not process.cwd()) so it works no matter where jest
+        // is launched from — the SDK lives in a subdir of the forge repo.
         const path = require('path');
         const fixturesPath = path.join(
-          process.cwd(),
+          __dirname,
+          '..',
           'tests',
           'fixtures',
           projectName
