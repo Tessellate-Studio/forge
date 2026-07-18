@@ -86,8 +86,8 @@ All in `forge/standards/workflows.md` unless noted:
 ## Testing
 
 Unit/component tests run locally and must stay green before any commit. E2E
-lives in the shared `guinea-pig` repo; `testID`s are the contract — don't
-remove/rename one without updating guinea-pig's `TEST_ID_CONTRACT.md`. Every
+lives in the shared `litmus` repo (renamed from guinea-pig); `testID`s are the contract — don't
+remove/rename one without a paired litmus PR (its `TEST_ID_CONTRACT.md` is generated). Every
 screen gets an error boundary + a render smoke test.
 
 ## Code style

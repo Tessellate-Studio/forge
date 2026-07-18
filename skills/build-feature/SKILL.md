@@ -131,7 +131,7 @@ Work in `mobile/`.
    `screenSmoke.test.tsx`). Assert the new behaviour — presence/absence of an
    element by `testID`, gating by state, copy. Watch it fail for the right
    reason. **Never remove or rename an existing `testID`** without updating
-   guinea-pig's contract — they're the E2E contract.
+   litmus's contract — they're the E2E contract.
 2. **Implement** using theme tokens, not literals. For layout that must adapt to
    screen size, prefer proportional flex over fixed pixels (it's the whole point
    of flex). For empty/variable states, decide where leftover space goes
