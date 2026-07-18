@@ -10,6 +10,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "lint": "eslint src/ --fix",
+    "lint:check": "eslint src/",
     "validate": "bp validate",
     "audit": "bp audit"
   },
@@ -25,6 +26,9 @@
     "nodemon": "^3.0.0",
     "eslint": "^8.0.0",
     "eslint-config-standard": "^17.0.0",
+    "eslint-plugin-import": "^2.29.0",
+    "eslint-plugin-n": "^16.0.0",
+    "eslint-plugin-promise": "^6.1.0",
     "webpack": "^5.0.0",
     "webpack-cli": "^5.0.0",
     "supertest": "^6.0.0"

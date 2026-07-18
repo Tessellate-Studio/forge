@@ -91,8 +91,14 @@ This project follows automated code quality standards:
   async _copyTemplateFiles(template, projectPath, projectName, filesCreated) {
     const templatePath = path.join(this.templatesDir, template);
 
-    // Copy all files from template directory
-    const templateFiles = glob.sync('**/*', { cwd: templatePath, nodir: true });
+    // Copy all files from template directory. `dot: true` matters — the
+    // templates ship dotfiles (.eslintrc.js, .env.example) that the scaffolded
+    // app is broken without.
+    const templateFiles = glob.sync('**/*', {
+      cwd: templatePath,
+      nodir: true,
+      dot: true,
+    });
 
     for (const file of templateFiles) {
       const srcPath = path.join(templatePath, file);
@@ -130,12 +136,30 @@ This project follows automated code quality standards:
     await fs.writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2));
     filesCreated.push('package.json');
 
+    // The package.json above ships a lint script + eslint deps, so the config
+    // has to ship with it — otherwise `npm run lint` fails with "no
+    // configuration found" in every scaffolded app.
+    await this._createEslintConfig(projectPath, filesCreated);
+
     // Create basic project structure based on template
     if (template === 'web-app') {
       await this._createWebAppStructure(projectPath, filesCreated);
     } else if (template === 'api') {
       await this._createApiStructure(projectPath, filesCreated);
     }
+  }
+
+  async _createEslintConfig(projectPath, filesCreated) {
+    const eslintPath = path.join(projectPath, '.eslintrc.js');
+    const eslintContent = `module.exports = {
+  root: true,
+  env: { node: true, es2022: true, jest: true },
+  extends: 'standard'
+};
+`;
+
+    await fs.writeFile(eslintPath, eslintContent);
+    filesCreated.push('.eslintrc.js');
   }
 
   async _createConfigFile(projectPath, config, filesCreated, template) {
@@ -164,24 +188,24 @@ This project follows automated code quality standards:
           code: {
             enforceComments: true,
             maxFunctionLines: 50,
-            testCoverage: 80
+            testCoverage: 80,
           },
           security: {
             scanSecrets: true,
-            vulnerabilityScan: true
+            vulnerabilityScan: true,
           },
           performance: {
             bundleSize: '500KB',
-            loadTime: '2s'
-          }
+            loadTime: '2s',
+          },
         },
         automation: {
           github: {
             autoPR: true,
             claudeReview: true,
-            autoMerge: false
-          }
-        }
+            autoMerge: false,
+          },
+        },
       };
     }
 
@@ -206,7 +230,7 @@ This project follows automated code quality standards:
         lint: 'eslint src/ --fix',
         'lint:check': 'eslint src/',
         validate: 'standards inspect',
-        audit: 'standards audit'
+        audit: 'standards audit',
       },
       keywords: ['code-standards', 'best-practices', template],
       author: '',
@@ -217,8 +241,14 @@ This project follows automated code quality standards:
         // genuinely-published toolchain goes here.
         jest: '^29.0.0',
         eslint: '^8.0.0',
-        'eslint-config-standard': '^17.0.0'
-      }
+        'eslint-config-standard': '^17.0.0',
+
+        // Peer plugins eslint-config-standard requires — without them
+        // `extends: 'standard'` throws at lint time.
+        'eslint-plugin-import': '^2.29.0',
+        'eslint-plugin-n': '^16.0.0',
+        'eslint-plugin-promise': '^6.1.0',
+      },
     };
 
     // Add template-specific dependencies
@@ -229,7 +259,7 @@ This project follows automated code quality standards:
         express: '^4.18.0',
         cors: '^2.8.5',
         helmet: '^7.0.0',
-        dotenv: '^16.0.0'
+        dotenv: '^16.0.0',
       };
       basePackageJson.devDependencies.nodemon = '^3.0.0';
 
@@ -284,7 +314,7 @@ This project follows automated code quality standards:
       '.yml',
       '.yaml',
       '.txt',
-      '.env'
+      '.env',
     ];
     return textExtensions.some(ext => filepath.endsWith(ext));
   }

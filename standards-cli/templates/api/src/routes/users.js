@@ -1,13 +1,23 @@
-const express = require('express');
-const { body, validationResult, param } = require('express-validator');
-const router = express.Router();
+const express = require('express')
+const { body, validationResult, param } = require('express-validator')
+const router = express.Router()
 
 // Mock database for demonstration (replace with real database)
-let users = [
-  { id: 1, name: 'John Doe', email: 'john@example.com', createdAt: new Date().toISOString() },
-  { id: 2, name: 'Jane Smith', email: 'jane@example.com', createdAt: new Date().toISOString() }
-];
-let nextUserId = 3;
+const users = [
+  {
+    id: 1,
+    name: 'John Doe',
+    email: 'john@example.com',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 2,
+    name: 'Jane Smith',
+    email: 'jane@example.com',
+    createdAt: new Date().toISOString()
+  }
+]
+let nextUserId = 3
 
 // Validation middleware for user creation
 const validateUserCreation = [
@@ -20,15 +30,15 @@ const validateUserCreation = [
     .isEmail()
     .withMessage('Please provide a valid email address')
     .normalizeEmail()
-    .custom(async (email) => {
+    .custom(async email => {
       // Check if email already exists
-      const existingUser = users.find(user => user.email === email);
+      const existingUser = users.find(user => user.email === email)
       if (existingUser) {
-        throw new Error('Email already registered');
+        throw new Error('Email already registered')
       }
-      return true;
+      return true
     })
-];
+]
 
 // Validation middleware for user ID parameter
 const validateUserId = [
@@ -36,7 +46,7 @@ const validateUserId = [
     .isInt({ min: 1 })
     .withMessage('User ID must be a positive integer')
     .toInt()
-];
+]
 
 /**
  * @route GET /api/users
@@ -46,14 +56,14 @@ const validateUserId = [
 router.get('/', (req, res) => {
   try {
     // Parse query parameters for pagination
-    const page = Math.max(1, parseInt(req.query.page) || 1);
-    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
-    const offset = (page - 1) * limit;
+    const page = Math.max(1, parseInt(req.query.page) || 1)
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10))
+    const offset = (page - 1) * limit
 
     // Apply pagination to users array
-    const paginatedUsers = users.slice(offset, offset + limit);
-    const totalUsers = users.length;
-    const totalPages = Math.ceil(totalUsers / limit);
+    const paginatedUsers = users.slice(offset, offset + limit)
+    const totalUsers = users.length
+    const totalPages = Math.ceil(totalUsers / limit)
 
     res.json({
       success: true,
@@ -66,16 +76,15 @@ router.get('/', (req, res) => {
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1
       }
-    });
-
+    })
   } catch (error) {
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve users',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    })
   }
-});
+})
 
 /**
  * @route GET /api/users/:id
@@ -85,40 +94,39 @@ router.get('/', (req, res) => {
 router.get('/:id', validateUserId, (req, res) => {
   try {
     // Check for validation errors
-    const errors = validationResult(req);
+    const errors = validationResult(req)
     if (!errors.isEmpty()) {
       return res.status(400).json({
         success: false,
         message: 'Invalid user ID format',
         errors: errors.array()
-      });
+      })
     }
 
-    const userId = req.params.id;
-    
+    const userId = req.params.id
+
     // Find user by ID
-    const user = users.find(u => u.id === userId);
+    const user = users.find(u => u.id === userId)
     if (!user) {
       return res.status(404).json({
         success: false,
         message: 'User not found',
         userId
-      });
+      })
     }
 
     res.json({
       success: true,
       data: user
-    });
-
+    })
   } catch (error) {
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve user',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    })
   }
-});
+})
 
 /**
  * @route POST /api/users
@@ -128,16 +136,16 @@ router.get('/:id', validateUserId, (req, res) => {
 router.post('/', validateUserCreation, async (req, res) => {
   try {
     // Check for validation errors
-    const errors = validationResult(req);
+    const errors = validationResult(req)
     if (!errors.isEmpty()) {
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
         errors: errors.array()
-      });
+      })
     }
 
-    const { name, email } = req.body;
+    const { name, email } = req.body
 
     // Create new user object
     const newUser = {
@@ -146,30 +154,29 @@ router.post('/', validateUserCreation, async (req, res) => {
       email,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
-    };
+    }
 
     // Add user to mock database
-    users.push(newUser);
+    users.push(newUser)
 
     // Log user creation for audit trail
-    console.log(`✅ User created: ${email} (ID: ${newUser.id})`);
+    console.log(`✅ User created: ${email} (ID: ${newUser.id})`)
 
     res.status(201).json({
       success: true,
       message: 'User created successfully',
       data: newUser
-    });
-
+    })
   } catch (error) {
-    console.error('Error creating user:', error);
-    
+    console.error('Error creating user:', error)
+
     res.status(500).json({
       success: false,
       message: 'Failed to create user',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    })
   }
-});
+})
 
 /**
  * @route PUT /api/users/:id
@@ -179,26 +186,26 @@ router.post('/', validateUserCreation, async (req, res) => {
 router.put('/:id', validateUserId, validateUserCreation, (req, res) => {
   try {
     // Check for validation errors
-    const errors = validationResult(req);
+    const errors = validationResult(req)
     if (!errors.isEmpty()) {
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
         errors: errors.array()
-      });
+      })
     }
 
-    const userId = req.params.id;
-    const { name, email } = req.body;
+    const userId = req.params.id
+    const { name, email } = req.body
 
     // Find user by ID
-    const userIndex = users.findIndex(u => u.id === userId);
+    const userIndex = users.findIndex(u => u.id === userId)
     if (userIndex === -1) {
       return res.status(404).json({
         success: false,
         message: 'User not found',
         userId
-      });
+      })
     }
 
     // Update user data
@@ -207,26 +214,25 @@ router.put('/:id', validateUserId, validateUserCreation, (req, res) => {
       name,
       email,
       updatedAt: new Date().toISOString()
-    };
+    }
 
-    console.log(`📝 User updated: ${email} (ID: ${userId})`);
+    console.log(`📝 User updated: ${email} (ID: ${userId})`)
 
     res.json({
       success: true,
       message: 'User updated successfully',
       data: users[userIndex]
-    });
-
+    })
   } catch (error) {
-    console.error('Error updating user:', error);
-    
+    console.error('Error updating user:', error)
+
     res.status(500).json({
       success: false,
       message: 'Failed to update user',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    })
   }
-});
+})
 
 /**
  * @route DELETE /api/users/:id
@@ -236,31 +242,31 @@ router.put('/:id', validateUserId, validateUserCreation, (req, res) => {
 router.delete('/:id', validateUserId, (req, res) => {
   try {
     // Check for validation errors
-    const errors = validationResult(req);
+    const errors = validationResult(req)
     if (!errors.isEmpty()) {
       return res.status(400).json({
         success: false,
         message: 'Invalid user ID format',
         errors: errors.array()
-      });
+      })
     }
 
-    const userId = req.params.id;
+    const userId = req.params.id
 
     // Find user index
-    const userIndex = users.findIndex(u => u.id === userId);
+    const userIndex = users.findIndex(u => u.id === userId)
     if (userIndex === -1) {
       return res.status(404).json({
         success: false,
         message: 'User not found',
         userId
-      });
+      })
     }
 
     // Remove user from array
-    const deletedUser = users.splice(userIndex, 1)[0];
+    const deletedUser = users.splice(userIndex, 1)[0]
 
-    console.log(`🗑️ User deleted: ${deletedUser.email} (ID: ${userId})`);
+    console.log(`🗑️ User deleted: ${deletedUser.email} (ID: ${userId})`)
 
     res.json({
       success: true,
@@ -270,17 +276,16 @@ router.delete('/:id', validateUserId, (req, res) => {
         name: deletedUser.name,
         email: deletedUser.email
       }
-    });
-
+    })
   } catch (error) {
-    console.error('Error deleting user:', error);
-    
+    console.error('Error deleting user:', error)
+
     res.status(500).json({
       success: false,
       message: 'Failed to delete user',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    })
   }
-});
+})
 
-module.exports = router;
+module.exports = router

@@ -95,6 +95,10 @@ screen gets an error boundary + a render smoke test.
 Theme tokens (colours, spacing, typography, alphas) — never hardcoded literals
 (`anti-patterns.md`).
 
+Linting is advisory: every package has a working `npm run lint`, and CI runs it
+non-blocking. Fix findings or consciously demote them to warnings — don't let the
+list rot.
+
 ---
 
 ## App-specific

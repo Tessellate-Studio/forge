@@ -43,7 +43,8 @@ jobs:
       
       - name: Run Linting
         run: npm run lint
-        continue-on-error: false
+        # Lint is advisory-first per platform standard - findings are surfaced, never blocking.
+        continue-on-error: true
       
       - name: Check Code Formatting
         run: |

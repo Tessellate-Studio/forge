@@ -6,3 +6,6 @@ build/
 *.bundle.js
 CHANGELOG.md
 LICENSE
+# Scaffold payload: template sources ship to generated apps and follow the
+# standard style their own .eslintrc.js declares, not forge house formatting.
+standards-cli/templates/

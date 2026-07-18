@@ -56,12 +56,20 @@ sibling of the other app repos.
    web surface with `/frontend-design` (not the generic scaffold look), and run
    `/design-critique` on the first rendered screen before the setup PR — a new
    app's visual baseline is set on day one.
-4. **CI inspection gate (advisory)** — add `.github/workflows/code-inspection.yml`
+4. **Lint (advisory-first)** — every app ships a lint setup that actually runs.
+   Expo/RN: run `npx expo lint` once — it scaffolds `eslint.config.js` with
+   `eslint-config-expo` and adds the `lint` script. TS backend/api packages: eslint 9
+   flat config extending `typescript-eslint`'s `recommended`, with
+   `"lint": "eslint ."`. Plain-JS scaffolds get a working `.eslintrc.js` from
+   `standards init`. CI runs lint as a **non-blocking** step/job
+   (`continue-on-error: true`) — findings inform, they don't gate. Add prettier
+   only if the app already uses it; don't introduce it here.
+5. **CI inspection gate (advisory)** — add `.github/workflows/code-inspection.yml`
    that calls
    `Tessellate-Studio/forge/.github/workflows/code-inspection.yml@master`
    with `fail_on_error: false` on `pull_request`. Non-blocking until the config is
    proven on the app; the app keeps its own tsc+test gate (don't double-run those).
-5. **Ignore worktree dirs** — the app's `.gitignore` must exclude `.worktrees/`
+6. **Ignore worktree dirs** — the app's `.gitignore` must exclude `.worktrees/`
    and `.claude/worktrees/` (per the concurrent-session isolation rule: tasks run
    in throwaway worktrees that must never be committed).
 
