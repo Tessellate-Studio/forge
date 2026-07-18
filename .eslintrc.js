@@ -49,7 +49,6 @@ module.exports = {
     eqeqeq: ['error', 'always'],
     curly: ['error', 'all'],
     'brace-style': ['error', '1tbs'],
-    'comma-dangle': ['error', 'never'],
     'no-trailing-spaces': 'error',
     'eol-last': 'error',
 
