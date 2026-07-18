@@ -121,6 +121,31 @@ roadmap-pulse's honesty pass enforces it weekly (it tombstones confirmed-shipped
 entries as part of Step 1). A doc that keeps growing after its work ships is a
 word block nobody reads — the failure mode this rule exists to prevent.
 
+**Shipped-ness alone is not grounds to collapse. What the text is FOR decides.**
+Two carve-outs, both learned by breaking them (alate PRs
+[#342](https://github.com/Tessellate-Studio/alate/pull/342) →
+[#349](https://github.com/Tessellate-Studio/alate/pull/349)):
+
+1. **A PR holds what was DONE, not what was considered and rejected.** Before
+   collapsing, ask whether the body contains anything *no diff can give back*:
+   a rejected alternative and why it lost, an investigation that corrected a
+   false belief, external research, a "don't try this again" finding. That
+   content was never in a commit, so collapsing it destroys it permanently —
+   the PR link goes to a diff that never contained it. Keep those lines next to
+   the tombstone; a few surviving sentences are cheaper than re-running the
+   investigation. *(What was lost the first time: a full-branch history search
+   establishing that a feature believed to be a "re-plug" had never existed.
+   The search was real work and left no commit.)*
+2. **Test artefacts are not planning docs.** Coverage maps, user-path audits,
+   E2E contracts and regression tables (e.g. alate's `USER_PATHS.md`) describe
+   paths that must still be *exercised*. A shipped fix there keeps its full
+   `Was` / `Now` split — `Was` is the repro, `Now` is the assertion, and a
+   tester needs both. Cite the PR alongside them; never collapse them into it.
+   Mark such docs with a header note putting them out of scope for this rule.
+
+Watch for **line-count parity masking content loss**: a table row that loses a
+column leaves the file the same length. Diff the content, not the line count.
+
 ## External-tool actions — log DECIDED steps
 
 When a session decides which external tool/provider to use for a setup (DNS,
