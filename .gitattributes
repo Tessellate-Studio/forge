@@ -1,0 +1,28 @@
+# Git owns line endings — not eslint, not the editor, not the OS.
+#
+# `text=auto eol=lf` normalizes every text file to LF in the index AND checks it
+# out as LF on every platform, including Windows. Without this, git's default
+# on Windows checks files out with CRLF, which made forge's own
+# `npm run lint:check` report ~7,800 phantom `linebreak-style` errors and bury
+# every real finding underneath.
+* text=auto eol=lf
+
+# Shell scripts must be LF or they break under bash/sh.
+*.sh text eol=lf
+
+# Binary files: never touch, never diff as text. None are tracked today, but
+# these markers stop a future image/archive from being corrupted by
+# normalization.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
