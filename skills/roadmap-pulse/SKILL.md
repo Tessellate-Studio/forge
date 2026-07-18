@@ -221,6 +221,7 @@ Confirm the next scheduled run is on the calendar; surface the next-run timestam
 ## What this skill does NOT do
 
 - It does not silently delete open entries. Confirmed-SHIPPED items get **collapsed to a one-line tombstone** (title + PR link + ship date — the implementation detail lives in the PR, not the docs; see `standards/workflows.md` → "Docs stay lean").
+- It does not collapse **what no diff can give back** (rejected alternatives and why they lost, investigations that corrected a false belief, external research) or **test artefacts** (coverage maps, user-path audits, E2E contracts, regression tables — a shipped fix keeps its full `Was` / `Now` split). Shipped-ness alone is not grounds to collapse; what the text is *for* decides. Both carve-outs are stated in `standards/workflows.md` → "Docs stay lean".
 - It does not invent SHAs or rubric scores. If rubric-sdk fails to return a score, the entry is surfaced as "unscored, manual review needed" — never fabricated.
 - It does not re-sort BACKLOG.md's P-tier sections or write inline scores into entries. (Both are opt-in extensions you can add later — for now, the digest + inline list is the visibility layer.)
 - It does not run on docs the user didn't include in the inventory's confirmed scope.

@@ -15,6 +15,19 @@ Use these as templates. Match the doc's existing house style — don't introduce
 
 ### Already-shipped → strike + tombstone
 
+> **Before collapsing, apply the two carve-outs** in
+> `standards/workflows.md` → "Docs stay lean". Shipped-ness alone is not
+> grounds to collapse:
+> 1. **Keep what no diff can give back** — a rejected alternative and why it
+>    lost, an investigation that corrected a false belief, external research.
+>    The PR link goes to a diff that never contained it.
+> 2. **Never collapse test artefacts** — coverage maps, user-path audits, E2E
+>    contracts, regression tables. A shipped fix there keeps its full
+>    `Was` / `Now` split; both halves are the test.
+>
+> When in doubt, keep the lines next to the tombstone and say so in the run
+> notes. Over-collapsing is unrecoverable; over-keeping costs a few lines.
+
 **Before** (entry sits under `## P1`, no strikethrough):
 
 ```markdown
