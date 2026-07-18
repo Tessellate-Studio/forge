@@ -102,6 +102,20 @@ step `env:` block, never inline `${{ }}` in a `run:` body.
 visible to all collaborators meanwhile. OWASP A05. *Precedent: a keystore step's
 `else` branch base64-printed a key into public logs.*
 
+## A build that runs without being asked for
+
+Heavy build workflows (Android APK/AAB, EAS, Gradle, Docker, emulator E2E) must
+be `workflow_dispatch`-only — never `on: push`, never `schedule:`, never
+auto-chained from another repo's build. Release tags are the sole exception; a
+tag is the explicit request. Cheap PR gates (tests, lint, typecheck, secret scan)
+stay automatic.
+**Why:** included Actions minutes are one org-wide monthly pool, so an
+unattended build starves every *other* repo's CI, and the outage looks like a
+config bug. *Precedent: 2026-07-18 — Tessellate-Studio blew through its 2,000
+included minutes and all private-repo CI stopped at once.* Full rule + the
+`concurrency` / `timeout-minutes` habits that go with it:
+[`workflows.md` → "CI spend"](./workflows.md).
+
 ## Speak from authority, not assumption — MOST IMPORTANT (was #20)
 
 Every assertion/status claim cites a verified source (`file:line`, SHA, MCP tool,

@@ -146,6 +146,49 @@ Two carve-outs, both learned by breaking them (alate PRs
 Watch for **line-count parity masking content loss**: a table row that loses a
 column leaves the file the same length. Diff the content, not the line count.
 
+## CI spend — heavy builds are MANUAL-DISPATCH ONLY
+
+**No build runs unless a human asked for it.** Free-tier Actions minutes are a
+shared, org-wide, monthly budget: when they run out, *every* private repo's CI
+dies at once — including the cheap PR gates that had nothing to do with the
+spend. Builds are cloud-only (never compiled on the laptop), so the cloud budget
+is the only budget there is. Protect it at the trigger, not with a spending cap.
+
+**Heavy** = Android APK/AAB, EAS, Gradle, Xcode, Docker image builds, emulator
+E2E — anything measured in tens of minutes. Heavy workflows carry
+`workflow_dispatch` and nothing else, unless the user explicitly asks otherwise.
+
+- **Never `on: push`** for a build (not master, not any branch).
+- **Never `schedule:`** for a build. A timer builds artefacts nobody is waiting
+  on, and a hung one bills silently until the job timeout kills it.
+- **Never chain heavy→heavy.** A build must not `repository_dispatch` another
+  repo's emulator/E2E run automatically; the downstream repo's heavy workflow
+  stays dispatch-only and gets pointed at an existing artefact by hand.
+- **Release tags (`push: tags: v*`) are the one allowed automatic build** — a
+  tag *is* the explicit human request. Tag deliberately; four tags in a day is
+  four full builds.
+
+**Cheap gates stay automatic.** Unit tests, lint, typecheck, secret/PII scan,
+deploy hooks — keep these on `pull_request`. They are the safety net and they
+cost single-digit minutes. Don't "save minutes" by removing a gate; save them by
+not building.
+
+Two supporting habits, both of which pay for themselves:
+- `concurrency: { group: …, cancel-in-progress: true }` on every heavy workflow,
+  so a superseded run stops instead of finishing.
+- An explicit `timeout-minutes` (never GitHub's 6-hour default) on every heavy
+  job. *Precedent: a hung Gradle daemon ate the full 6-hour default on every
+  scheduled alate run for a month — invisible, because a timeout ends in
+  `cancelled`, not `failure`.*
+
+**Non-builds on a schedule are fine** when the cron *is* the feature (a nightly
+data-retention/GDPR deletion job, a cert renewal). Judge by cost and purpose, not
+by the presence of the `schedule:` key.
+
+**Why:** *2026-07-18 — Tessellate-Studio exhausted its 2,000 included minutes and
+every private repo's Actions stopped mid-session. Public repos kept running,
+which is what made it legible as a budget problem rather than a config one.*
+
 ## External-tool actions — log DECIDED steps
 
 When a session decides which external tool/provider to use for a setup (DNS,
