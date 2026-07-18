@@ -1,0 +1,4 @@
+# Scaffold payload, not forge source. Template sources are copied verbatim into
+# generated apps and are linted there against the .eslintrc.js that ships with
+# them (eslint-config-standard) — forge's own house rules must not rewrite them.
+standards-cli/templates/
