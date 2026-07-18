@@ -12,7 +12,7 @@ the reusable **CI workflows**. Build know-how lives once and every app
 inherits it — interchangeable, inter-usable, self-learning (via reviewed PRs).
 
 > Absorbed the former `code-standards` and `rubric-sdk` repos on 2026-07-17
-> (histories preserved; old repos archived). guinea-pig (the E2E device lab)
+> (histories preserved; old repos archived). litmus (the testing lab, renamed from guinea-pig 2026-07-18)
 > deliberately stays separate — see `standards/testing.md`.
 
 ## What's inside
@@ -29,7 +29,7 @@ inherits it — interchangeable, inter-usable, self-learning (via reviewed PRs).
 | `standards/authoritative-claims.md` | The core rule: cite a source or label a hypothesis. |
 | `standards/security-triage.md` | `npm audit` / Dependabot triage policy. |
 | `standards/doc-placement.md` | Where each doc type lives in a Tessellate app. |
-| `standards/testing.md` | Unit vs E2E (guinea-pig) vs UAT — tiers, testID contract, trigger flow. |
+| `standards/testing.md` | Unit vs E2E/visual/rule-compliance (litmus) vs UAT — tiers, testID contract, trigger flow. |
 | `references/CLAUDE.base.md` | One-page CLAUDE.md template for new apps (used by `/new-app`). |
 | `standards-cli/` | The code-standards SDK: `standards`/`bp` CLI, validators, scaffolding templates. |
 | `rubric/` | The rubric SDK: `rubric` CLI + `evaluateFromContext` scoring API (root export). |

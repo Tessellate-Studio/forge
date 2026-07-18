@@ -5,7 +5,7 @@ description: >-
   to the shared platform from commit one. Use when the user says "new app", "spin
   up an app", "scaffold a new project", "start a new app called X", or hands over
   a requirements brief. Creates the repo under Tessellate-Studio, wires the shared
-  libs (rubric-sdk, code-standards, guinea-pig) + the forge plugin, seeds CLAUDE.md
+  libs (rubric-sdk, code-standards, litmus) + the forge plugin, seeds CLAUDE.md
   from the canonical base + the platform standards + app-specific memory, registers
   the weekly roadmap-pulse cron, and lands it as ONE initial commit + ONE setup PR
   (clean history). Seeds essentials only — no pre-built backlog (roadmap-pulse does
@@ -42,7 +42,7 @@ sibling of the other app repos.
 1. **Platform tooling** — one GitHub install gives the whole platform:
    `npm install -g github:Tessellate-Studio/forge` (provides the `standards`,
    `bp`, and `rubric` CLIs — nothing is on the npm registry). For E2E/test
-   utilities add `guinea-pig` (`github:Tessellate-Studio/guinea-pig`) as a
+   utilities add `litmus` (`github:Tessellate-Studio/litmus`) as a
    devDep; see `${CLAUDE_PLUGIN_ROOT}/standards/testing.md` for when.
 2. **forge plugin** — write a committed `.claude/settings.json` with
    `extraKnownMarketplaces` (`Tessellate-Studio/forge`, **`"autoUpdate": true`**)

@@ -1,7 +1,7 @@
 # Code Standards config — React Native / Expo profile
 # Dropped onto a new RN app by `standards init --template react-native`.
 # Tuned for mobile: no web bundle/load targets, accessibility on, E2E lives in
-# the shared guinea-pig repo (not in-repo).
+# the shared litmus repo (not in-repo; renamed from guinea-pig).
 version: "1.0.0"
 
 project:
@@ -28,11 +28,11 @@ standards:
     enabled: true
     level: "AA"
 
-# E2E is NOT in-repo for Tessellate apps — it runs in guinea-pig.
+# E2E is NOT in-repo for Tessellate apps — it runs in litmus.
 testing:
   e2e:
     inRepo: false
-    runner: "guinea-pig"
+    runner: "litmus"
 
 automation:
   github:
