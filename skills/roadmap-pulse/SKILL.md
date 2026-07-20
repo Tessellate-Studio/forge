@@ -14,6 +14,7 @@ This skill is a weekly project-management pulse. It does six things in sequence 
 3. **Dependency inference** — spot which open tasks block which; confirm with user; persist confirmed dependencies back into the BACKLOG entries.
 4. **Rubric scoring** — invoke rubric-sdk per open task (Impact / Complexity / Reusability / Strategic Fit, 0-12 total); adjust for dependency-unblock potential + goal-alignment.
 5. **Output** — a prioritized top-5-to-10 list inline + append a dated section to `WEEKLY_DIGEST.md` so the history of weekly decisions accumulates.
+5.5. **Auto-build** (autonomous runs only) — for the top P0 "Must" items, invoke `forge:build-feature` to implement end-to-end, ship to preview, and auto-merge on green. Cap: 2 per run.
 6. **Self-schedule** — first-run only: set up a weekly cron via the `schedule` skill. Default cadence Sunday 16:00 IST, override at first run.
 
 The point is not "produce a pretty list." The point is **align action with current goals, supported by sourced reasoning, weekly, without re-deriving from scratch each time.**
@@ -206,6 +207,35 @@ every run — never mint a new artifact**:
 4. Load the `artifact-design` skill before writing the page (required by the
    Artifact tool); keep it theme-aware and self-contained.
 
+### Step 5.5 — Auto-build top P0 items (autonomous runs only)
+
+This step runs **only on autonomous (cron-triggered) runs**. On manual invocations, skip this step — the user is present and will decide what to build.
+
+Everything built here ships to **test/preview** (OTA to the `preview` channel), never production. The user reviews on device at their convenience and promotes to production when ready.
+
+**For each item scored "Must" band (9-12) AND tagged P0 in BACKLOG, up to 2 items per pulse run:**
+
+1. **Branch:** create `pulse/<slug>` off the default branch (fetch origin first).
+2. **Build:** invoke the `forge:build-feature` skill to implement the item end-to-end. The build-feature skill handles TDD, implementation, OTA publish to preview, device verification (if a device is connected), and quality pass.
+3. **PR:** open a ready (not draft) PR with:
+   - Title: `feat(<scope>): <task title>`
+   - Body: standard build-feature output — TLDR, what changed, test coverage, acceptance criteria verdicts
+   - Labels: `pulse-auto-build`, `auto-generated`
+4. **Auto-merge:** enable auto-merge via `gh pr merge --squash --auto <pr-number>`.
+5. **Update BACKLOG:** mark the entry with status `DONE — <date>, PR #<n>` and the merged SHA once it lands. Collapse to a one-line tombstone per the "Docs stay lean" standard.
+6. **Log:** append to `BoTessellate/litmus` auto-ship-log.md:
+   `| <date> | roadmap-pulse | <repo> | PR #<n> | <1-line what> | P0 auto-build |`
+
+**Cap at 2 items per run.** If more than 2 items qualify, build the top 2 by score. The rest stay in the priority list for next week (or the user picks them up manually).
+
+**Skip conditions** (don't auto-build even if the item qualifies):
+- The item's BACKLOG entry contains `**Needs input:**` or `**Decision needed:**` — it has an unresolved human decision
+- The item requires changes to multiple repos (cross-repo coordination is too complex for autonomous builds)
+- The item's description mentions "breaking change", "migration", or "schema change" — these need human oversight
+- No device is connected for OTA verification — build and PR are fine, but note in the PR that device verification was skipped
+
+The weekly digest entry gets a new **"Built this week"** section listing what was implemented, with PR links and a 1-line summary of each.
+
 ### Step 6 — Summary + next-run confirmation
 
 End the run with the user's project-CLAUDE.md communication structure (for Alate that's the 5-part format). Surface:
@@ -214,7 +244,8 @@ End the run with the user's project-CLAUDE.md communication structure (for Alate
 2. **What you (user) need to do** — anything that requires the user (e.g. "confirm dependency suggestions from Step 3 that we marked SUGGESTED").
 3. **What I (Claude) can do** — anything the skill can take off the user's hands (e.g. "start on Task #1 now").
 4. **Summary of what changed this run** — items struck through, dependencies persisted, scores shifted vs last run (read prior `WEEKLY_DIGEST.md` section for diff).
-5. **Docs updated** — BACKLOG.md (tombstoned items + persisted Depends-on lines), WEEKLY_DIGEST.md (new section), the refreshed roadmap Artifact link, maybe memory files.
+5. **Built this week** — items auto-built by Step 5.5 (PR links + 1-line summaries). Only present on autonomous runs where Step 5.5 executed.
+6. **Docs updated** — BACKLOG.md (tombstoned items + persisted Depends-on lines), WEEKLY_DIGEST.md (new section), the refreshed roadmap Artifact link, maybe memory files.
 
 Confirm the next scheduled run is on the calendar; surface the next-run timestamp.
 
