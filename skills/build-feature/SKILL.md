@@ -1,18 +1,20 @@
 ---
 name: build-feature
 description: >-
-  Implement and VERIFY a UI feature or change in the alate React Native (Expo)
-  app end-to-end on a real device, iterating autonomously until the user's ask
-  is objectively met. Use this whenever the user asks to build, change, fix, or
-  redesign a screen/component or its layout, spacing, typography, colours, or
-  copy — e.g. "fix the home screen spacing", "the nav bar is too loud",
-  "redesign the empty state", "the gap is still there", "make the verse bigger",
-  "this doesn't look right on my phone". Trigger even when they don't say
-  "feature" or "skill": any visual/UI change to alate that should be confirmed
-  on-device belongs here. The whole point is to STOP making the user screenshot
-  the same defect repeatedly — this skill measures the result against explicit
-  acceptance criteria from a device screenshot and keeps iterating until it
-  passes.
+  Implement and VERIFY a feature, fix, or change end-to-end — iterating
+  autonomously until the user's ask is objectively met. Covers UI changes
+  (layout, spacing, typography, colours, copy — verified on a real device via
+  OTA) AND non-UI changes (backend, data-flow, tooling, config — verified via
+  TDD + test suite green + code review). Use this whenever the user asks to
+  build, change, or fix something in any Tessellate app — e.g. "fix the home
+  screen spacing", "add the API endpoint", "the data migration is wrong",
+  "redesign the empty state", "fix the build script". Trigger even when they
+  don't say "feature" or "skill": any change that should be verified before
+  handing back belongs here. For UI changes, the skill measures the result
+  against acceptance criteria from a device screenshot and keeps iterating
+  until it passes. For non-UI changes, acceptance criteria are test-based
+  (Steps 3-4 are skipped; the test suite + code review are the verification
+  bar).
 ---
 
 # Build a feature in alate — implement, then verify on-device until it's actually right
