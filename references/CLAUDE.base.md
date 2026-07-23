@@ -73,6 +73,16 @@ All in `forge/standards/workflows.md` unless noted:
 - `/forge:roadmap-pulse` — weekly planning-doc honesty pass + RICE-scored priorities.
 - `/forge:new-app` — scaffold a new platform-wired app.
 
+**Multi-agent builds (Pitch/RFD tier).** For feature- and architecture-scoped
+changes, `build-feature` delegates to the `researched-build` workflow — a
+pipeline of separated agents (researcher → tester → implementer → reviewer →
+verifier) that communicate via structured returns and cross-validate each
+other's work (the reviewer reads a diff it didn't write; skeptics refute review
+findings). The deeper `adversarial-review` workflow is also available for
+large diffs. Scripts + agent charters live under the forge plugin's
+`references/workflows/` and `references/agents/`; both degrade gracefully to
+single-agent when unavailable. Tactical/trivial changes stay single-agent.
+
 ## Project
 
 {{PROJECT_DESCRIPTION}} Package id: `{{PACKAGE_ID}}`.
