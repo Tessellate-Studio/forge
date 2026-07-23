@@ -40,11 +40,12 @@ fi
 # rubric-sdk PR #1 (commit 9ff27f2) that meets this skill's contract
 # (4-axis 0-3 scores + total + band + reasoning).
 #
-# Package-name fallback: the canonical package is now
-# `@tessellate-studio/forge` (rubric-sdk merged into the forge repo,
-# 2026-07-17 — the rubric lib is forge's root export). Older installs may
-# still be under `@tessellate-studio/rubric-sdk` or `@ramsaptami/rubric-sdk`,
-# so the candidates array below tries all three — forge first.
+# Resolution order: try the local forge repo root first (via FORGE_ROOT,
+# computed from this script's location), then fall back to npm-installed
+# package names. The local path handles the common case where forge is the
+# Claude Code plugin host, not an npm dependency.
+FORGE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" 2>/dev/null && pwd)"
+export FORGE_ROOT
 if command -v node >/dev/null 2>&1; then
   # NODE_PATH must include npm's global node_modules so a globally-installed
   # rubric-sdk is resolvable by `require()`. Without this, `npm install -g`
@@ -64,7 +65,7 @@ if command -v node >/dev/null 2>&1; then
   fi
   RESULT="$(node -e '
     const input = JSON.parse(require("fs").readFileSync(0, "utf-8"));
-    const candidates = ["@tessellate-studio/forge", "@tessellate-studio/rubric-sdk", "@ramsaptami/rubric-sdk"];
+    const candidates = [process.env.FORGE_ROOT, "@tessellate-studio/forge", "@tessellate-studio/rubric-sdk", "@ramsaptami/rubric-sdk"].filter(Boolean);
     let sdk = null;
     let lastErr = null;
     for (const name of candidates) {
