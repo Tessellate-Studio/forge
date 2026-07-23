@@ -2,3 +2,9 @@
 # generated apps and are linted there against the .eslintrc.js that ships with
 # them (eslint-config-standard) — forge's own house rules must not rewrite them.
 standards-cli/templates/
+
+# Workflow-runtime payload, not forge Node source. These scripts run in the
+# Claude Code Workflow sandbox (ESM module scope with injected globals like
+# `agent`, `phase`, `parallel`, `args`, and top-level await/return) — forge's
+# script-mode eslint can't parse them and would flag the runtime globals.
+references/workflows/
