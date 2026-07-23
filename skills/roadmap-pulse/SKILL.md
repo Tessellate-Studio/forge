@@ -1,6 +1,6 @@
 ---
 name: roadmap-pulse
-description: Weekly project-management skill that scans planning docs (BACKLOG, RELEASE notes, regression log), runs an honesty pass on stale claims, infers task dependencies, scores open tasks via rubric-sdk, and produces a prioritized top-5-to-10 list plus an appended WEEKLY_DIGEST.md entry. Self-schedules a weekly cron; also fires manually. Use whenever the user asks to "run roadmap pulse", "rebalance the backlog", "score open tasks", "what should I focus on this week", "is my roadmap up to date", or any phrasing implying both honesty-checking the planning docs AND deciding what's next. Triggers even on passive cues like "feels like the backlog needs a refresh" or "I'm not sure what to focus on" — even when the user doesn't say "skill" or "pulse" explicitly. Output is a sourced prioritized list with rubric-sdk scores + dependency-unblock + goal-alignment bumps, plus a dated WEEKLY_DIGEST.md section that builds a decision history.
+description: Weekly project-management skill that scans planning docs (BACKLOG, RELEASE notes, regression log), runs an honesty pass on stale claims, infers task dependencies, scores open tasks via RICE (Reach × Impact × Confidence / Effort), and produces a prioritized top-5-to-10 list plus an appended WEEKLY_DIGEST.md entry. Self-schedules a weekly cron; also fires manually. Use whenever the user asks to "run roadmap pulse", "rebalance the backlog", "score open tasks", "what should I focus on this week", "is my roadmap up to date", or any phrasing implying both honesty-checking the planning docs AND deciding what's next. Triggers even on passive cues like "feels like the backlog needs a refresh" or "I'm not sure what to focus on" — even when the user doesn't say "skill" or "pulse" explicitly. Output is a sourced prioritized list with RICE scores + reusability/strategic-fit/dependency-unblock overlays, plus a dated WEEKLY_DIGEST.md section that builds a decision history.
 ---
 
 # Roadmap pulse
@@ -12,7 +12,7 @@ This skill is a weekly project-management pulse. It does six things in sequence 
 1. **Honesty pass** — strip the ghosts (items still listed as open that actually shipped; items marked shipped from orphan branches that never merged).
 2. **Context pull** — read `RELEASE_V2.md` for current launch-state signals; surface inferred urgencies; accept user overrides.
 3. **Dependency inference** — spot which open tasks block which; confirm with user; persist confirmed dependencies back into the BACKLOG entries.
-4. **Rubric scoring** — invoke rubric-sdk per open task (Impact / Complexity / Reusability / Strategic Fit, 0-12 total); adjust for dependency-unblock potential + goal-alignment.
+4. **RICE scoring** — invoke rubric-sdk per open task using the RICE framework (Reach × Impact × Confidence / Effort); adjust with reusability, strategic fit, and dependency-unblock multiplier overlays.
 5. **Output** — a prioritized top-5-to-10 list inline + append a dated section to `WEEKLY_DIGEST.md` so the history of weekly decisions accumulates.
 5.5. **Auto-build** (autonomous runs only) — for the top P0 "Must" items, invoke `forge:build-feature` to implement end-to-end, ship to preview, and auto-merge on green. Cap: 2 per run.
 6. **Self-schedule** — first-run only: set up a weekly cron via the `schedule` skill. Default cadence Sunday 16:00 IST, override at first run.
@@ -152,19 +152,20 @@ For each open task identified in Step 1:
 
 For autonomous (cron) runs where no user is available to confirm: persist HIGH-confidence inferences as `**Suggested dependency:**` (note: SUGGESTED, not DEPENDS — easy to spot in review). The user upgrades them to confirmed `**Depends on:**` in the next manual run.
 
-### Step 4 — Rubric scoring
+### Step 4 — RICE scoring
 
 For each open task:
 
 1. Compose the input for rubric-sdk: `{ title, description (truncated to 500 chars), context: { goals: <Step 2 list>, dependencies: <Step 3 confirmed list> } }`.
 2. Invoke rubric-sdk via [`scripts/invoke_rubric.sh`](scripts/invoke_rubric.sh) — wraps the SDK CLI so the skill doesn't hand-write CLI strings. Falls back to programmatic API if the CLI fails.
-3. Receive `{ impact, complexity, reusability, strategic, total, band, reasoning }`.
-4. **Adjust scores with two overlays:**
-   - **+1** to `total` if this task is on the Step 2 goal-aligned list (capped at 12).
-   - **+1** to `total` if this task is a confirmed dependency of another open task (the dependency-unblock bonus).
-5. Re-band per the rubric-sdk's bands (9-12 Must, 6-8 Nice, 3-5 Low, 0-2 Reject).
+3. Receive `{ reach, impact, confidence, effort, rice_score, reasoning }`.
+4. **Adjust score with three multiplier overlays:**
+   - **×1.2** if this task produces a reusable component/pattern (reusability bonus).
+   - **×1.2** if this task is on the Step 2 goal-aligned list (strategic fit bonus).
+   - **×1.1** if this task is a confirmed dependency of another open task (dependency-unblock bonus).
+5. Sort by adjusted RICE score descending. Band by percentile: top 20% = Must, next 30% = Nice, next 30% = Low, bottom 20% = Reject.
 
-Full contract with rubric-sdk + dimension rubrics + override patterns in [`references/scoring-contract.md`](references/scoring-contract.md). Read it before invoking — the contract is also the spec the SDK is evolving toward.
+Full RICE contract with axis definitions + overlay patterns in [`references/scoring-contract.md`](references/scoring-contract.md). Read it before invoking.
 
 ### Step 5 — Output
 
@@ -173,10 +174,10 @@ Full contract with rubric-sdk + dimension rubrics + override patterns in [`refer
 ```
 ## This week's priorities
 
-| Rank | Task | Score | Band | Why |
-|---|---|---|---|---|
-| 1 | <title> | 11/12 | Must | <dependency / goal-alignment reasoning> |
-| 2 | ... | ... | ... | ... |
+| Rank | Task | RICE | Adjusted | Band | Why |
+|---|---|---|---|---|---|
+| 1 | <title> | 80 | 126.7 | Must | <RICE reasoning + overlay bonuses> |
+| 2 | ... | ... | ... | ... | ... |
 ...up to 10
 ```
 
@@ -213,7 +214,7 @@ This step runs **only on autonomous (cron-triggered) runs**. On manual invocatio
 
 Everything built here ships to **test/preview** (OTA to the `preview` channel), never production. The user reviews on device at their convenience and promotes to production when ready.
 
-**For each item scored "Must" band (9-12) AND tagged P0 in BACKLOG, up to 2 items per pulse run:**
+**For each item in the "Must" band (top 20% by RICE score) AND tagged P0 in BACKLOG, up to 2 items per pulse run:**
 
 1. **Branch:** create `pulse/<slug>` off the default branch (fetch origin first).
 2. **Build:** invoke the `forge:build-feature` skill to implement the item end-to-end. The build-feature skill handles TDD, implementation, OTA publish to preview, device verification (if a device is connected), and quality pass.
@@ -253,7 +254,7 @@ Confirm the next scheduled run is on the calendar; surface the next-run timestam
 
 - It does not silently delete open entries. Confirmed-SHIPPED items get **collapsed to a one-line tombstone** (title + PR link + ship date — the implementation detail lives in the PR, not the docs; see `standards/workflows.md` → "Docs stay lean").
 - It does not collapse **what no diff can give back** (rejected alternatives and why they lost, investigations that corrected a false belief, external research) or **test artefacts** (coverage maps, user-path audits, E2E contracts, regression tables — a shipped fix keeps its full `Was` / `Now` split). Shipped-ness alone is not grounds to collapse; what the text is *for* decides. Both carve-outs are stated in `standards/workflows.md` → "Docs stay lean".
-- It does not invent SHAs or rubric scores. If rubric-sdk fails to return a score, the entry is surfaced as "unscored, manual review needed" — never fabricated.
+- It does not invent SHAs or RICE scores. If rubric-sdk fails to return a score, the entry is surfaced as "unscored, manual review needed" — never fabricated.
 - It does not re-sort BACKLOG.md's P-tier sections or write inline scores into entries. (Both are opt-in extensions you can add later — for now, the digest + inline list is the visibility layer.)
 - It does not run on docs the user didn't include in the inventory's confirmed scope.
 - It does not pester. Rejected dependency suggestions don't re-surface for 4 weeks. Goal-alignment inferences are surfaced once per run, not re-asked.
@@ -267,7 +268,7 @@ Confirm the next scheduled run is on the calendar; surface the next-run timestam
 
 ## Tone + style
 
-- **Cite every verdict and every score.** Per the project's anti-pattern AP#20 (if their `CLAUDE.md` references it): every assertion gets a source. For shipping claims, cite the `git log` line. For scores, cite the rubric-sdk's reasoning output. For dependency inferences, cite the content match that triggered the inference.
+- **Cite every verdict and every score.** Per the project's anti-pattern AP#20 (if their `CLAUDE.md` references it): every assertion gets a source. For shipping claims, cite the `git log` line. For RICE scores, cite the rubric-sdk's per-axis reasoning output. For dependency inferences, cite the content match that triggered the inference.
 - **Strike-through, don't delete.** Historical context in closed-out entries is often the whole reason future readers can act on a related item.
 - **Be specific about what's stale and what shifted.** "Top priorities have shifted" is useless. "Set up email aliases moved from #4 last week to #1 this week — goal-alignment bonus (closed testing now live) + dependency-unblock bonus (Reddit + BrandIntegration both block on email)" is actionable.
 - **Don't pester.** The skill runs weekly; users will get fatigued fast if every run asks 15 confirmation questions. Cluster questions, default to sensible inferences, persist confirmed answers so they don't re-ask.

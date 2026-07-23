@@ -1,16 +1,17 @@
-// Tests for the autonomous-scoring path.
+// Tests for the autonomous RICE scoring path.
 //
 // The roadmap-pulse skill consumes this path. The skill's contract is
 // documented in roadmap-pulse/references/scoring-contract.md; this
 // test file mirrors that contract.
 
-const { evaluateFromContext, bandForTotal } = require('../../lib/evaluate-from-context');
+const { evaluateFromContext } = require('../../lib/evaluate-from-context');
 
-describe('evaluateFromContext — contract', () => {
-  test('returns the full output shape', () => {
+describe('evaluateFromContext — RICE contract', () => {
+  test('returns the full RICE output shape', () => {
     const out = evaluateFromContext({
       title: 'Set up email aliases on tessellate.co.in',
-      description: 'Compliance gap — privacy policy already published with privacy@ as the data-deletion address; emails bounce today.',
+      description:
+        'Compliance gap — privacy policy already published with privacy@ as the data-deletion address; emails bounce today.',
       context: {
         goals: [
           'Closed beta live — acquisition gates loom',
@@ -18,87 +19,99 @@ describe('evaluateFromContext — contract', () => {
         ],
         dependencies: {
           this_task_depends_on: [],
-          this_task_unblocks: ['Reddit launch posts', 'Get in touch on BrandIntegration'],
+          this_task_unblocks: [
+            'Reddit launch posts',
+            'Get in touch on BrandIntegration',
+          ],
         },
       },
     });
 
     expect(out).toEqual(
       expect.objectContaining({
+        reach: expect.any(Number),
         impact: expect.any(Number),
-        complexity: expect.any(Number),
-        reusability: expect.any(Number),
-        strategic: expect.any(Number),
-        total: expect.any(Number),
-        band: expect.stringMatching(/^(Must|Nice|Low|Reject)$/),
+        confidence: expect.any(Number),
+        effort: expect.any(Number),
+        rice_score: expect.any(Number),
         reasoning: expect.objectContaining({
+          reach: expect.any(String),
           impact: expect.any(String),
-          complexity: expect.any(String),
-          reusability: expect.any(String),
-          strategic: expect.any(String),
+          confidence: expect.any(String),
+          effort: expect.any(String),
         }),
       })
     );
   });
 
-  test('total equals the sum of the four axes', () => {
+  test('rice_score equals (reach * impact * confidence) / effort', () => {
     const out = evaluateFromContext({
       title: 'Anything',
-      description: 'Doesn\'t matter what; just check the math.',
+      description: 'Check the math.',
       context: { goals: ['random goal text'], dependencies: {} },
     });
-    expect(out.total).toBe(out.impact + out.complexity + out.reusability + out.strategic);
+    const expected =
+      Math.round(
+        ((out.reach * out.impact * out.confidence) / out.effort) * 100
+      ) / 100;
+    expect(out.rice_score).toBe(expected);
   });
 
-  test('each axis is an integer in [0, 3]', () => {
+  test('reach is one of the valid scale values', () => {
     const out = evaluateFromContext({
       title: 'X',
       description: 'Y',
       context: {},
     });
-    for (const axis of ['impact', 'complexity', 'reusability', 'strategic']) {
-      expect(Number.isInteger(out[axis])).toBe(true);
-      expect(out[axis]).toBeGreaterThanOrEqual(0);
-      expect(out[axis]).toBeLessThanOrEqual(3);
-    }
+    expect([1, 10, 100, 1000]).toContain(out.reach);
   });
-});
 
-describe('evaluateFromContext — band mapping', () => {
-  test('9-12 maps to Must', () => {
-    expect(bandForTotal(9)).toBe('Must');
-    expect(bandForTotal(12)).toBe('Must');
+  test('impact is one of the valid scale values', () => {
+    const out = evaluateFromContext({
+      title: 'X',
+      description: 'Y',
+      context: {},
+    });
+    expect([0.25, 0.5, 1, 2, 3]).toContain(out.impact);
   });
-  test('6-8 maps to Nice', () => {
-    expect(bandForTotal(6)).toBe('Nice');
-    expect(bandForTotal(8)).toBe('Nice');
+
+  test('confidence is one of the valid scale values', () => {
+    const out = evaluateFromContext({
+      title: 'X',
+      description: 'Y',
+      context: {},
+    });
+    expect([0.5, 0.8, 1.0]).toContain(out.confidence);
   });
-  test('3-5 maps to Low', () => {
-    expect(bandForTotal(3)).toBe('Low');
-    expect(bandForTotal(5)).toBe('Low');
-  });
-  test('0-2 maps to Reject', () => {
-    expect(bandForTotal(0)).toBe('Reject');
-    expect(bandForTotal(2)).toBe('Reject');
+
+  test('effort is one of the valid scale values', () => {
+    const out = evaluateFromContext({
+      title: 'X',
+      description: 'Y',
+      context: {},
+    });
+    expect([0.5, 1, 2, 3, 5, 10, 20]).toContain(out.effort);
   });
 });
 
 describe('evaluateFromContext — heuristic signals', () => {
-  test('high-impact keywords push the impact score up', () => {
+  test('high-impact keywords produce higher impact', () => {
     const high = evaluateFromContext({
       title: 'Critical compliance gating launch',
-      description: 'P0 security blocker for the production launch — auth is broken.',
+      description:
+        'P0 security blocker for the production launch — auth is broken.',
       context: { goals: [], dependencies: {} },
     });
     const low = evaluateFromContext({
       title: 'Polish footer spacing',
-      description: 'Minor visual tweak on the footer; not visible to most users.',
+      description:
+        'Minor visual tweak on the footer; not visible to most users.',
       context: { goals: [], dependencies: {} },
     });
     expect(high.impact).toBeGreaterThan(low.impact);
   });
 
-  test('low-complexity keywords push the complexity score up (inverse)', () => {
+  test('low-effort keywords produce lower effort estimate', () => {
     const simple = evaluateFromContext({
       title: 'Fix typo in docs',
       description: 'One-liner doc copy fix.',
@@ -106,56 +119,50 @@ describe('evaluateFromContext — heuristic signals', () => {
     });
     const complex = evaluateFromContext({
       title: 'Rearchitect auth subsystem',
-      description: 'A'.repeat(900) + ' This is a multi-week rewrite that requires external partnership and a database migration.',
+      description: `${'A'.repeat(
+        900
+      )} This is a multi-week rewrite that requires external partnership and a database migration.`,
       context: { dependencies: { this_task_depends_on: ['A', 'B', 'C'] } },
     });
-    expect(simple.complexity).toBeGreaterThan(complex.complexity);
+    expect(simple.effort).toBeLessThan(complex.effort);
   });
 
-  test('reusability keywords drive the reusability axis', () => {
-    const reusable = evaluateFromContext({
-      title: 'Build a shared validation library',
-      description: 'Create a reusable infrastructure-grade plugin shared across services.',
+  test('high-reach keywords produce higher reach', () => {
+    const broad = evaluateFromContext({
+      title: 'Fix onboarding flow for all users',
+      description: 'Production app-wide bug affecting every user on launch.',
       context: {},
     });
-    const oneoff = evaluateFromContext({
-      title: 'One-off fix for this brand',
-      description: 'A bespoke fix specific to this user.',
+    const narrow = evaluateFromContext({
+      title: 'Fix internal debugging tool',
+      description: 'Admin-only dev tooling fix.',
       context: {},
     });
-    expect(reusable.reusability).toBeGreaterThan(oneoff.reusability);
+    expect(broad.reach).toBeGreaterThan(narrow.reach);
   });
 
-  test('strategic fit reflects goal overlap', () => {
-    const aligned = evaluateFromContext({
-      title: 'Set up partner email aliases',
-      description: 'Set up partner email aliases for closed-beta launch.',
+  test('tasks with goals and specific descriptions get higher confidence', () => {
+    const confident = evaluateFromContext({
+      title: 'Set up email aliases',
+      description:
+        'Compliance gap — privacy policy already published with privacy@ address; emails bounce today. Need MX records on tessellate.co.in pointed to Google Workspace.',
       context: {
-        goals: [
-          'Closed-beta launch acquisition gates',
-          'Partner inquiries must resolve',
-        ],
+        goals: ['Closed beta live'],
         dependencies: {},
       },
     });
-    const unrelated = evaluateFromContext({
-      title: 'Refactor internal logging utility',
-      description: 'Tidy up a logging utility nobody depends on directly.',
-      context: {
-        goals: [
-          'Closed-beta launch acquisition gates',
-          'Partner inquiries must resolve',
-        ],
-        dependencies: {},
-      },
+    const vague = evaluateFromContext({
+      title: 'Something',
+      description: 'Do it.',
+      context: {},
     });
-    expect(aligned.strategic).toBeGreaterThan(unrelated.strategic);
+    expect(confident.confidence).toBeGreaterThan(vague.confidence);
   });
 
-  test('dependency-unblock potential pushes impact up', () => {
+  test('dependency-unblock potential boosts reach', () => {
     const unblocker = evaluateFromContext({
       title: 'Set up the thing',
-      description: 'Do the thing.',
+      description: 'Do the thing for production launch for all users.',
       context: {
         goals: [],
         dependencies: {
@@ -172,7 +179,26 @@ describe('evaluateFromContext — heuristic signals', () => {
         dependencies: { this_task_depends_on: [], this_task_unblocks: [] },
       },
     });
-    expect(unblocker.impact).toBeGreaterThan(leaf.impact);
+    expect(unblocker.reach).toBeGreaterThanOrEqual(leaf.reach);
+  });
+
+  test('high-impact + low-effort produces higher RICE score than low-impact + high-effort', () => {
+    const quickWin = evaluateFromContext({
+      title: 'Critical compliance fix',
+      description: 'One-liner config fix for production security gate.',
+      context: { goals: ['Security compliance'], dependencies: {} },
+    });
+    const slog = evaluateFromContext({
+      title: 'Polish footer spacing',
+      description: `${'A'.repeat(
+        900
+      )} Multi-week rewrite of the layout system that requires external partnership.`,
+      context: {
+        goals: [],
+        dependencies: { this_task_depends_on: ['X', 'Y', 'Z'] },
+      },
+    });
+    expect(quickWin.rice_score).toBeGreaterThan(slog.rice_score);
   });
 });
 
@@ -181,13 +207,23 @@ describe('evaluateFromContext — input validation', () => {
     expect(() => evaluateFromContext()).toThrow(/input must be an object/);
   });
   test('throws when title is missing', () => {
-    expect(() => evaluateFromContext({ description: 'x' })).toThrow(/title is required/);
+    expect(() => evaluateFromContext({ description: 'x' })).toThrow(
+      /title is required/
+    );
   });
   test('throws when description is missing', () => {
-    expect(() => evaluateFromContext({ title: 'x' })).toThrow(/description is required/);
+    expect(() => evaluateFromContext({ title: 'x' })).toThrow(
+      /description is required/
+    );
   });
   test('throws when context is not an object', () => {
-    expect(() => evaluateFromContext({ title: 'x', description: 'y', context: 'not-an-object' })).toThrow(/context must be an object/);
+    expect(() =>
+      evaluateFromContext({
+        title: 'x',
+        description: 'y',
+        context: 'not-an-object',
+      })
+    ).toThrow(/context must be an object/);
   });
 });
 
@@ -198,7 +234,7 @@ describe('evaluateFromContext — reasoning is non-empty', () => {
       description: 'Compliance gap for closed beta.',
       context: { goals: ['Closed beta'], dependencies: {} },
     });
-    for (const axis of ['impact', 'complexity', 'reusability', 'strategic']) {
+    for (const axis of ['reach', 'impact', 'confidence', 'effort']) {
       expect(out.reasoning[axis].length).toBeGreaterThan(10);
     }
   });

@@ -40,11 +40,11 @@ Each run prepends (NOT appends — newest stays at the top) a section like this:
 
 ### Top priorities this week
 
-| Rank | Task | Score | Band | Why |
-|---|---|---|---|---|
-| 1 | Set up email aliases on tessellate.co.in | 11/12 (8 raw + 1 goal + 1 unblock + 1 cap reached) | Must | Unblocks Reddit + BrandIntegration. Closed beta is live per RELEASE_V2; bounce-back risk. |
-| 2 | Reddit launch posts | 10/12 (9 raw + 1 unblock for #1) | Must | Highest-priority acquisition channel for closed beta. Awaits #1. |
-| 3 | … | … | … | … |
+| Rank | Task | RICE | Adjusted | Band | Why |
+|---|---|---|---|---|---|
+| 1 | Set up email aliases on tessellate.co.in | 80 | 126.7 (×1.2 goal ×1.2 reusable ×1.1 unblock) | Must | Unblocks Reddit + BrandIntegration. Closed beta is live per RELEASE_V2; bounce-back risk. |
+| 2 | Reddit launch posts | 60 | 79.2 (×1.2 goal ×1.1 unblock) | Must | Highest-priority acquisition channel for closed beta. Awaits #1. |
+| 3 | … | … | … | … | … |
 ...up to 10
 
 ### What changed since last week

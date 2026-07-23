@@ -1,45 +1,29 @@
-// Core rubric scoring engine implementation
+// Core rubric scoring engine — RICE framework.
+//
+// RICE = (Reach × Impact × Confidence) / Effort
+// Adopted from Intercom's prioritisation framework.
 const fs = require('fs-extra');
 const path = require('path');
 const yaml = require('yaml');
 
 class RubricEngine {
   constructor(options = {}) {
-    // Default scoring weights based on best practices
-    this.defaultWeights = {
-      impact: 0.35,      // How much value it adds
-      complexity: 0.25,  // Effort required (inverted for scoring)
-      reusability: 0.20, // Cross-project potential  
-      strategic: 0.20    // Vision alignment
-    };
-    
-    // Default scoring thresholds for decision making
-    this.defaultThresholds = {
-      high_priority: 3,
-      medium_priority: 2,
-      low_priority: 1
-    };
-    
     this.config = this.loadConfig(options.configPath);
-    this.weights = options.weights || this.config.weights || this.defaultWeights;
-    this.thresholds = options.thresholds || this.config.thresholds || this.defaultThresholds;
   }
 
-  // Load configuration from file or use defaults
   loadConfig(configPath) {
     try {
       if (configPath && fs.existsSync(configPath)) {
         const configContent = fs.readFileSync(configPath, 'utf8');
         return yaml.parse(configContent);
       }
-      
-      // Try to find config in current directory
+
       const defaultConfigPath = path.join(process.cwd(), 'rubric-config.yml');
       if (fs.existsSync(defaultConfigPath)) {
         const configContent = fs.readFileSync(defaultConfigPath, 'utf8');
         return yaml.parse(configContent);
       }
-      
+
       return {};
     } catch (error) {
       console.warn(`Warning: Could not load config file: ${error.message}`);
@@ -47,188 +31,168 @@ class RubricEngine {
     }
   }
 
-  // Validate scoring input to ensure all dimensions are provided
   validateScores(scores) {
-    const requiredDimensions = ['impact', 'complexity', 'reusability', 'strategic'];
-    const missing = requiredDimensions.filter(dim => !(dim in scores));
-    
-    if (missing.length > 0) {
-      throw new Error(`Missing required scoring dimensions: ${missing.join(', ')}`);
+    if (typeof scores.reach !== 'number' || scores.reach <= 0) {
+      throw new Error('Invalid score for reach: must be a positive number');
     }
-    
-    // Ensure all scores are within valid range (0-3)
-    for (const [dimension, score] of Object.entries(scores)) {
-      if (typeof score !== 'number' || score < 0 || score > 3) {
-        throw new Error(`Invalid score for ${dimension}: must be a number between 0 and 3`);
-      }
+    if (typeof scores.impact !== 'number' || scores.impact <= 0) {
+      throw new Error('Invalid score for impact: must be a positive number');
+    }
+    if (
+      typeof scores.confidence !== 'number' ||
+      scores.confidence <= 0 ||
+      scores.confidence > 1
+    ) {
+      throw new Error(
+        'Invalid score for confidence: must be between 0 (exclusive) and 1 (inclusive)'
+      );
+    }
+    if (typeof scores.effort !== 'number' || scores.effort <= 0) {
+      throw new Error('Invalid score for effort: must be a positive number');
     }
   }
 
-  // Calculate weighted score from individual dimension scores
-  calculateWeightedScore(scores) {
+  calculateRiceScore(scores) {
     this.validateScores(scores);
-    
-    let totalScore = 0;
-    let totalWeight = 0;
-    
-    // Calculate weighted average, inverting complexity (higher complexity = lower priority)
-    for (const [dimension, weight] of Object.entries(this.weights)) {
-      if (scores[dimension] !== undefined) {
-        let adjustedScore = scores[dimension];
-        
-        // Invert complexity score (high complexity = low priority)
-        if (dimension === 'complexity') {
-          adjustedScore = 3 - adjustedScore;
-        }
-        
-        totalScore += adjustedScore * weight;
-        totalWeight += weight;
-      }
-    }
-    
-    // Return normalized score
-    return totalWeight > 0 ? totalScore / totalWeight : 0;
+    return (
+      Math.round(
+        ((scores.reach * scores.impact * scores.confidence) / scores.effort) *
+          100
+      ) / 100
+    );
   }
 
-  // Determine priority level based on calculated score
-  getPriorityLevel(score) {
-    if (score >= this.thresholds.high_priority) {
+  getPriorityLevel(riceScore) {
+    if (riceScore >= 100) {
       return 'high';
-    } else if (score >= this.thresholds.medium_priority) {
-      return 'medium';
-    } else if (score >= this.thresholds.low_priority) {
-      return 'low';
-    } else {
-      return 'backlog';
     }
+    if (riceScore >= 10) {
+      return 'medium';
+    }
+    if (riceScore >= 1) {
+      return 'low';
+    }
+    return 'backlog';
   }
 
-  // Generate detailed recommendation based on scores
-  generateRecommendation(scores, weightedScore) {
-    const priority = this.getPriorityLevel(weightedScore);
+  generateRecommendation(scores, riceScore) {
+    const priority = this.getPriorityLevel(riceScore);
     const recommendations = [];
-    
-    // Analyze individual dimension scores for specific recommendations
-    if (scores.impact >= 3 && scores.complexity <= 1) {
-      recommendations.push('Quick win - high impact, low complexity');
+
+    if (scores.impact >= 2 && scores.effort <= 1) {
+      recommendations.push('Quick win - high impact, low effort');
     }
-    
-    if (scores.reusability >= 3) {
-      recommendations.push('Consider creating reusable component/library');
+    if (scores.reach >= 1000) {
+      recommendations.push('High reach - affects many users');
     }
-    
-    if (scores.strategic >= 3) {
-      recommendations.push('Aligns well with strategic objectives');
+    if (scores.confidence <= 0.5) {
+      recommendations.push(
+        'Low confidence - validate assumptions before investing'
+      );
     }
-    
-    if (scores.complexity >= 3) {
+    if (scores.effort >= 10) {
       recommendations.push('Consider breaking into smaller tasks');
     }
-    
-    if (scores.impact <= 1 && scores.complexity >= 2) {
+    if (scores.impact <= 0.5 && scores.effort >= 5) {
       recommendations.push('Low value for effort - consider alternatives');
     }
-    
+
     return {
       priority,
-      recommendations: recommendations.length > 0 ? recommendations : ['Standard implementation approach']
+      recommendations:
+        recommendations.length > 0
+          ? recommendations
+          : ['Standard implementation approach'],
     };
   }
 
-  // Main evaluation method for single task
   async evaluate(taskDescription, scores, options = {}) {
     try {
       if (!taskDescription || typeof taskDescription !== 'string') {
         throw new Error('Task description must be a non-empty string');
       }
-      
+
       if (!scores || typeof scores !== 'object') {
         throw new Error('Scores must be provided as an object');
       }
-      
-      // Calculate weighted score and priority
-      const weightedScore = this.calculateWeightedScore(scores);
-      const recommendation = this.generateRecommendation(scores, weightedScore);
-      
-      // Create comprehensive evaluation result
+
+      const riceScore = this.calculateRiceScore(scores);
+      const recommendation = this.generateRecommendation(scores, riceScore);
+
       const evaluation = {
         task: taskDescription,
         timestamp: new Date().toISOString(),
         scores: { ...scores },
-        weights: { ...this.weights },
-        weightedScore: Math.round(weightedScore * 100) / 100, // Round to 2 decimal places
+        riceScore,
         priority: recommendation.priority,
         recommendations: recommendation.recommendations,
         metadata: {
           evaluator: options.evaluator || 'system',
-          version: '1.0.0',
-          notes: options.notes || null
-        }
+          version: '2.0.0',
+          notes: options.notes || null,
+        },
       };
-      
-      // Save evaluation if requested
+
       if (options.save) {
         await this.saveEvaluation(evaluation);
       }
-      
+
       return evaluation;
     } catch (error) {
       throw new Error(`Evaluation failed: ${error.message}`);
     }
   }
 
-  // Compare multiple tasks and rank them by priority
   async compareMultiple(tasks, options = {}) {
     if (!Array.isArray(tasks) || tasks.length === 0) {
       throw new Error('Tasks must be provided as a non-empty array');
     }
-    
+
     const evaluations = [];
-    
-    // Evaluate each task individually
+
     for (const task of tasks) {
       if (!task.description || !task.scores) {
-        throw new Error('Each task must have description and scores properties');
+        throw new Error(
+          'Each task must have description and scores properties'
+        );
       }
-      
+
       const evaluation = await this.evaluate(task.description, task.scores, {
         ...options,
         evaluator: task.evaluator || options.evaluator,
-        notes: task.notes
+        notes: task.notes,
       });
-      
+
       evaluations.push(evaluation);
     }
-    
-    // Sort by weighted score (descending)
-    evaluations.sort((a, b) => b.weightedScore - a.weightedScore);
-    
-    // Add ranking information
+
+    evaluations.sort((left, right) => right.riceScore - left.riceScore);
+
     evaluations.forEach((evaluation, index) => {
       evaluation.rank = index + 1;
     });
-    
+
     return {
       comparison: {
         timestamp: new Date().toISOString(),
         taskCount: evaluations.length,
-        highPriority: evaluations.filter(e => e.priority === 'high').length,
-        mediumPriority: evaluations.filter(e => e.priority === 'medium').length,
-        lowPriority: evaluations.filter(e => e.priority === 'low').length
+        highPriority: evaluations.filter(ev => ev.priority === 'high').length,
+        mediumPriority: evaluations.filter(ev => ev.priority === 'medium')
+          .length,
+        lowPriority: evaluations.filter(ev => ev.priority === 'low').length,
       },
-      evaluations
+      evaluations,
     };
   }
 
-  // Save evaluation to file system for tracking
   async saveEvaluation(evaluation) {
     try {
       const evaluationsDir = path.join(process.cwd(), '.rubric', 'evaluations');
       await fs.ensureDir(evaluationsDir);
-      
+
       const filename = `evaluation-${Date.now()}.json`;
       const filepath = path.join(evaluationsDir, filename);
-      
+
       await fs.writeJson(filepath, evaluation, { spaces: 2 });
       return filepath;
     } catch (error) {

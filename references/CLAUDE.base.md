@@ -67,7 +67,10 @@ All in `forge/standards/workflows.md` unless noted:
   criteria → TDD → on-device/runtime verification → quality pass → status
   update → retro). Auto-triggers on build/fix/redesign asks; the skill IS the
   process, so it never needs restating here.
-- `/forge:roadmap-pulse` — weekly planning-doc honesty pass + scored priorities.
+- `/forge:plan` — three-tiered planning framework: ADR (tactical), Shape Up
+  Pitch (feature scope), RFD (architecture). Auto-triggers in build-feature
+  Step 0; also available standalone for decision-making.
+- `/forge:roadmap-pulse` — weekly planning-doc honesty pass + RICE-scored priorities.
 - `/forge:new-app` — scaffold a new platform-wired app.
 
 ## Project

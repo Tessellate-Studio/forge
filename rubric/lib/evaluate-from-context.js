@@ -1,19 +1,14 @@
 // evaluate-from-context.js
 //
-// Autonomous-scoring path for the Rubric SDK.
+// Autonomous-scoring path for the Rubric SDK — RICE framework.
 //
-// The original `RubricEngine.evaluate(taskDescription, scores)` method
-// requires the caller to PROVIDE the 4-axis scores. That's correct for
-// scenarios where a human is filling out a rubric manually, but doesn't
-// work for autonomous consumers (e.g. the `roadmap-pulse` skill) that
-// need the SDK to decide scores from a task's title + description +
-// surrounding context.
+// Implements Intercom's RICE prioritisation formula:
+//   Score = (Reach × Impact × Confidence) / Effort
 //
-// This module adds an autonomous path that uses transparent, rule-based
-// heuristics — keyword matching on the task content + structural signals
-// from the provided context. No LLM call. The heuristics are
-// deliberately simple and inspectable so the resulting scores are
-// auditable.
+// The heuristics estimate each RICE axis from a task's title +
+// description + surrounding context (goals, dependencies). No LLM
+// call — keyword matching + structural signals only, so scores are
+// auditable and deterministic.
 //
 // CONTRACT (input + output) — match this verbatim:
 //
@@ -32,61 +27,114 @@
 //
 //   Output:
 //   {
-//     impact:       0-3 integer,
-//     complexity:   0-3 integer (inverse — higher = simpler/cheaper),
-//     reusability:  0-3 integer,
-//     strategic:    0-3 integer,
-//     total:        0-12 integer (= sum of 4 axes),
-//     band:         "Must" | "Nice" | "Low" | "Reject",
+//     reach:        number (1 | 10 | 100 | 1000),
+//     impact:       number (0.25 | 0.5 | 1 | 2 | 3),
+//     confidence:   number (0.5 | 0.8 | 1.0),
+//     effort:       number (person-days: 0.5 | 1 | 2 | 3 | 5 | 10 | 20),
+//     rice_score:   number (= reach * impact * confidence / effort),
 //     reasoning: {
-//       impact:      string,
-//       complexity:  string,
-//       reusability: string,
-//       strategic:   string
+//       reach:      string,
+//       impact:     string,
+//       confidence: string,
+//       effort:     string
 //     }
 //   }
 //
 // CALIBRATION:
-//   The heuristics in this module are v1 and intentionally conservative.
-//   When the consuming skill (roadmap-pulse) starts producing weekly
-//   digests with real outcomes, those outcomes become training signal for
-//   tightening the heuristics OR for swapping in an LLM-backed scorer.
+//   v1 heuristics are intentionally conservative. Weekly digest outcomes
+//   become training signal for tightening or swapping in an LLM scorer.
 
 const HIGH_IMPACT_KEYWORDS = [
-  'launch', 'compliance', 'security', 'critical', 'blocking', 'gating',
-  'production', 'must', 'p0', 'urgent', 'gate', 'legal', 'privacy',
-  'auth', 'authentication', 'authorization', 'data loss',
+  'launch',
+  'compliance',
+  'security',
+  'critical',
+  'blocking',
+  'gating',
+  'production',
+  'must',
+  'p0',
+  'urgent',
+  'gate',
+  'legal',
+  'privacy',
+  'auth',
+  'authentication',
+  'authorization',
+  'data loss',
 ];
 
 const MEDIUM_IMPACT_KEYWORDS = [
-  'user-facing', 'visible', 'metric', 'analytics', 'retention',
-  'acquisition', 'conversion', 'support', 'friction', 'p1',
+  'user-facing',
+  'visible',
+  'metric',
+  'analytics',
+  'retention',
+  'acquisition',
+  'conversion',
+  'support',
+  'friction',
+  'p1',
 ];
 
-const HIGH_COMPLEXITY_KEYWORDS = [
-  'rewrite', 'migration', 'multi-week', 'multi-month', 'rearchitect',
-  'overhaul', 'partnership', 'external', 'third-party integration',
-  'distributed', 'consensus', 'eventual consistency',
+const HIGH_REACH_KEYWORDS = [
+  'all users',
+  'every user',
+  'production',
+  'launch',
+  'public',
+  'app-wide',
+  'global',
+  'everyone',
+  'onboarding',
 ];
 
-const LOW_COMPLEXITY_KEYWORDS = [
-  'one-liner', 'rename', 'doc', 'comment', 'env var', 'config', 'flag',
-  'feature flag', 'css', 'styling', 'copy', 'typo', 'small fix',
+const LOW_REACH_KEYWORDS = [
+  'internal',
+  'testing',
+  'one-off',
+  'admin',
+  'dev-only',
+  'debugging',
+  'tooling',
+  'ci',
+  'pipeline',
 ];
 
-const REUSABILITY_HIGH_KEYWORDS = [
-  'infrastructure', 'library', 'sdk', 'pattern', 'framework', 'shared',
-  'reusable', 'generic', 'abstraction', 'middleware', 'plugin',
+const HIGH_EFFORT_KEYWORDS = [
+  'rewrite',
+  'migration',
+  'multi-week',
+  'multi-month',
+  'rearchitect',
+  'overhaul',
+  'partnership',
+  'external',
+  'third-party integration',
+  'distributed',
+  'consensus',
+  'eventual consistency',
 ];
 
-const REUSABILITY_LOW_KEYWORDS = [
-  'one-shot', 'one-off', 'specific to', 'bespoke', 'this brand', 'this user',
-  'specific case',
+const LOW_EFFORT_KEYWORDS = [
+  'one-liner',
+  'rename',
+  'doc',
+  'comment',
+  'env var',
+  'config',
+  'flag',
+  'feature flag',
+  'css',
+  'styling',
+  'copy',
+  'typo',
+  'small fix',
 ];
 
 function normaliseText(...parts) {
   return parts
-    .filter((p) => typeof p === 'string' && p.length > 0)
+    .filter(part => typeof part === 'string' && part.length > 0)
     .join(' ')
     .toLowerCase();
 }
@@ -94,155 +142,168 @@ function normaliseText(...parts) {
 function countMatches(haystack, keywords) {
   let count = 0;
   for (const kw of keywords) {
-    if (haystack.includes(kw)) count += 1;
+    if (haystack.includes(kw)) {
+      count += 1;
+    }
   }
   return count;
 }
 
 /**
- * Score the IMPACT axis (0-3).
+ * Estimate REACH — how many users/events this touches per time period.
  *
- * Signals:
- *  - keyword density in the task text
- *  - goal-alignment: task mentioned or implied by any of the provided
- *    `context.goals` strings
- *  - dependency-unblock potential: number of OTHER tasks this one unblocks
+ * Scale: 1 (just me/testing), 10 (early testers), 100 (all current
+ * users), 1000 (future users at scale).
  */
-function scoreImpact(text, context) {
-  const goals = context.goals || [];
-  const unblocks = (context.dependencies && context.dependencies.this_task_unblocks) || [];
+function estimateReach(text, context) {
+  const unblocks =
+    (context.dependencies && context.dependencies.this_task_unblocks) || [];
+  const highHits = countMatches(text, HIGH_REACH_KEYWORDS);
+  const lowHits = countMatches(text, LOW_REACH_KEYWORDS);
 
-  const highHits = countMatches(text, HIGH_IMPACT_KEYWORDS);
-  const mediumHits = countMatches(text, MEDIUM_IMPACT_KEYWORDS);
-
-  // Goal-alignment signal: how many of the goal strings overlap with the task text
-  let goalAlignment = 0;
-  for (const goal of goals) {
-    const goalWords = goal.toLowerCase().split(/\s+/).filter((w) => w.length > 4);
-    for (const word of goalWords) {
-      if (text.includes(word)) {
-        goalAlignment += 1;
-        break;
-      }
-    }
+  let reach = 100;
+  if (highHits >= 2 || unblocks.length >= 3) {
+    reach = 1000;
+  } else if (highHits >= 1) {
+    reach = 100;
+  } else if (lowHits >= 1) {
+    reach = 1;
+  } else {
+    reach = 10;
   }
 
-  let score = 1;
-  if (highHits >= 2 || goalAlignment >= 2 || unblocks.length >= 2) score = 3;
-  else if (highHits >= 1 || mediumHits >= 2 || goalAlignment >= 1 || unblocks.length >= 1) score = 2;
-  else if (mediumHits >= 1) score = 1;
-  else score = 0;
+  const reasoning =
+    `${highHits} high-reach + ${lowHits} low-reach keyword matches; ` +
+    `unblocks ${unblocks.length} other task${
+      unblocks.length === 1 ? '' : 's'
+    }.`;
+
+  return { value: reach, reasoning };
+}
+
+function countGoalAlignment(text, goals) {
+  let count = 0;
+  for (const goal of goals) {
+    const goalWords = goal
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(gw => gw.length > 4);
+    const matched = goalWords.some(gw => text.includes(gw));
+    if (matched) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function pickImpactValue(highHits, mediumHits, goalAlignment, unblockCount) {
+  if (highHits >= 2 || goalAlignment >= 2 || unblockCount >= 2) {
+    return 3;
+  }
+  if (
+    highHits >= 1 ||
+    mediumHits >= 2 ||
+    goalAlignment >= 1 ||
+    unblockCount >= 1
+  ) {
+    return 2;
+  }
+  if (mediumHits >= 1) {
+    return 1;
+  }
+  return 0.5;
+}
+
+function estimateImpact(text, context) {
+  const goals = context.goals || [];
+  const unblocks =
+    (context.dependencies && context.dependencies.this_task_unblocks) || [];
+  const highHits = countMatches(text, HIGH_IMPACT_KEYWORDS);
+  const mediumHits = countMatches(text, MEDIUM_IMPACT_KEYWORDS);
+  const goalAlignment = countGoalAlignment(text, goals);
+  const value = pickImpactValue(
+    highHits,
+    mediumHits,
+    goalAlignment,
+    unblocks.length
+  );
 
   const reasoning =
     `${highHits} high-impact + ${mediumHits} medium-impact keyword matches; ` +
     `${goalAlignment} goal-string overlap; ` +
-    `unblocks ${unblocks.length} other task${unblocks.length === 1 ? '' : 's'}.`;
+    `unblocks ${unblocks.length} other task${
+      unblocks.length === 1 ? '' : 's'
+    }.`;
 
-  return { score, reasoning };
+  return { value, reasoning };
 }
 
 /**
- * Score COMPLEXITY (0-3) — INVERSE scoring (higher = simpler / cheaper).
+ * Estimate CONFIDENCE — how validated is the impact estimate?
  *
- * Signals:
- *  - keyword density in the task text
- *  - description length (longer descriptions tend to indicate more complex work)
- *  - dependency count (this_task_depends_on)
- */
-function scoreComplexity(text, description, context) {
-  const dependsOn = (context.dependencies && context.dependencies.this_task_depends_on) || [];
-
-  const highHits = countMatches(text, HIGH_COMPLEXITY_KEYWORDS);
-  const lowHits = countMatches(text, LOW_COMPLEXITY_KEYWORDS);
-  const descLen = (description || '').length;
-
-  let score = 2; // default: moderate complexity → moderate score
-  if (lowHits >= 1 && highHits === 0 && descLen < 200) score = 3;
-  else if (highHits >= 1 || descLen > 800 || dependsOn.length >= 2) score = 0;
-  else if (descLen > 400 || dependsOn.length >= 1) score = 1;
-  else score = 2;
-
-  const reasoning =
-    `${highHits} high-complexity + ${lowHits} low-complexity keyword matches; ` +
-    `description length ${descLen}; ` +
-    `depends on ${dependsOn.length} other task${dependsOn.length === 1 ? '' : 's'}. ` +
-    `Score is inverse: higher = simpler/cheaper.`;
-
-  return { score, reasoning };
-}
-
-/**
- * Score REUSABILITY (0-3).
+ * Scale: 0.5 (guess), 0.8 (qualitative signal), 1.0 (measured/tested).
  *
- * Signals: keyword density only. Reusability is hard to infer from
- * structural context — keywords like "infrastructure" or "library"
- * vs. "one-off" / "specific to" are the cheapest tell.
+ * Heuristic: tasks with goal context and specific descriptions score higher.
  */
-function scoreReusability(text) {
-  const highHits = countMatches(text, REUSABILITY_HIGH_KEYWORDS);
-  const lowHits = countMatches(text, REUSABILITY_LOW_KEYWORDS);
-
-  let score = 1; // default: some reuse, but not infrastructure-grade
-  if (highHits >= 2) score = 3;
-  else if (highHits >= 1 && lowHits === 0) score = 2;
-  else if (lowHits >= 1) score = 0;
-  else score = 1;
-
-  const reasoning =
-    `${highHits} reusability-high + ${lowHits} reusability-low keyword matches.`;
-
-  return { score, reasoning };
-}
-
-/**
- * Score STRATEGIC FIT (0-3).
- *
- * Signals: pure goal-alignment overlap from context.goals. If no goals
- * are provided, default to 1 (tangential).
- */
-function scoreStrategic(text, context) {
+function estimateConfidence(text, description, context) {
   const goals = context.goals || [];
+  const descLen = (description || '').length;
+  const hasGoals = goals.length > 0;
+  const hasSpecificDesc = descLen > 100;
 
-  if (goals.length === 0) {
-    return {
-      score: 1,
-      reasoning: 'No goals provided in context; defaulting to tangential (1).',
-    };
+  let value = 0.8;
+  if (hasGoals && hasSpecificDesc) {
+    value = 1.0;
+  } else if (hasGoals || hasSpecificDesc) {
+    value = 0.8;
+  } else {
+    value = 0.5;
   }
-
-  let alignment = 0;
-  for (const goal of goals) {
-    const goalWords = goal.toLowerCase().split(/\s+/).filter((w) => w.length > 4);
-    let goalMatched = false;
-    for (const word of goalWords) {
-      if (text.includes(word)) {
-        goalMatched = true;
-        break;
-      }
-    }
-    if (goalMatched) alignment += 1;
-  }
-
-  let score = 0;
-  if (alignment >= 2) score = 3;
-  else if (alignment === 1) score = 2;
-  else score = 0;
 
   const reasoning =
-    `Task overlaps with ${alignment} of ${goals.length} provided goal${goals.length === 1 ? '' : 's'}.`;
+    `${hasGoals ? 'Goals provided' : 'No goals provided'}; ` +
+    `description length ${descLen} (${
+      hasSpecificDesc ? 'specific' : 'vague'
+    }).`;
 
-  return { score, reasoning };
+  return { value, reasoning };
 }
 
-/**
- * Map a 0-12 total to a band label.
- * 9-12 = Must, 6-8 = Nice, 3-5 = Low, 0-2 = Reject.
- */
-function bandForTotal(total) {
-  if (total >= 9) return 'Must';
-  if (total >= 6) return 'Nice';
-  if (total >= 3) return 'Low';
-  return 'Reject';
+function pickEffortValue(highHits, lowHits, descLen, depCount) {
+  if (lowHits >= 1 && highHits === 0 && descLen < 200) {
+    return 0.5;
+  }
+  if (highHits >= 2 || descLen > 800 || depCount >= 3) {
+    return 20;
+  }
+  if (highHits >= 1 || descLen > 600 || depCount >= 2) {
+    return 10;
+  }
+  if (descLen > 400 || depCount >= 1) {
+    return 5;
+  }
+  if (lowHits >= 1) {
+    return 1;
+  }
+  return 2;
+}
+
+function estimateEffort(text, description, context) {
+  const dependsOn =
+    (context.dependencies && context.dependencies.this_task_depends_on) || [];
+  const highHits = countMatches(text, HIGH_EFFORT_KEYWORDS);
+  const lowHits = countMatches(text, LOW_EFFORT_KEYWORDS);
+  const descLen = (description || '').length;
+  const value = pickEffortValue(highHits, lowHits, descLen, dependsOn.length);
+
+  const reasoning =
+    `${highHits} high-effort + ${lowHits} low-effort keyword matches; ` +
+    `description length ${descLen}; ` +
+    `depends on ${dependsOn.length} other task${
+      dependsOn.length === 1 ? '' : 's'
+    }.`;
+
+  return { value, reasoning };
 }
 
 /**
@@ -256,15 +317,19 @@ function validateInput(input) {
     throw new Error('evaluateFromContext: input.title is required (string)');
   }
   if (typeof input.description !== 'string') {
-    throw new Error('evaluateFromContext: input.description is required (string)');
+    throw new Error(
+      'evaluateFromContext: input.description is required (string)'
+    );
   }
   if (input.context && typeof input.context !== 'object') {
-    throw new Error('evaluateFromContext: input.context must be an object if provided');
+    throw new Error(
+      'evaluateFromContext: input.context must be an object if provided'
+    );
   }
 }
 
 /**
- * Autonomous scoring path for the Rubric SDK.
+ * Autonomous RICE scoring path for the Rubric SDK.
  *
  * See module docblock for the full contract. Inputs and outputs match
  * the schema documented in:
@@ -276,43 +341,41 @@ function evaluateFromContext(input) {
   const context = input.context || {};
   const text = normaliseText(input.title, input.description);
 
-  const impact = scoreImpact(text, context);
-  const complexity = scoreComplexity(text, input.description, context);
-  const reusability = scoreReusability(text);
-  const strategic = scoreStrategic(text, context);
+  const reach = estimateReach(text, context);
+  const impact = estimateImpact(text, context);
+  const confidence = estimateConfidence(text, input.description, context);
+  const effort = estimateEffort(text, input.description, context);
 
-  const total = impact.score + complexity.score + reusability.score + strategic.score;
+  const rice_score =
+    (reach.value * impact.value * confidence.value) / effort.value;
 
   return {
-    impact: impact.score,
-    complexity: complexity.score,
-    reusability: reusability.score,
-    strategic: strategic.score,
-    total,
-    band: bandForTotal(total),
+    reach: reach.value,
+    impact: impact.value,
+    confidence: confidence.value,
+    effort: effort.value,
+    rice_score: Math.round(rice_score * 100) / 100,
     reasoning: {
+      reach: reach.reasoning,
       impact: impact.reasoning,
-      complexity: complexity.reasoning,
-      reusability: reusability.reasoning,
-      strategic: strategic.reasoning,
+      confidence: confidence.reasoning,
+      effort: effort.reasoning,
     },
   };
 }
 
 module.exports = {
   evaluateFromContext,
-  bandForTotal,
-  // Exposed for testing / inspection — callers should generally just use evaluateFromContext.
   _internals: {
-    scoreImpact,
-    scoreComplexity,
-    scoreReusability,
-    scoreStrategic,
+    estimateReach,
+    estimateImpact,
+    estimateConfidence,
+    estimateEffort,
     HIGH_IMPACT_KEYWORDS,
     MEDIUM_IMPACT_KEYWORDS,
-    HIGH_COMPLEXITY_KEYWORDS,
-    LOW_COMPLEXITY_KEYWORDS,
-    REUSABILITY_HIGH_KEYWORDS,
-    REUSABILITY_LOW_KEYWORDS,
+    HIGH_REACH_KEYWORDS,
+    LOW_REACH_KEYWORDS,
+    HIGH_EFFORT_KEYWORDS,
+    LOW_EFFORT_KEYWORDS,
   },
 };

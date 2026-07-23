@@ -88,7 +88,12 @@ exit it by verifying yourself.
    built in full before confirming the quiz path shipped instantly while the
    app-handoff path needed an OTA + a deep-link scheme in the installed binary —
    knowing that up front would have led with the cheap path.*
-7. **Greenfield or multi-phase build? Render on a device BEFORE stacking
+7. **Planning gate — size the decision, document it if non-trivial.** Run
+   the sizing guide (`${CLAUDE_PLUGIN_ROOT}/skills/plan/references/sizing-guide.md`).
+   Tactical → skip or quick ADR. Feature-scope → Shape Up Pitch with research.
+   Architecture → RFD with full research. Planning doc must exist before Step 1
+   (acceptance criteria). Trivial changes: one-line skip note.
+8. **Greenfield or multi-phase build? Render on a device BEFORE stacking
    phases.** As soon as the scaffold + theme produce a first screen, put pixels
    on a real device/emulator — don't build N more phases on top of an unseen
    base. Unit tests mock every native module, so they cannot catch import-time

@@ -11,11 +11,17 @@ class ReportGenerator {
   // Generate report in specified format
   async generate(data, format = 'json', options = {}) {
     if (!this.supportedFormats.includes(format)) {
-      throw new Error(`Unsupported format: ${format}. Supported formats: ${this.supportedFormats.join(', ')}`);
+      throw new Error(
+        `Unsupported format: ${format}. Supported formats: ${this.supportedFormats.join(
+          ', '
+        )}`
+      );
     }
-    
-    const methodName = `generate${format.charAt(0).toUpperCase() + format.slice(1)}`;
-    return await this[methodName](data, options);
+
+    const methodName = `generate${
+      format.charAt(0).toUpperCase() + format.slice(1)
+    }`;
+    return this[methodName](data, options);
   }
 
   // Generate JSON format report
@@ -25,17 +31,17 @@ class ReportGenerator {
         generatedAt: new Date().toISOString(),
         generator: 'Rubric SDK Report Generator',
         version: '1.0.0',
-        format: 'json'
+        format: 'json',
       },
       summary: this.generateSummary(data),
-      data: Array.isArray(data) ? data : [data]
+      data: Array.isArray(data) ? data : [data],
     };
-    
+
     if (options.outputPath) {
       await fs.writeJson(options.outputPath, report, { spaces: 2 });
       return { success: true, path: options.outputPath };
     }
-    
+
     return JSON.stringify(report, null, 2);
   }
 
@@ -43,101 +49,124 @@ class ReportGenerator {
   async generateMarkdown(data, options = {}) {
     const evaluations = Array.isArray(data) ? data : [data];
     const summary = this.generateSummary(evaluations);
-    
-    let markdown = `# Rubric Evaluation Report\n\n`;
+
+    let markdown = '# Rubric Evaluation Report\n\n';
     markdown += `**Generated:** ${new Date().toISOString()}\n`;
     markdown += `**Total Tasks:** ${summary.totalTasks}\n\n`;
-    
+
     // Summary section
-    markdown += `## Summary\n\n`;
-    markdown += `| Priority | Count | Percentage |\n`;
-    markdown += `|----------|-------|------------|\n`;
-    markdown += `| High | ${summary.priorityDistribution.high} | ${((summary.priorityDistribution.high / summary.totalTasks) * 100).toFixed(1)}% |\n`;
-    markdown += `| Medium | ${summary.priorityDistribution.medium} | ${((summary.priorityDistribution.medium / summary.totalTasks) * 100).toFixed(1)}% |\n`;
-    markdown += `| Low | ${summary.priorityDistribution.low} | ${((summary.priorityDistribution.low / summary.totalTasks) * 100).toFixed(1)}% |\n`;
-    markdown += `| Backlog | ${summary.priorityDistribution.backlog} | ${((summary.priorityDistribution.backlog / summary.totalTasks) * 100).toFixed(1)}% |\n\n`;
-    
+    markdown += '## Summary\n\n';
+    markdown += '| Priority | Count | Percentage |\n';
+    markdown += '|----------|-------|------------|\n';
+    markdown += `| High | ${summary.priorityDistribution.high} | ${(
+      (summary.priorityDistribution.high / summary.totalTasks) *
+      100
+    ).toFixed(1)}% |\n`;
+    markdown += `| Medium | ${summary.priorityDistribution.medium} | ${(
+      (summary.priorityDistribution.medium / summary.totalTasks) *
+      100
+    ).toFixed(1)}% |\n`;
+    markdown += `| Low | ${summary.priorityDistribution.low} | ${(
+      (summary.priorityDistribution.low / summary.totalTasks) *
+      100
+    ).toFixed(1)}% |\n`;
+    markdown += `| Backlog | ${summary.priorityDistribution.backlog} | ${(
+      (summary.priorityDistribution.backlog / summary.totalTasks) *
+      100
+    ).toFixed(1)}% |\n\n`;
+
     // Detailed evaluations
-    markdown += `## Detailed Evaluations\n\n`;
-    
+    markdown += '## Detailed Evaluations\n\n';
+
     evaluations.forEach((evaluation, index) => {
       markdown += `### ${index + 1}. ${evaluation.task}\n\n`;
-      markdown += `**Priority:** ${evaluation.priority.toUpperCase()} (Score: ${evaluation.weightedScore})\n\n`;
-      
-      // Individual scores
-      markdown += `**Scores:**\n`;
-      markdown += `- Impact: ${evaluation.scores.impact}/5\n`;
-      markdown += `- Complexity: ${evaluation.scores.complexity}/5\n`;
-      markdown += `- Reusability: ${evaluation.scores.reusability}/5\n`;
-      markdown += `- Strategic Fit: ${evaluation.scores.strategic}/5\n\n`;
-      
+      markdown += `**Priority:** ${evaluation.priority.toUpperCase()} (Score: ${
+        evaluation.riceScore
+      })\n\n`;
+
+      // RICE scores
+      markdown += '**RICE Scores:**\n';
+      markdown += `- Reach: ${evaluation.scores.reach}\n`;
+      markdown += `- Impact: ${evaluation.scores.impact}\n`;
+      markdown += `- Confidence: ${evaluation.scores.confidence}\n`;
+      markdown += `- Effort: ${evaluation.scores.effort} person-days\n\n`;
+
       // Recommendations
       if (evaluation.recommendations && evaluation.recommendations.length > 0) {
-        markdown += `**Recommendations:**\n`;
+        markdown += '**Recommendations:**\n';
         evaluation.recommendations.forEach(rec => {
           markdown += `- ${rec}\n`;
         });
-        markdown += `\n`;
+        markdown += '\n';
       }
-      
+
       // Metadata
       if (evaluation.metadata) {
-        markdown += `**Metadata:**\n`;
-        if (evaluation.metadata.evaluator) markdown += `- Evaluator: ${evaluation.metadata.evaluator}\n`;
-        if (evaluation.metadata.notes) markdown += `- Notes: ${evaluation.metadata.notes}\n`;
-        if (evaluation.rank) markdown += `- Rank: ${evaluation.rank}\n`;
-        markdown += `\n`;
+        markdown += '**Metadata:**\n';
+        if (evaluation.metadata.evaluator) {
+          markdown += `- Evaluator: ${evaluation.metadata.evaluator}\n`;
+        }
+        if (evaluation.metadata.notes) {
+          markdown += `- Notes: ${evaluation.metadata.notes}\n`;
+        }
+        if (evaluation.rank) {
+          markdown += `- Rank: ${evaluation.rank}\n`;
+        }
+        markdown += '\n';
       }
-      
-      markdown += `---\n\n`;
+
+      markdown += '---\n\n';
     });
-    
+
     if (options.outputPath) {
       await fs.writeFile(options.outputPath, markdown, 'utf8');
       return { success: true, path: options.outputPath };
     }
-    
+
     return markdown;
   }
 
   // Generate CSV format report
   async generateCsv(data, options = {}) {
     const evaluations = Array.isArray(data) ? data : [data];
-    
+
     // Flatten data for CSV format
     const csvData = evaluations.map(evaluation => ({
       task: evaluation.task,
       priority: evaluation.priority,
-      weightedScore: evaluation.weightedScore,
-      impactScore: evaluation.scores.impact,
-      complexityScore: evaluation.scores.complexity,
-      reusabilityScore: evaluation.scores.reusability,
-      strategicScore: evaluation.scores.strategic,
-      impactWeight: evaluation.weights.impact,
-      complexityWeight: evaluation.weights.complexity,
-      reusabilityWeight: evaluation.weights.reusability,
-      strategicWeight: evaluation.weights.strategic,
+      riceScore: evaluation.riceScore,
+      reach: evaluation.scores.reach,
+      impact: evaluation.scores.impact,
+      confidence: evaluation.scores.confidence,
+      effort: evaluation.scores.effort,
       rank: evaluation.rank || null,
       evaluator: evaluation.metadata?.evaluator || null,
       notes: evaluation.metadata?.notes || null,
-      timestamp: evaluation.timestamp
+      timestamp: evaluation.timestamp,
     }));
-    
+
     const fields = [
-      'task', 'priority', 'weightedScore', 'rank',
-      'impactScore', 'complexityScore', 'reusabilityScore', 'strategicScore',
-      'impactWeight', 'complexityWeight', 'reusabilityWeight', 'strategicWeight',
-      'evaluator', 'notes', 'timestamp'
+      'task',
+      'priority',
+      'riceScore',
+      'rank',
+      'reach',
+      'impact',
+      'confidence',
+      'effort',
+      'evaluator',
+      'notes',
+      'timestamp',
     ];
-    
+
     const parser = new Parser({ fields });
     const csv = parser.parse(csvData);
-    
+
     if (options.outputPath) {
       await fs.writeFile(options.outputPath, csv, 'utf8');
       return { success: true, path: options.outputPath };
     }
-    
+
     return csv;
   }
 
@@ -145,7 +174,7 @@ class ReportGenerator {
   async generateHtml(data, options = {}) {
     const evaluations = Array.isArray(data) ? data : [data];
     const summary = this.generateSummary(evaluations);
-    
+
     let html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -181,37 +210,61 @@ class ReportGenerator {
             <p><strong>Total Tasks:</strong> ${summary.totalTasks}</p>
             <table>
                 <tr><th>Priority</th><th>Count</th><th>Percentage</th></tr>
-                <tr><td>High</td><td>${summary.priorityDistribution.high}</td><td>${((summary.priorityDistribution.high / summary.totalTasks) * 100).toFixed(1)}%</td></tr>
-                <tr><td>Medium</td><td>${summary.priorityDistribution.medium}</td><td>${((summary.priorityDistribution.medium / summary.totalTasks) * 100).toFixed(1)}%</td></tr>
-                <tr><td>Low</td><td>${summary.priorityDistribution.low}</td><td>${((summary.priorityDistribution.low / summary.totalTasks) * 100).toFixed(1)}%</td></tr>
-                <tr><td>Backlog</td><td>${summary.priorityDistribution.backlog}</td><td>${((summary.priorityDistribution.backlog / summary.totalTasks) * 100).toFixed(1)}%</td></tr>
+                <tr><td>High</td><td>${
+                  summary.priorityDistribution.high
+                }</td><td>${(
+      (summary.priorityDistribution.high / summary.totalTasks) *
+      100
+    ).toFixed(1)}%</td></tr>
+                <tr><td>Medium</td><td>${
+                  summary.priorityDistribution.medium
+                }</td><td>${(
+      (summary.priorityDistribution.medium / summary.totalTasks) *
+      100
+    ).toFixed(1)}%</td></tr>
+                <tr><td>Low</td><td>${
+                  summary.priorityDistribution.low
+                }</td><td>${(
+      (summary.priorityDistribution.low / summary.totalTasks) *
+      100
+    ).toFixed(1)}%</td></tr>
+                <tr><td>Backlog</td><td>${
+                  summary.priorityDistribution.backlog
+                }</td><td>${(
+      (summary.priorityDistribution.backlog / summary.totalTasks) *
+      100
+    ).toFixed(1)}%</td></tr>
             </table>
         </div>
         
         <h2>Detailed Evaluations</h2>`;
-    
+
     evaluations.forEach((evaluation, index) => {
       const priorityClass = `priority-${evaluation.priority}`;
       html += `
         <div class="task-card ${priorityClass}">
             <h3>${index + 1}. ${evaluation.task}</h3>
-            <p><strong>Priority:</strong> ${evaluation.priority.toUpperCase()} (Score: ${evaluation.weightedScore})</p>
+            <p><strong>Priority:</strong> ${evaluation.priority.toUpperCase()} (Score: ${
+        evaluation.riceScore
+      })</p>
             
             <div class="scores-grid">
                 <div class="score-item">
-                    <strong>Impact</strong><br>${evaluation.scores.impact}/5
+                    <strong>Reach</strong><br>${evaluation.scores.reach}
                 </div>
                 <div class="score-item">
-                    <strong>Complexity</strong><br>${evaluation.scores.complexity}/5
+                    <strong>Impact</strong><br>${evaluation.scores.impact}
                 </div>
                 <div class="score-item">
-                    <strong>Reusability</strong><br>${evaluation.scores.reusability}/5
+                    <strong>Confidence</strong><br>${
+                      evaluation.scores.confidence
+                    }
                 </div>
                 <div class="score-item">
-                    <strong>Strategic</strong><br>${evaluation.scores.strategic}/5
+                    <strong>Effort</strong><br>${evaluation.scores.effort}d
                 </div>
             </div>`;
-      
+
       if (evaluation.recommendations && evaluation.recommendations.length > 0) {
         html += `
             <div class="recommendations">
@@ -220,53 +273,60 @@ class ReportGenerator {
         evaluation.recommendations.forEach(rec => {
           html += `<li>${rec}</li>`;
         });
-        html += `</ul></div>`;
+        html += '</ul></div>';
       }
-      
+
       if (evaluation.metadata) {
-        html += `<div class="metadata">`;
-        if (evaluation.metadata.evaluator) html += `<strong>Evaluator:</strong> ${evaluation.metadata.evaluator} | `;
-        if (evaluation.rank) html += `<strong>Rank:</strong> ${evaluation.rank} | `;
-        if (evaluation.metadata.notes) html += `<strong>Notes:</strong> ${evaluation.metadata.notes}`;
-        html += `</div>`;
+        html += '<div class="metadata">';
+        if (evaluation.metadata.evaluator) {
+          html += `<strong>Evaluator:</strong> ${evaluation.metadata.evaluator} | `;
+        }
+        if (evaluation.rank) {
+          html += `<strong>Rank:</strong> ${evaluation.rank} | `;
+        }
+        if (evaluation.metadata.notes) {
+          html += `<strong>Notes:</strong> ${evaluation.metadata.notes}`;
+        }
+        html += '</div>';
       }
-      
-      html += `</div>`;
+
+      html += '</div>';
     });
-    
+
     html += `
     </div>
 </body>
 </html>`;
-    
+
     if (options.outputPath) {
       await fs.writeFile(options.outputPath, html, 'utf8');
       return { success: true, path: options.outputPath };
     }
-    
+
     return html;
   }
 
   // Generate summary statistics from evaluation data
   generateSummary(evaluations) {
     const data = Array.isArray(evaluations) ? evaluations : [evaluations];
-    
+
     const priorityDistribution = {
-      high: data.filter(e => e.priority === 'high').length,
-      medium: data.filter(e => e.priority === 'medium').length,
-      low: data.filter(e => e.priority === 'low').length,
-      backlog: data.filter(e => e.priority === 'backlog').length
+      high: data.filter(ev => ev.priority === 'high').length,
+      medium: data.filter(ev => ev.priority === 'medium').length,
+      low: data.filter(ev => ev.priority === 'low').length,
+      backlog: data.filter(ev => ev.priority === 'backlog').length,
     };
-    
-    const scores = data.map(e => e.weightedScore);
-    const averageScore = scores.reduce((sum, score) => sum + score, 0) / scores.length;
-    
+
+    const scores = data.map(ev => ev.riceScore);
+    const averageScore =
+      scores.reduce((sum, score) => sum + score, 0) / scores.length;
+
     return {
       totalTasks: data.length,
       priorityDistribution,
       averageScore: Math.round(averageScore * 100) / 100,
       highestScore: Math.max(...scores),
-      lowestScore: Math.min(...scores)
+      lowestScore: Math.min(...scores),
     };
   }
 
@@ -274,18 +334,18 @@ class ReportGenerator {
   async saveReport(content, outputPath, format) {
     try {
       await fs.ensureDir(path.dirname(outputPath));
-      
+
       if (typeof content === 'object') {
         await fs.writeJson(outputPath, content, { spaces: 2 });
       } else {
         await fs.writeFile(outputPath, content, 'utf8');
       }
-      
+
       return {
         success: true,
         path: outputPath,
         format,
-        size: (await fs.stat(outputPath)).size
+        size: (await fs.stat(outputPath)).size,
       };
     } catch (error) {
       throw new Error(`Failed to save report: ${error.message}`);
