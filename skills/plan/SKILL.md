@@ -105,6 +105,14 @@ Read the research protocol:
 **Fallback:** if WebSearch is unavailable, note "Research skipped — WebSearch
 tool unavailable" in the Prior Art section and proceed.
 
+**Delegate to a researcher agent (optional).** If the Agent tool is available,
+hand the research to a dedicated read-only **researcher** using
+`${CLAUDE_PLUGIN_ROOT}/references/agents/researcher-prompt.md` as its
+instructions. It keeps the research — and the large context of fetched pages —
+out of your main window and returns structured, cited findings ready to drop
+into the Prior Art section. Same rounds, same source-quality tiers. Fall back to
+running the rounds inline if the Agent tool or the prompt file isn't available.
+
 ## Step 3 — Draft the planning doc
 
 1. **Determine the next number.** Scan `memory/decisions/` for files matching

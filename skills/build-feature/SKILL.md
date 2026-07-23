@@ -130,6 +130,31 @@ question now beats three correction rounds later.
 If you're in plan mode, this is where the plan + AskUserQuestion belong; exit
 plan mode only once the approach is settled.
 
+## Step 1.5 — Multi-agent build (conditional — Pitch/RFD tier only)
+
+If the planning gate (Step 0, item 7) sized this as **Pitch or RFD tier** AND
+the workflow script exists at
+`${CLAUDE_PLUGIN_ROOT}/references/workflows/researched-build.js`, delegate the
+build (Steps 2–4) to the multi-agent pipeline instead of building single-handed.
+Invoke the **Workflow** tool with:
+
+- `scriptPath: "${CLAUDE_PLUGIN_ROOT}/references/workflows/researched-build.js"`
+- `args: { tier, criteria, rendersUI, task, context }` — `tier` is `'pitch'` or
+  `'rfd'`; `criteria` is the Step 1 acceptance criteria; `rendersUI` is whether
+  the change puts pixels on screen; `task` is the ask; `context` carries the
+  repo + framework notes.
+
+The workflow runs researcher → tester (failing tests) → implementer (worktree) →
+reviewer (adversarial; a multi-lens panel + skeptic verification for RFD) with a
+fix loop → verifier (on-device, UI only) with a fix loop. It returns the diff,
+test results, review verdicts, and verification measurements. When it returns,
+**skip to Step 5.5** — the build + verify are done; you own integration, commit,
+and PR (Step 6).
+
+**Fall back to single-agent (Steps 2–4 below) when:** the tier is ADR / tactical
+/ trivial, the workflow script is absent, or the change is small enough that
+orchestration overhead isn't worth it. Don't over-orchestrate a one-file fix.
+
 ## Step 2 — TDD, implement, keep the suite green
 
 Work in `mobile/`.
@@ -215,6 +240,14 @@ tooling included);** skip with a one-line note for a true one-liner:
 
 1. `/code-review` — surfaces correctness bugs plus reuse/simplification/efficiency
    cleanups in the current diff. Triage and fix what's real.
+   - **Large diff from a single-agent build?** If the diff is > ~50 lines AND it
+     did NOT already go through `researched-build` (which reviews internally),
+     run the deeper **adversarial-review** workflow instead: invoke the Workflow
+     tool with `scriptPath:
+     "${CLAUDE_PLUGIN_ROOT}/references/workflows/adversarial-review.js"` and
+     `args: { diff, criteria, crossRepo }`. It runs parallel multi-lens reviewers
+     and refutes each finding with independent skeptics, so only confirmed issues
+     survive. Fall back to `/code-review` if the workflow script is absent.
 2. `/simplify` — applies reuse/efficiency/altitude cleanups (quality only, no bug
    hunt). Re-run `npx tsc --noEmit && npx jest --no-coverage` after it touches
    code, since it edits the working tree.
@@ -229,6 +262,22 @@ tooling included);** skip with a one-line note for a true one-liner:
 
 Full platform rule: `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Quality
 pass before commit".
+
+## Step 5.7 — Pre-merge E2E gate (litmus) — smoke subset only
+
+For a change that touches a **user-facing flow** (skip for backend/config/
+copy-only diffs), gate the merge on fast, reliable checks — **never** the full
+E2E suite. This is the industry standard, not a cost shortcut: Google's 70/20/10
+test pyramid and merge-queue practice both hold that a flaky full suite blocks
+good PRs and destroys feedback speed, so the bulk of E2E runs *post*-merge.
+
+1. **testID contract** is already enforced by the reviewer (Step 5.5, or the
+   `researched-build` review phase): a renamed/removed testID that litmus depends
+   on is a hard block — its paired litmus PR must land first.
+2. **Smoke subset:** if litmus exposes a `@smoke` critical-golden-path job,
+   trigger just that (`gh workflow run <litmus-smoke> --ref master`), target
+   < 10 min, and block the merge on red. If no smoke job exists yet, skip this —
+   the full suite runs post-merge (Step 6, item 5).
 
 ## Step 6 — Commit and wrap
 
@@ -251,7 +300,13 @@ pass before commit".
 4. If the change has reached the user via OTA, remember the
    pre-production-verification discipline (BACKLOG P1): test on dev/preview, never
    push UI straight to `production` as the way to find out it's wrong.
-5. Report with the **bottom line first**, the measured verdicts, the screenshot,
+5. **Post-merge full E2E (litmus) — advisory.** After the merge lands on
+   `master`, trigger the FULL litmus suite (`gh workflow run <litmus-e2e> --ref
+   master`). It does NOT block (the change already merged): on red, log a
+   regression-log entry, open an implementer fix PR, and bisect — don't revert
+   reflexively. This is where the bulk of E2E coverage runs, per the pyramid.
+   Skip only for changes that touch no user-facing flow.
+6. Report with the **bottom line first**, the measured verdicts, the screenshot,
    and only the sections that have real content (per the repo's communication
    style). If you added a regression-worthy fix, log it.
 

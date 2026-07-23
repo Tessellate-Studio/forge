@@ -9,3 +9,7 @@ LICENSE
 # Scaffold payload: template sources ship to generated apps and follow the
 # standard style their own .eslintrc.js declares, not forge house formatting.
 standards-cli/templates/
+
+# Workflow-runtime payload: these ship to the Claude Code Workflow sandbox and
+# are kept pristine as templates, not reformatted to forge house style.
+references/workflows/
