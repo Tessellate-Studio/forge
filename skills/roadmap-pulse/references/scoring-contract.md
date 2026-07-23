@@ -2,12 +2,19 @@
 
 This file is the contract roadmap-pulse expects from `@tessellate-studio/rubric-sdk`. The SDK is on its own evolution track (Track B) — that track should evolve to meet this contract, not the other way around.
 
+## Framework
+
+**RICE** — Intercom's prioritisation framework (38% adoption per 2024 Delibr PM
+survey; used by Intercom, Miro, GoFundMe).
+
+Formula: **Score = (Reach × Impact × Confidence) / Effort**
+
 ## Table of contents
 
 1. [Input shape (what the skill hands to the SDK)](#input-shape)
 2. [Output shape (what the SDK returns)](#output-shape)
-3. [Dimension rubrics (what each 0-3 score means)](#dimension-rubrics)
-4. [Score adjustments (the skill's overlays on top of SDK output)](#score-adjustments)
+3. [Axis definitions (what each value means)](#axis-definitions)
+4. [Score overlays (the skill's adjustments on top of SDK output)](#score-overlays)
 5. [Failure modes + fallbacks](#failure-modes--fallbacks)
 6. [Invocation via `scripts/invoke_rubric.sh`](#invocation)
 
@@ -53,101 +60,136 @@ The skill expects this back from the SDK:
 
 ```json
 {
-  "impact": 3,
-  "complexity": 2,
-  "reusability": 1,
-  "strategic": 3,
-  "total": 9,
-  "band": "Must",
+  "reach": 100,
+  "impact": 2,
+  "confidence": 0.8,
+  "effort": 2,
+  "rice_score": 80,
   "reasoning": {
-    "impact": "Directly unblocks acquisition channels (Reddit) + compliance email handle.",
-    "complexity": "Domain registrar email-forwarding setup is 1-2 hours; not low (would be 3) because the user has to configure Google Workspace or Zoho.",
-    "reusability": "Aliases are project-specific; some reuse for future Tessellate-domain projects.",
-    "strategic": "Critical-path for closed beta acquisition; aligned with the Step 2 goal of 'gates loom'."
+    "reach": "2 high-reach keyword matches (production, launch); unblocks 2 other tasks.",
+    "impact": "1 high-impact + 0 medium-impact keyword matches; 2 goal-string overlap; unblocks 2 other tasks.",
+    "confidence": "Goals provided; description length 132 (specific).",
+    "effort": "0 high-effort + 0 low-effort keyword matches; description length 132; depends on 0 other tasks."
   }
 }
 ```
 
 **Conventions:**
 
-- Each axis is a strict integer 0-3.
-- `total` = sum of the 4 axes (0-12 range).
-- `band` is one of `Must` (9-12), `Nice` (6-8), `Low` (3-5), `Reject` (0-2).
+- `reach` is one of: 1 (just me/testing), 10 (early testers), 100 (all current users), 1000 (future users at scale).
+- `impact` is one of: 0.25 (minimal), 0.5 (low), 1 (medium), 2 (high), 3 (massive).
+- `confidence` is one of: 0.5 (guess), 0.8 (qualitative signal), 1.0 (measured/tested).
+- `effort` is person-days: 0.5, 1, 2, 3, 5, 10, or 20.
+- `rice_score` = `(reach * impact * confidence) / effort`, rounded to 2 decimal places.
 - `reasoning` is a per-axis short prose justification. The skill cites this in the final report — without reasoning, scores aren't actionable.
 
 ---
 
-## Dimension rubrics
+## Axis definitions
 
-For when the user (or you, in dev mode) is scoring a task manually because the SDK is unavailable or you're checking the SDK's work.
+### Reach — how many users/events does this touch?
 
-### Impact (0-3)
+| Value | Meaning | Examples |
+|---|---|---|
+| **1** | Just me / testing / internal tooling | CI config, debugging aid, admin panel |
+| **10** | Early testers / small cohort | Beta tester feature, niche flow |
+| **100** | All current users | App-wide change, onboarding, core flow |
+| **1000** | Future users at scale | Infrastructure, launch-gating, acquisition |
 
-- **0** — Trivia / cosmetic only. No user-visible value, no business impact.
-- **1** — Marginal improvement. A few users benefit; quality-of-life work.
-- **2** — Meaningful improvement to a real user pain or a real business metric (acquisition, retention, support load).
-- **3** — Critical-path: unblocks acquisition, prevents user loss, addresses an active legal / compliance gap, or removes a major friction point.
+### Impact — how much does it move the needle per person reached?
 
-### Complexity / Cost (0-3) — **inverse scoring** (lower complexity = higher score)
+| Value | Meaning | Examples |
+|---|---|---|
+| **0.25** | Minimal — barely noticeable | Subtle visual polish |
+| **0.5** | Low — marginal improvement | Minor UX smoothing |
+| **1** | Medium — meaningful improvement to a real pain | Quality-of-life fix |
+| **2** | High — significant value or friction removal | Feature that removes a support driver |
+| **3** | Massive — critical-path or compliance | Launch blocker, legal/security gate |
 
-- **0** — Multi-week, multi-component, requires research or external partnerships.
-- **1** — 1-2 weeks of focused work; touches multiple systems.
-- **2** — Few days; touches one system; well-understood.
-- **3** — Hours, single-file change OR straightforward config / doc update.
+### Confidence — how validated is the estimate?
 
-### Reusability (0-3)
+| Value | Meaning | What you have |
+|---|---|---|
+| **0.5** | Guess — "I think this is right" | No data, no user signal, hunch |
+| **0.8** | Qualitative signal — "users complained about this" | Bug reports, user feedback, support tickets |
+| **1.0** | Measured — "I have data" | Analytics, A/B test, reproduction steps |
 
-- **0** — One-shot. Doesn't apply to future projects or other features.
-- **1** — Some reuse — pattern applies elsewhere but isn't a building block.
-- **2** — Generalizable component or pattern. Future features will lean on it.
-- **3** — Infrastructure-grade. Becomes a foundation other features build on top of.
+### Effort — how much work in person-days?
 
-### Strategic Fit (0-3)
-
-- **0** — Doesn't align with current goals. Speculative or off-roadmap.
-- **1** — Tangentially relevant. Nice-to-have for someday.
-- **2** — Supports a current focus area but isn't on the critical path.
-- **3** — On the critical path for a Step 2 goal. Directly enables a gate the project is currently optimizing for.
+| Value | Meaning |
+|---|---|
+| **0.5** | Minutes to an hour. Config, copy, one-liner. |
+| **1** | A focused morning or afternoon. |
+| **2** | A full day's work. |
+| **3** | Two focused days. |
+| **5** | A working week. |
+| **10** | Two weeks. Multiple systems, research needed. |
+| **20** | A month+. Major architecture, external dependencies. |
 
 ---
 
-## Score adjustments
+## Score overlays
 
-The SDK returns a raw score. The skill applies two overlays on top:
+The SDK returns a raw RICE score. The skill applies three multiplier overlays:
 
-1. **Goal-alignment bonus**: `+1 total` if this task's title or description appears in the Step 2 goal-aligned list. Capped at 12. This bumps a Nice-to-have (6-8) into the Must band (9-12) when the goal is specifically about this task.
+1. **Reusability bonus** — if the task produces a reusable component/pattern
+   (keywords: infrastructure, library, sdk, shared, plugin, middleware, etc.),
+   multiply RICE score by **1.2×**. This captures the value the old Reusability
+   axis provided.
 
-2. **Dependency-unblock bonus**: `+1 total` if the task has ≥1 entry in `context.dependencies.this_task_unblocks`. Capped at 12. Tasks that gate other open tasks are higher leverage than equally-scored leaf tasks.
+2. **Strategic Fit bonus** — if this task appears in the Step 2 goal-aligned
+   list, multiply RICE score by **1.2×**. This captures the value the old
+   Strategic Fit axis provided.
 
-These are **additive** — a task that's BOTH goal-aligned AND a dependency-unblocker gets +2 total (capped at 12).
+3. **Dependency-unblock bonus** — if this task has ≥1 entry in
+   `context.dependencies.this_task_unblocks`, multiply RICE score by **1.1×**.
+   Tasks that gate other open tasks are higher leverage.
 
-Document the bonus in the final report so the user sees the math: `Score: 7 (raw) + 1 (goal: closed beta) + 1 (unblocks Reddit + BrandIntegration) = 9 → Must band`.
+These are **multiplicative** — a task that's both reusable AND goal-aligned AND
+a dependency-unblocker gets `score × 1.2 × 1.2 × 1.1 = score × 1.584`.
+
+Document the overlay in the final report so the user sees the math:
+`RICE: 80 (raw) × 1.2 (reusable: shared library) × 1.2 (goal: closed beta) × 1.1 (unblocks 2 tasks) = 126.7`
+
+### Prioritisation
+
+Sort all tasks by adjusted RICE score descending. Take the top 5-10 for the
+weekly priority list. No fixed band thresholds — RICE scores vary widely by
+context, so relative ranking within the current backlog is more useful than
+absolute buckets.
+
+For compatibility with existing references to bands in BACKLOG.md entries and
+the digest format, map to bands by percentile:
+- **Must** — top 20% of scored items
+- **Nice** — next 30%
+- **Low** — next 30%
+- **Reject** — bottom 20%
 
 ---
 
 ## Failure modes + fallbacks
 
-The rubric-sdk is experimental (v1.0.0, 2 commits, no npm release at time of writing). The skill should fail gracefully when the SDK does:
+The rubric-sdk is experimental (v2.0.0). The skill should fail gracefully:
 
 | Failure | Fallback |
 |---|---|
-| SDK CLI not installed | Skip scoring for this run; surface in the report as "rubric-sdk not installed — `npm install -g @tessellate-studio/rubric-sdk` then re-run." Continue with un-scored prioritization (Step 2 goal-alignment + Step 3 dependency graph still produces a useful ranking). |
-| SDK returns malformed JSON | Score that task as `null`; surface in the report as "scoring failed for task X (SDK error)". Don't fail the whole run. |
+| SDK CLI not installed | Skip scoring; surface "rubric-sdk not installed" in report. Continue with un-scored prioritisation (Step 2 goal-alignment + Step 3 dependency graph still produces a useful ranking). |
+| SDK returns malformed JSON | Score that task as `null`; surface "scoring failed for task X" in report. Don't fail the whole run. |
 | SDK takes longer than 30s per task | Time out; treat as malformed-JSON case. |
-| SDK CLI requires interactive input the skill can't provide | Try the programmatic API path first (`scripts/invoke_rubric.sh --programmatic`). If that fails too, fall back to skip-and-surface. |
+| SDK CLI requires interactive input | Try programmatic API first. If that fails too, fall back to skip-and-surface. |
 
-The skill is useful even without scoring — Step 2 + Step 3 alone produce a defensible weekly priority list. Scoring is the icing.
+The skill is useful even without scoring — Step 2 + Step 3 alone produce a defensible weekly priority list.
 
 ---
 
 ## Invocation
 
-The wrapper [`scripts/invoke_rubric.sh`](../scripts/invoke_rubric.sh) takes the input JSON on stdin and returns the output JSON on stdout. Usage from inside the skill:
+The wrapper [`scripts/invoke_rubric.sh`](../scripts/invoke_rubric.sh) takes the input JSON on stdin and returns the output JSON on stdout. Usage:
 
 ```bash
 echo '<input json>' | bash scripts/invoke_rubric.sh
 ```
 
-The wrapper tries the CLI first, falls back to the programmatic API, and surfaces a structured error if both fail. The skill should batch invocations sensibly — one per task, sequential (not parallel — the SDK isn't tested for concurrency yet).
+The wrapper tries the CLI first, falls back to the programmatic API, and surfaces a structured error if both fail. Batch invocations: one per task, sequential.
 
-For high-task-count weeks (>20 open tasks), the skill MAY skip scoring for tasks whose Step 2 + Step 3 ranking already places them outside the top 15 — those won't make the top-10 list anyway, so the SDK's per-axis reasoning isn't needed for them.
+For high-task-count weeks (>20 open tasks), skip scoring for tasks whose Step 2 + Step 3 ranking already places them outside the top 15.

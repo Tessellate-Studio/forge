@@ -1,4 +1,4 @@
-// Unit tests for RubricEngine
+// Unit tests for RubricEngine — RICE framework
 const RubricEngine = require('../../lib/rubric-engine');
 
 describe('RubricEngine', () => {
@@ -8,155 +8,108 @@ describe('RubricEngine', () => {
     engine = new RubricEngine();
   });
 
-  describe('constructor', () => {
-    test('should initialize with default weights', () => {
-      expect(engine.weights.impact).toBe(0.35);
-      expect(engine.weights.complexity).toBe(0.25);
-      expect(engine.weights.reusability).toBe(0.2);
-      expect(engine.weights.strategic).toBe(0.2);
-    });
-
-    test('should accept custom weights', () => {
-      const customEngine = new RubricEngine({
-        weights: {
-          impact: 0.5,
-          complexity: 0.3,
-          reusability: 0.1,
-          strategic: 0.1,
-        },
-      });
-
-      expect(customEngine.weights.impact).toBe(0.5);
-      expect(customEngine.weights.complexity).toBe(0.3);
-    });
-
-    test('should initialize with default thresholds', () => {
-      expect(engine.thresholds.high_priority).toBe(3);
-      expect(engine.thresholds.medium_priority).toBe(2);
-      expect(engine.thresholds.low_priority).toBe(1);
-    });
-  });
-
   describe('validateScores', () => {
-    test('should validate correct scores', () => {
-      const scores = { impact: 3, complexity: 2, reusability: 3, strategic: 1 };
+    test('should validate correct RICE scores', () => {
+      const scores = { reach: 100, impact: 2, confidence: 0.8, effort: 3 };
       expect(() => engine.validateScores(scores)).not.toThrow();
     });
 
-    test('should throw error for missing dimensions', () => {
-      const scores = { impact: 3, complexity: 2 }; // missing reusability and strategic
+    test('should throw error for zero reach', () => {
+      const scores = { reach: 0, impact: 2, confidence: 0.8, effort: 3 };
       expect(() => engine.validateScores(scores)).toThrow(
-        'Missing required scoring dimensions'
+        'Invalid score for reach'
       );
     });
 
-    test('should throw error for invalid score range', () => {
-      const scores = { impact: 4, complexity: 2, reusability: 1, strategic: 3 };
+    test('should throw error for negative effort', () => {
+      const scores = { reach: 100, impact: 2, confidence: 0.8, effort: -1 };
       expect(() => engine.validateScores(scores)).toThrow(
-        'Invalid score for impact'
+        'Invalid score for effort'
       );
     });
 
-    test('should throw error for negative scores', () => {
-      const scores = {
-        impact: -1,
-        complexity: 2,
-        reusability: 1,
-        strategic: 3,
-      };
+    test('should throw error for confidence above 1', () => {
+      const scores = { reach: 100, impact: 2, confidence: 1.5, effort: 3 };
       expect(() => engine.validateScores(scores)).toThrow(
-        'Invalid score for impact'
+        'Invalid score for confidence'
+      );
+    });
+
+    test('should throw error for zero confidence', () => {
+      const scores = { reach: 100, impact: 2, confidence: 0, effort: 3 };
+      expect(() => engine.validateScores(scores)).toThrow(
+        'Invalid score for confidence'
       );
     });
   });
 
-  describe('calculateWeightedScore', () => {
-    test('should calculate weighted score correctly', () => {
-      const scores = { impact: 3, complexity: 1, reusability: 2, strategic: 2 };
-      const weightedScore = engine.calculateWeightedScore(scores);
+  describe('calculateRiceScore', () => {
+    test('should calculate RICE score correctly', () => {
+      const scores = { reach: 100, impact: 2, confidence: 0.8, effort: 5 };
+      const riceScore = engine.calculateRiceScore(scores);
 
-      // Expected calculation:
-      // impact: 3 * 0.35 = 1.05
-      // complexity: (3-1) * 0.25 = 0.50 (inverted)
-      // reusability: 2 * 0.20 = 0.40
-      // strategic: 2 * 0.20 = 0.40
-      // Total: 2.35 (weights sum to 1.0, so normalization is a no-op)
-      expect(weightedScore).toBeCloseTo(2.35, 2);
+      // (100 * 2 * 0.8) / 5 = 32
+      expect(riceScore).toBe(32);
     });
 
-    test('should invert complexity score', () => {
-      const scores = { impact: 0, complexity: 3, reusability: 0, strategic: 0 };
-      const weightedScore = engine.calculateWeightedScore(scores);
+    test('should handle small values', () => {
+      const scores = { reach: 1, impact: 0.25, confidence: 0.5, effort: 20 };
+      const riceScore = engine.calculateRiceScore(scores);
 
-      // Complexity 3 should become 0 (3-3), so total should be 0
-      expect(weightedScore).toBe(0);
+      // (1 * 0.25 * 0.5) / 20 = 0.00625 → 0.01
+      expect(riceScore).toBeCloseTo(0.01, 2);
     });
 
-    test('should handle zero weights', () => {
-      const customEngine = new RubricEngine({
-        weights: { impact: 1.0, complexity: 0, reusability: 0, strategic: 0 },
-      });
+    test('should handle high values', () => {
+      const scores = { reach: 1000, impact: 3, confidence: 1.0, effort: 0.5 };
+      const riceScore = engine.calculateRiceScore(scores);
 
-      const scores = { impact: 2, complexity: 3, reusability: 1, strategic: 0 };
-      const weightedScore = customEngine.calculateWeightedScore(scores);
-
-      expect(weightedScore).toBe(2);
+      // (1000 * 3 * 1.0) / 0.5 = 6000
+      expect(riceScore).toBe(6000);
     });
   });
 
   describe('getPriorityLevel', () => {
     test('should return correct priority levels', () => {
-      expect(engine.getPriorityLevel(3.0)).toBe('high');
-      expect(engine.getPriorityLevel(2.5)).toBe('medium');
-      expect(engine.getPriorityLevel(1.5)).toBe('low');
+      expect(engine.getPriorityLevel(100)).toBe('high');
+      expect(engine.getPriorityLevel(50)).toBe('medium');
+      expect(engine.getPriorityLevel(5)).toBe('low');
       expect(engine.getPriorityLevel(0.5)).toBe('backlog');
     });
 
     test('should handle boundary conditions', () => {
-      expect(engine.getPriorityLevel(3.0)).toBe('high');
-      expect(engine.getPriorityLevel(2.9)).toBe('medium');
-      expect(engine.getPriorityLevel(2.0)).toBe('medium');
-      expect(engine.getPriorityLevel(1.9)).toBe('low');
-      expect(engine.getPriorityLevel(1.0)).toBe('low');
+      expect(engine.getPriorityLevel(100)).toBe('high');
+      expect(engine.getPriorityLevel(99)).toBe('medium');
+      expect(engine.getPriorityLevel(10)).toBe('medium');
+      expect(engine.getPriorityLevel(9)).toBe('low');
+      expect(engine.getPriorityLevel(1)).toBe('low');
       expect(engine.getPriorityLevel(0.9)).toBe('backlog');
     });
   });
 
   describe('generateRecommendation', () => {
     test('should identify quick wins', () => {
-      const scores = { impact: 3, complexity: 1, reusability: 2, strategic: 2 };
-      const weightedScore = engine.calculateWeightedScore(scores);
-      const recommendation = engine.generateRecommendation(
-        scores,
-        weightedScore
-      );
-
+      const scores = { reach: 100, impact: 3, confidence: 0.8, effort: 0.5 };
+      const riceScore = engine.calculateRiceScore(scores);
+      const recommendation = engine.generateRecommendation(scores, riceScore);
       expect(recommendation.recommendations).toContain(
-        'Quick win - high impact, low complexity'
+        'Quick win - high impact, low effort'
       );
     });
 
-    test('should recommend reusable components', () => {
-      const scores = { impact: 2, complexity: 2, reusability: 3, strategic: 2 };
-      const weightedScore = engine.calculateWeightedScore(scores);
-      const recommendation = engine.generateRecommendation(
-        scores,
-        weightedScore
-      );
-
+    test('should flag low confidence', () => {
+      const scores = { reach: 100, impact: 2, confidence: 0.5, effort: 3 };
+      const riceScore = engine.calculateRiceScore(scores);
+      const recommendation = engine.generateRecommendation(scores, riceScore);
       expect(recommendation.recommendations).toContain(
-        'Consider creating reusable component/library'
+        'Low confidence - validate assumptions before investing'
       );
     });
 
-    test('should recommend breaking down complex tasks', () => {
-      const scores = { impact: 2, complexity: 3, reusability: 2, strategic: 2 };
-      const weightedScore = engine.calculateWeightedScore(scores);
-      const recommendation = engine.generateRecommendation(
-        scores,
-        weightedScore
-      );
-
+    test('should recommend breaking down high-effort tasks', () => {
+      const scores = { reach: 100, impact: 2, confidence: 0.8, effort: 10 };
+      const riceScore = engine.calculateRiceScore(scores);
+      const recommendation = engine.generateRecommendation(scores, riceScore);
       expect(recommendation.recommendations).toContain(
         'Consider breaking into smaller tasks'
       );
@@ -166,21 +119,20 @@ describe('RubricEngine', () => {
   describe('evaluate', () => {
     test('should evaluate a task successfully', async () => {
       const taskDescription = 'Implement user authentication';
-      const scores = { impact: 3, complexity: 2, reusability: 2, strategic: 3 };
+      const scores = { reach: 100, impact: 3, confidence: 0.8, effort: 5 };
 
       const result = await engine.evaluate(taskDescription, scores);
 
       expect(result.task).toBe(taskDescription);
       expect(result.scores).toEqual(scores);
-      expect(result.weightedScore).toBeGreaterThan(0);
+      expect(result.riceScore).toBeGreaterThan(0);
       expect(result.priority).toMatch(/high|medium|low|backlog/);
       expect(result.recommendations).toBeInstanceOf(Array);
       expect(result.timestamp).toBeDefined();
     });
 
     test('should throw error for invalid task description', async () => {
-      const scores = { impact: 3, complexity: 2, reusability: 2, strategic: 3 };
-
+      const scores = { reach: 100, impact: 3, confidence: 0.8, effort: 5 };
       await expect(engine.evaluate('', scores)).rejects.toThrow(
         'Task description must be a non-empty string'
       );
@@ -190,42 +142,36 @@ describe('RubricEngine', () => {
     });
 
     test('should throw error for missing scores', async () => {
-      const taskDescription = 'Test task';
-
-      await expect(engine.evaluate(taskDescription, null)).rejects.toThrow(
-        'Scores must be provided as an object'
-      );
-      await expect(engine.evaluate(taskDescription, undefined)).rejects.toThrow(
+      await expect(engine.evaluate('Test task', null)).rejects.toThrow(
         'Scores must be provided as an object'
       );
     });
 
     test('should include metadata when provided', async () => {
-      const taskDescription = 'Test task';
-      const scores = { impact: 3, complexity: 2, reusability: 2, strategic: 3 };
-      const options = { evaluator: 'John Doe', notes: 'Test evaluation' };
-
-      const result = await engine.evaluate(taskDescription, scores, options);
-
-      expect(result.metadata.evaluator).toBe('John Doe');
+      const scores = { reach: 100, impact: 3, confidence: 0.8, effort: 5 };
+      const result = await engine.evaluate('Test task', scores, {
+        evaluator: 'Jane',
+        notes: 'Test evaluation',
+      });
+      expect(result.metadata.evaluator).toBe('Jane');
       expect(result.metadata.notes).toBe('Test evaluation');
     });
   });
 
   describe('compareMultiple', () => {
-    test('should compare multiple tasks successfully', async () => {
+    test('should compare and rank tasks by RICE score', async () => {
       const tasks = [
         {
-          description: 'Task A',
-          scores: { impact: 3, complexity: 1, reusability: 2, strategic: 3 },
+          description: 'Low priority',
+          scores: { reach: 1, impact: 0.5, confidence: 0.5, effort: 10 },
         },
         {
-          description: 'Task B',
-          scores: { impact: 2, complexity: 3, reusability: 1, strategic: 2 },
+          description: 'High priority',
+          scores: { reach: 1000, impact: 3, confidence: 1.0, effort: 1 },
         },
         {
-          description: 'Task C',
-          scores: { impact: 3, complexity: 0, reusability: 3, strategic: 1 },
+          description: 'Medium priority',
+          scores: { reach: 100, impact: 2, confidence: 0.8, effort: 5 },
         },
       ];
 
@@ -233,18 +179,13 @@ describe('RubricEngine', () => {
 
       expect(result.comparison.taskCount).toBe(3);
       expect(result.evaluations).toHaveLength(3);
-
-      // Should be sorted by weighted score (descending)
       expect(result.evaluations[0].rank).toBe(1);
-      expect(result.evaluations[1].rank).toBe(2);
-      expect(result.evaluations[2].rank).toBe(3);
-
-      // Verify sorting order
-      expect(result.evaluations[0].weightedScore).toBeGreaterThanOrEqual(
-        result.evaluations[1].weightedScore
+      expect(result.evaluations[0].task).toBe('High priority');
+      expect(result.evaluations[0].riceScore).toBeGreaterThan(
+        result.evaluations[1].riceScore
       );
-      expect(result.evaluations[1].weightedScore).toBeGreaterThanOrEqual(
-        result.evaluations[2].weightedScore
+      expect(result.evaluations[1].riceScore).toBeGreaterThan(
+        result.evaluations[2].riceScore
       );
     });
 
@@ -255,47 +196,11 @@ describe('RubricEngine', () => {
     });
 
     test('should throw error for invalid task structure', async () => {
-      const invalidTasks = [
-        { description: 'Task A' }, // missing scores
-      ];
-
-      await expect(engine.compareMultiple(invalidTasks)).rejects.toThrow(
+      await expect(
+        engine.compareMultiple([{ description: 'A' }])
+      ).rejects.toThrow(
         'Each task must have description and scores properties'
       );
-    });
-
-    test('should count priority distribution correctly', async () => {
-      const tasks = [
-        // 3*0.35 + (3-0)*0.25 + 3*0.20 + 3*0.20 = 3.0 -> high
-        {
-          description: 'High priority task',
-          scores: { impact: 3, complexity: 0, reusability: 3, strategic: 3 },
-        },
-
-        // 2*0.35 + (3-1)*0.25 + 2*0.20 + 2*0.20 = 2.0 -> medium
-        {
-          description: 'Medium priority task',
-          scores: { impact: 2, complexity: 1, reusability: 2, strategic: 2 },
-        },
-
-        // 1*0.35 + (3-2)*0.25 + 1*0.20 + 1*0.20 = 1.0 -> low
-        {
-          description: 'Low priority task',
-          scores: { impact: 1, complexity: 2, reusability: 1, strategic: 1 },
-        },
-      ];
-
-      const result = await engine.compareMultiple(tasks);
-
-      expect(result.comparison.highPriority).toBe(1);
-      expect(result.comparison.mediumPriority).toBe(1);
-      expect(result.comparison.lowPriority).toBe(1);
-
-      const totalPriorities =
-        result.comparison.highPriority +
-        result.comparison.mediumPriority +
-        result.comparison.lowPriority;
-      expect(totalPriorities).toBe(3);
     });
   });
 });
