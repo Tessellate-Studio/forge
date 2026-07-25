@@ -143,6 +143,37 @@ git plumbing across the worktree boundary, or full session context.
 3. **Skill integration** — build-feature (Steps 1.5 / 5.5 / 5.7 / 6.5), plan (Step 2), CLAUDE.base.md, version 0.3.0 → 0.4.0. (done — bbf051a)
 4. **This RFD** — persist the decision. (this commit)
 
+## Amendment — first live run (2026-07-23)
+
+`adversarial-review` ran for the first time, reviewing this RFD's own merged
+diff (f3ce2d5). The machinery worked (20 agents, 0 errors, skeptics filtered
+8 raw findings → 5 confirmed) — but **it reviewed the wrong repo.** The `args`
+payload reached the script as a JSON string, so `input.diff` / `criteria` /
+`crossRepo` all read undefined; reviewers received an empty DIFF section and
+silently improvised by reviewing the diff in their working directory (the alate
+session repo). Every confirmed finding was about alate's CI migration, none
+about the target.
+
+Lessons folded back into the scripts (fix/workflow-target-hardening):
+
+1. **Fail loudly on a missing target.** Both scripts now normalize stringified
+   args and return a structured error instead of running target-less. A silent
+   wrong-target review is the worst failure mode — it produces confident
+   findings about the wrong code.
+2. **Diff by file, with a manifest.** `adversarial-review` now accepts
+   `diffPath` (reviewers Read the exact bytes; no re-encoding corruption) and
+   `files` (a target manifest reviewers must verify before judging — mismatch
+   returns a "target-mismatch" blocker instead of an improvised review).
+3. **Doc/code drift fixed.** This RFD claimed `researched-build` reuses
+   `adversarial-review` as a nested sub-workflow; the merged code inlined a
+   duplicate panel instead. Now real: the skill passes `reviewScriptPath` and
+   the RFD review phase calls `workflow({scriptPath})`, with the inline panel
+   kept as fallback. The dead `standards` parameter is now consumed.
+4. **Calibration honesty:** the run caught none of the three defects a manual
+   re-read found (the drift above, the dead parameter, diff-transport
+   fragility) — because the broken input path severed it from the target. The
+   manual pass and the live failure were complementary, not redundant.
+
 ## Open Questions
 
 - [ ] **Tester → implementer test handoff across worktrees.** `isolation: 'worktree'`
