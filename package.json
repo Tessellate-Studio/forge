@@ -92,5 +92,12 @@
       "eslint --fix",
       "prettier --write"
     ]
+  },
+  "overrides": {
+    "brace-expansion": "^5.0.8",
+    "lint-staged": {
+      "micromatch": "^4.0.8",
+      "yaml": "^2.8.3"
+    }
   }
 }
