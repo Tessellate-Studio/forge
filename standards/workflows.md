@@ -43,6 +43,13 @@ Open PRs ready (not draft) and merge as soon as CI is green. Full rule + the
 carve-outs (outward-facing / hard-to-reverse / explicit hold):
 [`anti-patterns.md` → "Merge on green by default"](./anti-patterns.md).
 
+**Gate the merge on the check command's OWN exit status — never through a
+pipe.** `gh pr checks N --watch | tail` reports tail's exit code, not the
+checks', so `&& gh pr merge` fires even when a check failed. Same trap:
+`npm audit | tail; echo $?`. Correct shape:
+`gh pr checks N --watch >/dev/null && gh pr merge N --squash`. (Precedent:
+2026-07-25, forge PR #22 merged past a red Security Scan exactly this way.)
+
 ## Orphan-branch fixes — port AUTOMATICALLY, do not ask
 
 If a regression-log/BACKLOG entry or an audit reveals a needed fix already
