@@ -14,22 +14,45 @@ export const meta = {
 
 // ---------------------------------------------------------------------------
 // Inputs (via `args`):
-//   tier       'pitch' | 'rfd'   — controls research depth + review rigor
-//   criteria   string[]          — objective acceptance criteria
-//   rendersUI  boolean           — run the device-verify phase?
-//   task       string            — what is being built (title + description)
-//   context    object            — repo, goals, framework notes
+//   tier             'pitch' | 'rfd' — controls research depth + review rigor
+//   criteria         string[]        — objective acceptance criteria
+//   rendersUI        boolean         — run the device-verify phase?
+//   task             string          — what is being built (title + description)
+//   context          object          — repo, goals, framework notes
+//   reviewScriptPath string          — absolute path to adversarial-review.js;
+//                    when set, the RFD review phase runs it as a nested
+//                    sub-workflow (single source of review logic). Falls back
+//                    to the inline panel when absent or unresolvable.
 // Returns: { tier, findings, crossRepo, tests, impl, review, verify }
 // ---------------------------------------------------------------------------
 
-const input = args || {}
+// Normalize args defensively (stringified-JSON args severed the first live
+// adversarial-review run from its target — same guard here).
+let input = args || {}
+if (typeof input === 'string') {
+  try {
+    input = JSON.parse(input)
+  } catch (e) {
+    input = {}
+  }
+}
 const tier = input.tier === 'rfd' ? 'rfd' : 'pitch'
 const criteria = input.criteria || []
 const rendersUI = Boolean(input.rendersUI)
 const task = input.task || ''
 const context = input.context || {}
+const reviewScriptPath = input.reviewScriptPath || ''
 const MAX_REVIEW_ROUNDS = 2
 const MAX_VERIFY_ROUNDS = 3
+
+if (!task && criteria.length === 0) {
+  return {
+    tier,
+    error:
+      'No task or criteria provided — refusing to build without an explicit target. ' +
+      'Pass args as a JSON object: { tier, criteria, rendersUI, task, context }.',
+  }
+}
 
 // --- Schemas ------------------------------------------------------------------
 const FINDINGS_SCHEMA = {
@@ -292,7 +315,10 @@ function verifierPrompt(failed) {
     .join('\n\n')
 }
 
-// --- Review phase (tier-branched, self-contained) -----------------------------
+// --- Review phase (tier-branched) ----------------------------------------------
+// pitch → single reviewer. rfd → the adversarial-review sub-workflow when its
+// scriptPath was provided (single source of review logic); inline panel as the
+// fallback so the pipeline still works when the path is absent or unresolvable.
 async function runReview(diff, crossRepo) {
   if (tier !== 'rfd') {
     const r = await agent(reviewerPrompt('correctness+standards', diff, crossRepo), {
@@ -303,7 +329,23 @@ async function runReview(diff, crossRepo) {
     return r || { findings: [], testIdDrift: false, verdict: 'approve' }
   }
 
-  // RFD: parallel multi-lens panel + skeptic verification.
+  if (reviewScriptPath) {
+    try {
+      const sub = await workflow({ scriptPath: reviewScriptPath }, { diff, criteria, crossRepo })
+      if (sub && Array.isArray(sub.confirmed) && !sub.error) {
+        return {
+          findings: sub.confirmed,
+          testIdDrift: Boolean(sub.testIdDrift),
+          verdict: sub.confirmed.length ? 'changes-requested' : 'approve',
+        }
+      }
+      log(`adversarial-review sub-workflow returned ${sub && sub.error ? `error: ${sub.error}` : 'no usable result'} — falling back to inline panel`)
+    } catch (err) {
+      log(`adversarial-review sub-workflow unavailable (${err.message}) — falling back to inline panel`)
+    }
+  }
+
+  // RFD fallback: parallel multi-lens panel + skeptic verification, inline.
   const lenses = ['correctness', 'standards', 'cross-repo']
   const revs = (
     await parallel(

@@ -11,18 +11,58 @@ export const meta = {
 
 // ---------------------------------------------------------------------------
 // Inputs (via `args`):
-//   diff       string   — the diff to review (required)
+//   diff       string   — the diff to review, inline (this or diffPath required)
+//   diffPath   string   — absolute path to a file holding the diff; preferred for
+//                         large diffs (re-encoding them inline risks corruption)
+//   files      string[] — target manifest: the files the diff must change.
+//                         Reviewers verify the diff matches before judging.
 //   criteria   string[] — acceptance criteria the change must meet (optional)
 //   crossRepo  object   — RFD blast-radius report; presence adds a cross-repo lens
-//   standards  string   — extra standards context to pass to reviewers (optional)
-// Returns: { confirmed, testIdDrift, counts }
+//   standards  string   — extra standards context appended to reviewer prompts
+// Returns: { confirmed, testIdDrift, counts } — or { ..., error } when no target.
 // ---------------------------------------------------------------------------
 
-const input = args || {}
+// Normalize args defensively: a stringified-JSON args (the documented common
+// mistake) severed the first live run from its target entirely — reviewers got
+// an empty DIFF section and silently improvised by reviewing their cwd.
+let input = args || {}
+if (typeof input === 'string') {
+  try {
+    input = JSON.parse(input)
+  } catch (e) {
+    input = {}
+  }
+}
 const diff = input.diff || ''
+const diffPath = input.diffPath || ''
+const files = input.files || []
 const criteria = input.criteria || []
 const crossRepo = input.crossRepo || null
+const standards = input.standards || ''
 const SKEPTICS_PER_FINDING = 3
+
+// Fail LOUDLY on a missing target. A silent wrong-target review is far worse
+// than an error — it produces confident findings about the wrong code.
+if (!diff && !diffPath) {
+  return {
+    confirmed: [],
+    testIdDrift: false,
+    counts: { raw: 0, deduped: 0, confirmed: 0 },
+    error:
+      'No diff or diffPath provided — refusing to review without an explicit target. ' +
+      'Pass the diff inline via args.diff, or write it to a file and pass args.diffPath.',
+  }
+}
+
+const diffBlock = diffPath
+  ? `The diff under review is stored at:\n  ${diffPath}\nRead that ENTIRE file. Review ONLY that diff — nothing else in your working directory is under review.`
+  : diff
+
+const manifestBlock = files.length
+  ? `Target manifest — the diff must change exactly these files:\n${files
+      .map((f) => `- ${f}`)
+      .join('\n')}\nFIRST verify the diff you read matches this manifest. If it does not (wrong repo, different files, empty diff), STOP and return a single blocker finding with category "target-mismatch" describing what you actually saw instead.`
+  : ''
 
 const REVIEW_SCHEMA = {
   type: 'object',
@@ -73,12 +113,14 @@ function reviewerPrompt(lens) {
   return [
     'You are a code REVIEWER with fresh eyes on a diff you did NOT write. You cannot edit — you only report. This adversarial separation is the point.',
     lensBrief,
+    manifestBlock,
     criteria.length ? `Acceptance criteria the change must meet:\n${criteria.map((c) => `- ${c}`).join('\n')}` : '',
     crossRepo ? `Cross-repo blast-radius report:\n${JSON.stringify(crossRepo, null, 2)}` : '',
-    'Read the FULL diff below — not excerpts. Report findings most-severe first. Each finding needs file:line, what is wrong, and the concrete failure it causes. An empty findings list with verdict "approve" is a valid, honest result — do not invent nits.',
+    standards ? `Additional standards context:\n${standards}` : '',
+    'Read the FULL diff — not excerpts. Report findings most-severe first. Each finding needs file:line, what is wrong, and the concrete failure it causes. An empty findings list with verdict "approve" is a valid, honest result — do not invent nits.',
     '',
-    'DIFF:',
-    diff,
+    'DIFF UNDER REVIEW:',
+    diffBlock,
   ]
     .filter(Boolean)
     .join('\n\n')
@@ -98,8 +140,8 @@ function skepticPrompt(finding, index) {
     `Finding: ${finding.summary} (${finding.file}:${finding.line}, ${finding.category}, ${finding.severity})`,
     `Claimed failure: ${finding.failureScenario}`,
     '',
-    'Relevant diff:',
-    diff,
+    'Diff under review:',
+    diffBlock,
   ].join('\n\n')
 }
 

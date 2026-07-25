@@ -139,10 +139,14 @@ build (Steps 2–4) to the multi-agent pipeline instead of building single-hande
 Invoke the **Workflow** tool with:
 
 - `scriptPath: "${CLAUDE_PLUGIN_ROOT}/references/workflows/researched-build.js"`
-- `args: { tier, criteria, rendersUI, task, context }` — `tier` is `'pitch'` or
-  `'rfd'`; `criteria` is the Step 1 acceptance criteria; `rendersUI` is whether
-  the change puts pixels on screen; `task` is the ask; `context` carries the
-  repo + framework notes.
+- `args: { tier, criteria, rendersUI, task, context, reviewScriptPath }` —
+  `tier` is `'pitch'` or `'rfd'`; `criteria` is the Step 1 acceptance criteria;
+  `rendersUI` is whether the change puts pixels on screen; `task` is the ask;
+  `context` carries the repo + framework notes; `reviewScriptPath` is
+  `"${CLAUDE_PLUGIN_ROOT}/references/workflows/adversarial-review.js"` so the
+  RFD review phase reuses it as a nested sub-workflow. Pass `args` as a JSON
+  OBJECT, never a JSON-encoded string — a stringified args reaches the script
+  as one string and severs it from its inputs.
 
 The workflow runs researcher → tester (failing tests) → implementer (worktree) →
 reviewer (adversarial; a multi-lens panel + skeptic verification for RFD) with a
@@ -245,9 +249,14 @@ tooling included);** skip with a one-line note for a true one-liner:
      run the deeper **adversarial-review** workflow instead: invoke the Workflow
      tool with `scriptPath:
      "${CLAUDE_PLUGIN_ROOT}/references/workflows/adversarial-review.js"` and
-     `args: { diff, criteria, crossRepo }`. It runs parallel multi-lens reviewers
-     and refutes each finding with independent skeptics, so only confirmed issues
-     survive. Fall back to `/code-review` if the workflow script is absent.
+     `args: { diffPath, files, criteria, crossRepo }` — write the diff to a temp
+     file and pass its absolute path as `diffPath` (re-encoding a large diff
+     inline risks corrupting it), plus the changed-file list as `files` so
+     reviewers verify they're looking at the right change before judging. Pass
+     `args` as a JSON OBJECT, never a stringified one. It runs parallel
+     multi-lens reviewers and refutes each finding with independent skeptics, so
+     only confirmed issues survive. Fall back to `/code-review` if the workflow
+     script is absent.
 2. `/simplify` — applies reuse/efficiency/altitude cleanups (quality only, no bug
    hunt). Re-run `npx tsc --noEmit && npx jest --no-coverage` after it touches
    code, since it edits the working tree.
