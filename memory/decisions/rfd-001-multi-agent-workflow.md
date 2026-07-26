@@ -69,7 +69,12 @@ a constraint (move to Oracle CI).
 Read-only vs write boundaries enforce separation. All Sonnet — workers do
 bounded tasks; Opus stays on the main-loop supervisor.
 
-| Role | Tools | Separation |
+> **Enforcement caveat (corrected 2026-07-23, Amendment 2):** the "Tools" column
+> below states *intent*, not runtime enforcement. `agent()` accepts no tool
+> restriction, so separation is enforced by prompt instruction only. See
+> Amendment 2 and the open question on `.claude/agents/` tool grants.
+
+| Role | Tools (intent) | Separation |
 |---|---|---|
 | researcher | Read/Glob/Grep/WebSearch/WebFetch | read-only; also the RFD cross-repo blast-radius map |
 | tester | Read/Glob/Grep/Edit/Write/Bash | tests ONLY; never sees implementation |
@@ -174,6 +179,59 @@ Lessons folded back into the scripts (fix/workflow-target-hardening):
    fragility) — because the broken input path severed it from the target. The
    manual pass and the live failure were complementary, not redundant.
 
+## Amendment 2 — second live run: the system reviewed itself (2026-07-23)
+
+The corrected re-run (real diff via `diffPath` + file manifest) found **six
+confirmed defects in this system's own merged code** — two blockers. All are
+fixed in `fix/review-gate-fail-closed`. What it caught:
+
+1. **Fix rounds couldn't see the work they were fixing** (blocker). `fixPrompt`
+   passed only findings + notes, while every fix agent runs
+   `isolation:'worktree'` — a *fresh* worktree without the implementation or the
+   tests. Fix agents would have "fixed" against a pre-implementation tree, and
+   `impl = fixed` then discarded the original `branchRef`, silently losing the
+   feature. Now the prompt carries `branchRef`, `filesChanged`, the diff, and the
+   test files, with explicit recover-first steps; `branchRef` is preserved across
+   rounds and required by `IMPL_SCHEMA`.
+2. **Verify measured a bundle that couldn't contain the change** (blocker). The
+   verifier published an OTA from its own checkout, but the implementation lives
+   only on the implementer's worktree branch (integration happens *after* the
+   workflow returns). Every `rendersUI` run would have burned all 3 device cycles
+   measuring the old app. Now the verifier is given the branch and must obtain it
+   first, or stop; `updateConfirmed:false` is surfaced instead of trusted.
+3. **The review gate failed open.** A null (crashed/skipped) reviewer was coerced
+   to `verdict:'approve'` — infrastructure failure was indistinguishable from a
+   clean review, and merge-on-green would have auto-merged unreviewed code. Now
+   returns `verdict:'error'` + `reviewFailed`.
+4. **testID drift was never actually enforced** despite the skill claiming it.
+   The verdict derived from `findings.length` only, so refutation-biased skeptics
+   stripping the drift finding produced `{testIdDrift:true, verdict:'approve'}`.
+   Now `verdictFor()` blocks on drift regardless of findings.
+5. **Findings with all-null skeptics were silently dropped** — `survives =
+   valid.length > 0 && …` treated "nobody voted" as "refuted". This bug erased
+   the evidence of itself: the run that found it lost 72 agents to quota limits
+   and dropped 23 findings as refuted that no skeptic ever read. Both scripts now
+   fail closed — unvoted findings survive, flagged `unverified` and reported in a
+   separate bucket so a quota-starved run can't masquerade as a clean gate.
+6. **Separation is enforced by prompt text, not tools.** No `agent()` call passes
+   any tool restriction — the option set is label/phase/schema/isolation. The
+   charters' "Tools:" lines and this RFD's original "read-only vs write
+   boundaries enforce separation" were **aspirational, not true as shipped**. The
+   claim is corrected below; skeptic prompts (the one review-side path with no
+   prohibition at all) now carry an explicit cannot-edit boundary.
+
+**Corrected enforcement claim:** adversarial separation is enforced by *prompt
+instruction*, not by tool grants. The charters' tool lists describe intent;
+the runtime does not restrict them. Hardening this properly needs real
+`.claude/agents/` definitions with `tools:` frontmatter — tracked as an open
+question below rather than left as a false claim.
+
+**Calibration (honest):** the manual pass found 3 defects the system missed
+(all shipped in the earlier fix); this run found 6 the manual pass missed,
+including both blockers. Neither was sufficient alone. The system's value showed
+up precisely where human attention is weakest — the failure modes that only
+appear when something *else* fails.
+
 ## Open Questions
 
 - [ ] **Tester → implementer test handoff across worktrees.** `isolation: 'worktree'`
@@ -185,6 +243,18 @@ Lessons folded back into the scripts (fix/workflow-target-hardening):
 - [ ] **Worktree branch integration mechanics.** Cleanest way to bring the
   implementer's committed worktree branch onto the feature branch (cherry-pick /
   merge / rebase) — TBD against how Claude Code exposes the worktree ref.
+- [ ] **Real tool-level separation.** Prompt instruction is the only enforcement
+  today (Amendment 2, finding 6). Genuine enforcement needs `.claude/agents/`
+  definitions with `tools:` frontmatter invoked via `agent(..., {agentType})` —
+  but those files are per-repo and not plugin-portable, which is the same
+  constraint that drove the reference-file design. Needs a decision: ship agent
+  definitions per-consumer-repo via `new-app`, or accept prompt-level
+  enforcement and stop claiming otherwise.
+- [ ] **Quota-aware runs.** Two consecutive runs died on session/spend limits
+  (47 then 72 agents). A full RFD-tier review is ~90 agents; the fail-closed fix
+  stops silent data loss but doesn't prevent exhaustion. Consider `budget`-aware
+  scaling (fewer skeptics per finding, or cap deduped findings) before the next
+  large run.
 - [ ] **litmus `@smoke` tag.** The pre-merge smoke subset assumes a litmus
   critical-golden-path job that doesn't exist yet. Deferred to a follow-up litmus
   PR — until then the full suite runs post-merge only.

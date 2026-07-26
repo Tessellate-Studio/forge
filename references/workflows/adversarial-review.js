@@ -133,7 +133,8 @@ function skepticPrompt(finding, index) {
     'Ask whether this can actually be triggered in practice, or whether it is theoretical.',
   ]
   return [
-    'You are an independent SKEPTIC verifying one code-review finding. Your job is to REFUTE it if you honestly can.',
+    'You are an independent SKEPTIC verifying one code-review finding. You are REVIEW-SIDE: you CANNOT edit, write, or commit anything — read and reason only. Never "fix" the code to make a finding moot; return your verdict instead.',
+    'Your job is to REFUTE the finding if you honestly can.',
     framings[index % framings.length],
     'Default to refuted=true if you are uncertain — only a finding that clearly survives scrutiny should pass.',
     '',
@@ -198,25 +199,42 @@ const judged = await parallel(
       )
     ).then((votes) => {
       const valid = votes.filter(Boolean)
+      // FAIL CLOSED: zero valid votes means verification never ran (rate limit,
+      // crash, skip) — that is NOT a refutation. Keep the finding and flag it
+      // unverified. Precedent: 2026-07-25, a run lost 72 agents to quota limits
+      // and silently dropped 23 findings as "refuted" that no skeptic ever read.
+      if (valid.length === 0) {
+        return { finding, survives: true, unverified: true, votes: 0, notRefuted: 0 }
+      }
       const notRefuted = valid.filter((v) => !v.refuted).length
       // Survives if a MAJORITY of skeptics could not refute it.
-      const survives = valid.length > 0 && notRefuted > valid.length / 2
-      return { finding, survives, votes: valid.length, notRefuted }
+      const survives = notRefuted > valid.length / 2
+      return { finding, survives, unverified: false, votes: valid.length, notRefuted }
     })
   )
 )
 
-const confirmed = judged
-  .filter(Boolean)
-  .filter((j) => j.survives)
-  .map((j) => j.finding)
+const survivors = judged.filter(Boolean).filter((j) => j.survives)
+const confirmed = survivors.filter((j) => !j.unverified).map((j) => j.finding)
+const unverified = survivors.filter((j) => j.unverified).map((j) => j.finding)
 
-log(`Verify: ${deduped.length} findings → ${confirmed.length} survived skeptical majority`)
+log(
+  `Verify: ${deduped.length} findings → ${confirmed.length} confirmed by skeptical majority` +
+    (unverified.length ? `, ${unverified.length} UNVERIFIED (all skeptics failed — not refuted, just unchecked)` : '')
+)
 
 // --- Phase 3: Synthesize ------------------------------------------------------
 phase('Synthesize')
 return {
   confirmed,
+  // Findings whose skeptics all failed. Surfaced separately so a quota-starved
+  // run can never masquerade as a clean gate.
+  unverified,
   testIdDrift,
-  counts: { raw: allFindings.length, deduped: deduped.length, confirmed: confirmed.length },
+  counts: {
+    raw: allFindings.length,
+    deduped: deduped.length,
+    confirmed: confirmed.length,
+    unverified: unverified.length,
+  },
 }
