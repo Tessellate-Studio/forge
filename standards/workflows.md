@@ -27,15 +27,30 @@ current branch. Use `git worktree add` when the current branch has uncommitted
 work to preserve. Separate code commits from doc commits; run the app's full
 test suite before either commit.
 
-## Merged branches — rename to `done/<original>` AUTOMATICALLY
+## Merged branches — let them be deleted
 
-When a PR merges, rename the local source branch to `done/<original-name>`
-instead of deleting it: drop `--delete-branch` from `gh pr merge`, then
-`git branch -m <original> done/<original>`. The `done/` prefix flags it
-"merged, safe to prune"; periodic pruning (`git branch | grep ^done/` →
-`git branch -D`) clears the backlog without re-verifying each branch. This
-trumps "delete on merge" — never leave a merged branch under its original name,
-and don't ask before renaming.
+Let the merged head branch go. Leaving GitHub's "Automatically delete head
+branches" (`delete_branch_on_merge`) on is fine, as is `gh pr merge
+--delete-branch`. Don't rename merged branches to `done/<original>`, and
+don't treat a deleted merged branch as something to restore.
+
+**Nothing is lost when a merged branch is deleted.** A PR's commits stay
+reachable at `refs/pull/<n>/head` for the life of the repo — including the
+individual pre-squash commits a squash merge keeps out of the default branch:
+
+```bash
+git fetch origin refs/pull/<n>/head:refs/remotes/origin/pr-<n>
+git log --oneline refs/remotes/origin/pr-<n>
+```
+
+That recovers the branch tip and its full history for investigation, and it
+works even for a PR that was merged and then reverted — the reverted content
+is still readable at that ref.
+
+This replaces an earlier rule that required renaming merged branches to
+`done/<original>` and called deletion lossy. It isn't: the premise was wrong,
+and on a repo with auto-delete enabled the rule generated a contradiction at
+every merge instead of an action worth taking.
 
 ## Merge on green — the default
 
