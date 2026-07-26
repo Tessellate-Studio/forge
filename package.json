@@ -1,6 +1,6 @@
 {
   "name": "@tessellate-studio/forge",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "description": "Tessellate build platform: Claude Code plugin (skills + standards) plus the standards/bp and rubric CLIs — one repo, installed from GitHub.",
   "main": "index.js",
   "bin": {
