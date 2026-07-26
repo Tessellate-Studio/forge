@@ -47,6 +47,10 @@ All in `forge/standards/workflows.md` unless noted:
 - **Orphan-branch fixes** — port to a fresh branch off default automatically.
 - **Concurrent sessions** — worktree-isolate every task; SHA-explicit git;
   verify `HEAD` before every commit/push (`anti-patterns.md`).
+- **Shared docs & duplicate work** — before editing a regression log / BACKLOG /
+  tracker, list the open PRs already in that file; before starting anything, scan open
+  PR titles for your intent (a duplicate wastes a whole branch). Shared-doc edits get
+  their own PR; date-key new log rows, never a sequential number (`anti-patterns.md`).
 - **Bug-fix pre-flight** — read `memory/project_regression_log.md` BEFORE any
   code; log new fixes there after.
 - **TDD** — failing test first, suite green before commit.
