@@ -84,6 +84,15 @@ sessions, `npm ci` before the commit gate, SHA-explicit git, verify `HEAD`
 before every commit/push. Full rule:
 [`anti-patterns.md` → "Isolate concurrent sessions"](./anti-patterns.md).
 
+## Shared planning docs — check who else is in the file
+
+Worktree isolation does not prevent two branches editing the same doc or the same
+lane. Before touching a regression log, BACKLOG, digest or tracker — or starting a
+fix in a busy area — list the open PRs already in that file, keep shared-doc edits
+in their own PR, and fix any claim your own change makes stale rather than handing
+it to another session. Full rule:
+[`anti-patterns.md` → "Concurrent branches collide in content"](./anti-patterns.md).
+
 ## Bug-fix pre-flight — read the regression log FIRST
 
 Before writing any code for a reported bug, read the app's
@@ -93,6 +102,12 @@ is minutes):
    regressed (run its test), patch from that starting point — don't re-discover.
 2. No match → TDD loop below; once the fix lands, add a new entry
    (symptom → root cause → fix → test → lesson). One-liners get logged too.
+   Key the new row by date — `YYYY-MM-DD` plus a letter for a second row the same
+   day (`2026-07-26a`, `2026-07-26b`) — never a hand-picked sequential number: two
+   sessions appending on different days then cannot collide, and a same-day clash
+   shows up as a visible letter conflict instead of a silent renumber. Rows already
+   carrying integers keep them, so existing "row 34" references stay valid. Check
+   who else is in the file first (see "Shared planning docs" above).
 3. 3+ entries on one theme → promote to an anti-pattern (app's
    `memory/project_anti_patterns.md`, or here if app-agnostic).
 

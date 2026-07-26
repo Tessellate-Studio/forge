@@ -167,6 +167,41 @@ verify a SHA is on the default branch before claiming shipped; this is the
 don't-corrupt-the-op half). **[enforced]** `.worktrees/` ignore + the pre-commit
 deps-bootstrap guard live in code-standards.
 
+## Concurrent branches collide in content, not just in git
+
+Worktree isolation stops branches corrupting each other's *git state*. It does
+nothing about two branches editing the same *content*. Before editing a shared
+planning doc (regression log, BACKLOG, weekly digest, user-actions tracker,
+CHANGELOG) — or starting a fix in an area someone else is already in — list who
+else is in that file:
+
+```bash
+gh pr list --state open --json number,headRefName,files \
+  --jq '.[] | select(any(.files[]; .path=="BACKLOG.md")) | "#\(.number) \(.headRefName)"'
+```
+
+- **Never bundle a shared-doc edit with a code change in one PR.** Land the code,
+  then the doc entry, as separate PRs. Bundling lets a doc-level problem take a
+  correct code fix down with it.
+- **If your change makes a doc claim stale, fix it in your own PR** — never leave it
+  to another session that "agreed to take it". Two sessions each deferring is how a
+  wrong line survives both their merges.
+- **Treat a contended anchor as a shared resource.** Append-only lists where everyone
+  inserts at the same point, and any hand-assigned sequential id, are claimed by
+  whoever merges first — verify your claim is still free at *merge* time, not author
+  time. Better: key such rows by date (`2026-07-26a`), so two sessions on different
+  days cannot collide at all.
+
+**Why:** both branches are isolated, green, and individually correct. The defect
+exists only in their union, so nothing either session can run locally will show it.
+*Precedent: in one day, four branches claimed the same four regression-log row
+numbers; one PR was merged and then reverted wholesale purely to fix row ordering,
+discarding a verified CI fix that had to be re-landed as a third PR; the same BACKLOG
+paragraph was rewritten three times by three sessions, each correct when written and
+stale within hours; and every open PR in the repo at that moment touched at least one
+shared planning doc.* Content sibling of the checkout-isolation rule above — that one
+is don't-corrupt-the-op, this one is don't-collide-at-merge.
+
 ## Merge on green by default — don't let PRs sit stale
 
 Open PRs **ready, not draft**, and **merge as soon as CI is green**. A
