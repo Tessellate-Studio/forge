@@ -42,7 +42,6 @@ All in `forge/standards/workflows.md` unless noted:
 
 - **Branch placement** — task doesn't fit the current branch → cut
   `fix|feat|docs|chore/<slug>` off the default branch automatically; don't ask.
-- **Merged branches** — rename to `done/<original>` after merge; never delete-on-merge.
 - **Merge on green** — PRs open ready (not draft), merge when CI passes
   (carve-outs in `anti-patterns.md`).
 - **Orphan-branch fixes** — port to a fresh branch off default automatically.
