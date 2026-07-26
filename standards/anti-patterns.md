@@ -191,6 +191,19 @@ gh pr list --state open --json number,headRefName,files \
   whoever merges first — verify your claim is still free at *merge* time, not author
   time. Better: key such rows by date (`2026-07-26a`), so two sessions on different
   days cannot collide at all.
+- **Scan for duplicate work, not just conflicting edits.** Before starting, read the
+  open PR titles and branch names for your *intent*, not only the paths you expect to
+  touch — `gh pr list --state open --json number,title,headRefName`. Two sessions
+  independently making the same change is worse than a conflict: a conflict merges,
+  a duplicate throws a whole branch away, and neither session can see it until both
+  already have work in flight. When dispatching parallel sessions yourself, name one
+  owner per file or area up front — that is the only fix that acts *before* the
+  duplicate work exists.
+
+*Precedent for the duplicate case: PRs #379 and #380 were opened three minutes apart
+with the same change (`timeout-minutes` on every CI job) by two sessions; #380 was
+closed as a duplicate, and a cross-session message could not resolve it because both
+branches were already written.*
 
 **Why:** both branches are isolated, green, and individually correct. The defect
 exists only in their union, so nothing either session can run locally will show it.
