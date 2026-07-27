@@ -1,6 +1,6 @@
 {
   "name": "@tessellate-studio/forge",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Tessellate build platform: Claude Code plugin (skills + standards) plus the standards/bp and rubric CLIs — one repo, installed from GitHub.",
   "main": "index.js",
   "bin": {
@@ -21,6 +21,8 @@
     "standards/",
     "skills/",
     "references/",
+    "!references/__tests__/",
+    "!references/jest.config.js",
     ".claude-plugin/"
   ],
   "exports": {
@@ -31,9 +33,10 @@
     "./integrations": "./standards-cli/lib/integrations/index.js"
   },
   "scripts": {
-    "test": "npm run test:standards && npm run test:rubric",
+    "test": "npm run test:standards && npm run test:rubric && npm run test:workflows",
     "test:standards": "jest --config standards-cli/jest.config.js",
     "test:rubric": "jest --config rubric/jest.config.js",
+    "test:workflows": "jest --config references/jest.config.js",
     "test:coverage": "jest --config standards-cli/jest.config.js --coverage && jest --config rubric/jest.config.js --coverage",
     "lint": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ --fix",
     "lint:check": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/",

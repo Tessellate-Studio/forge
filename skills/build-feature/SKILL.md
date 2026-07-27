@@ -148,6 +148,31 @@ Invoke the **Workflow** tool with:
   OBJECT, never a JSON-encoded string — a stringified args reaches the script
   as one string and severs it from its inputs.
 
+**When `rendersUI: true`, put this repo's verification loop in
+`context.verify`.** The verify phase runs whatever you give it and assumes no
+stack, so an omitted step is one the verifier has to reverse-engineer from the
+repo — and it will stop with a `structuralLimit` rather than guess:
+
+```
+context: {
+  repo: 'loom',
+  verify: {
+    surface: 'the embedded admin page /app/settings in the dev store',
+    publish: 'npm run deploy:dev',
+    apply:   'hard-reload the embedded admin page so the new bundle loads',
+    capture: 'browser screenshot of the embedded admin iframe at 1280x800',
+    confirm: '`shopify app versions list` shows the version id you just pushed',
+    measure: '% of the 1280x800 viewport',
+  },
+}
+```
+
+Every field is optional and every repo's differ — alate's are the EAS/adb loop
+in `references/device-loop.md`, loom's are the Shopify ones above. `apply` and
+`confirm` are the two people leave out, and leaving them out is how a run
+measures the *previous* build and reports it as a verdict on this one. Full
+contract: `${CLAUDE_PLUGIN_ROOT}/references/agents/verifier-prompt.md`.
+
 The workflow runs researcher → tester (failing tests) → implementer (worktree) →
 reviewer (adversarial; a multi-lens panel + skeptic verification for RFD) with a
 fix loop → verifier (on-device, UI only) with a fix loop. It returns the diff,
