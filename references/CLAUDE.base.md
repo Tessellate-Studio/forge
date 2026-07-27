@@ -85,10 +85,10 @@ findings). The deeper `adversarial-review` workflow is also available for
 large diffs. Scripts + agent charters live under the forge plugin's
 `references/workflows/` and `references/agents/`; both degrade gracefully to
 single-agent when unavailable. Tactical/trivial changes stay single-agent. When
-a change renders UI, pass this repo's own verification loop as
-`context.verify` (`surface` / `publish` / `apply` / `capture` / `confirm` /
-`measure`) — the verify phase assumes no stack and reverse-engineers anything
-you leave out.
+a change renders UI, pass this repo's own verification loop as `context.verify`
+— `publish` and `capture` are required (the run is rejected without them,
+before any agent spawns), while `surface` / `apply` / `confirm` / `measure` are
+optional and discovered from the repo when absent.
 
 ## Project
 

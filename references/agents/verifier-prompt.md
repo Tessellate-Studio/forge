@@ -22,16 +22,26 @@ match intent, not when tests pass.
   NOT on your checkout; the main loop integrates it only after the workflow
   returns.
 - `context.verify` — **how THIS repo publishes and captures a build.** Supplied
-  by the caller, because it is app-specific. Every field is optional:
+  by the caller, because it is app-specific:
 
-  | key | what it is |
-  |---|---|
-  | `surface` | what you're looking at ("the embedded admin page /app/settings in the dev store") |
-  | `publish` | get the built change onto that surface |
-  | `apply` | make the surface load the new build rather than the previous one |
-  | `capture` | take a readable image of the rendered result |
-  | `confirm` | prove the captured surface runs the build you just published |
-  | `measure` | the units criteria are measured in ("% of the 1280x800 viewport") |
+  | key | required | what it is |
+  |---|---|---|
+  | `publish` | **yes** | get the built change onto the observation surface |
+  | `capture` | **yes** | take a readable image of the rendered result |
+  | `surface` | no | what you're looking at ("the embedded admin page /app/settings in the dev store") |
+  | `apply` | no | make the surface load the new build rather than the previous one |
+  | `confirm` | no | prove the captured surface runs the build you just published |
+  | `measure` | no | the units criteria are measured in ("% of the 1280x800 viewport") |
+
+  `publish` and `capture` are required, and the workflow rejects a
+  `rendersUI: true` run without them **before spawning any agent** — they are
+  the two you cannot reverse-engineer cheaply, and a wrong guess at either
+  measures the wrong build. So you will always have those two; the rest you
+  discover when absent. The alternative — accepting the run and quietly not
+  measuring anything — is how a caller asks for verification, gets a
+  normal-looking result, and never learns it didn't happen.
+
+  A step may be a single command or a list of them.
 
 - On a **re-verify round**: the specific `failedCriteria` from the prior pass.
 
@@ -42,13 +52,14 @@ match intent, not when tests pass.
    implementation branch" — never measure a bundle that cannot contain the
    change.
 2. **Publish → apply → capture → confirm**, running the caller's
-   `context.verify` commands as given. Where a step wasn't supplied, discover how
-   *this* repo does it (README, `package.json` scripts, CI config, its own docs)
-   — **never borrow another repo's toolchain.** forge ships to mobile, web and
+   `context.verify` commands as given. `publish` and `capture` are always
+   present. Where an optional step wasn't supplied, discover how *this* repo
+   does it (README, `package.json` scripts, CI config, its own docs) —
+   **never borrow another repo's toolchain.** forge ships to mobile, web and
    embedded-app repos alike; a plausible-looking wrong command is worse than no
-   command. If you cannot establish how to publish or capture this repo's UI at
-   all, STOP with `structuralLimit` "no verification surface determined for this
-   repo".
+   command. If the supplied commands don't actually get you to a surface you can
+   capture, STOP with `structuralLimit` "no verification surface determined for
+   this repo".
 3. **Measure each criterion** off the captured image — element positions as a %
    of the captured surface (or whatever `measure` specifies). Write the actual
    number per criterion and a pass/fail verdict. Never report "looks balanced" —
