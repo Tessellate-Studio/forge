@@ -7,6 +7,20 @@
 #       uses: Tessellate-Studio/forge/.github/workflows/code-inspection.yml@master
 #       with:
 #         fail_on_error: false   # advisory; flip to true once tuned
+#         runner: '["self-hosted","linux","ci-light"]'   # optional; see below
+#
+# RUNNER: `runs-on` belongs to the CALLED workflow, so a caller cannot override
+# it — which left every consumer pinned to hosted `ubuntu-latest` and unable to
+# use its own runners. The `runner` input fixes that. Note a reusable workflow
+# bills minutes to the CALLER, so this is also the only way a consumer whose
+# hosted minutes are exhausted can run this gate at all.
+#
+# Before moving this to a PERSISTENT self-hosted runner, weigh what the job
+# does: it `npm install -g` this repo from a git ref and runs the consumer's own
+# `npm ci`. That is an unpinned, unsandboxed install executing lifecycle scripts
+# as the runner user, which is a different risk on a long-lived machine than on
+# a throwaway hosted VM. Ephemeral runner: fine. Persistent one: decide
+# deliberately.
 
 name: Code Inspection
 
@@ -43,6 +57,14 @@ on:
         required: false
         type: boolean
         default: true
+      runner:
+        description: >-
+          Runner for the inspect job. A single label ("ubuntu-latest") or a JSON
+          array of labels ('["self-hosted","linux","ci-light"]'). workflow_call
+          inputs cannot be arrays, hence the JSON string for the multi-label case.
+        required: false
+        type: string
+        default: 'ubuntu-latest'
     outputs:
       inspection_score:
         description: 'Overall inspection score (0-100)'
@@ -63,7 +85,11 @@ env:
 jobs:
   inspect:
     name: Inspect with Code Standards
-    runs-on: ubuntu-latest
+    # Accepts both input forms: a JSON array is parsed to a label list, anything
+    # else is passed through as a single label. Defaulting to the plain string
+    # 'ubuntu-latest' keeps every existing caller byte-identical — none of them
+    # pass `runner`, so this branch resolves exactly as the old hardcoded value.
+    runs-on: ${{ startsWith(inputs.runner, '[') && fromJSON(inputs.runner) || inputs.runner }}
 
     outputs:
       score: ${{ steps.inspect.outputs.score }}
