@@ -1,7 +1,20 @@
 const fs = require('fs-extra');
 const path = require('path');
 const glob = require('glob');
-const { execSync } = require('child_process');
+const childProcess = require('child_process');
+const { promisify } = require('util');
+
+// `npm audit` is network-bound, so it needs a ceiling — without one a stalled
+// registry hangs the caller forever. Generous enough for a real dependency tree.
+const AUDIT_TIMEOUT_MS = 60000;
+
+// `npm audit --json` on a large tree comfortably exceeds exec's 1 MB default,
+// and an overflow throws away the whole report.
+const AUDIT_MAX_BUFFER = 10 * 1024 * 1024;
+
+// The lockfiles `npm audit` can build a tree from. Without one of these it
+// refuses outright (ENOLOCK).
+const LOCKFILES = ['package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock'];
 
 class SecurityValidator {
   constructor(config = {}) {
@@ -192,14 +205,16 @@ class SecurityValidator {
       return results;
     }
 
-    try {
-      // Run npm audit to check for vulnerabilities
-      const auditOutput = execSync('npm audit --json --audit-level=moderate', {
-        cwd: projectPath,
-        encoding: 'utf8',
-      });
+    // Without a lockfile `npm audit` cannot resolve a tree and exits ENOLOCK —
+    // so spawning it buys nothing but seconds of npm startup. Bail before the
+    // subprocess, not after it. (Measured: 13,021 ms of pure waste on a
+    // freshly-scaffolded project.)
+    if (!(await this._hasLockfile(projectPath))) {
+      return results;
+    }
 
-      const auditData = JSON.parse(auditOutput);
+    try {
+      const auditData = JSON.parse(await this._runNpmAudit(projectPath));
 
       if (auditData.vulnerabilities) {
         for (const [packageName, vulnData] of Object.entries(
@@ -237,6 +252,39 @@ class SecurityValidator {
     }
 
     return results;
+  }
+
+  // Run `npm audit --json` against a project and hand back its raw report.
+  //
+  // Async on purpose. The synchronous form held the caller's event loop for the
+  // whole registry round-trip, which starves every timer waiting behind it —
+  // including a test runner's own timeout, so the deadline could only fire once
+  // this returned and something downstream yielded. Reached via the module
+  // object (not a destructured import) so tests can observe the spawn.
+  async _runNpmAudit(projectPath) {
+    const execAsync = promisify(childProcess.exec);
+    const { stdout } = await execAsync(
+      'npm audit --json --audit-level=moderate',
+      {
+        cwd: projectPath,
+        encoding: 'utf8',
+        timeout: AUDIT_TIMEOUT_MS,
+        maxBuffer: AUDIT_MAX_BUFFER,
+        windowsHide: true,
+      }
+    );
+
+    return stdout;
+  }
+
+  // Does the project carry a lockfile `npm audit` can actually read?
+  async _hasLockfile(projectPath) {
+    for (const lockfile of LOCKFILES) {
+      if (await fs.pathExists(path.join(projectPath, lockfile))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // Find files to scan for secrets

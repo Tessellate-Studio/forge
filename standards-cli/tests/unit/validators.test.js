@@ -1,5 +1,6 @@
 const fs = require('fs-extra');
 const path = require('path');
+const childProcess = require('child_process');
 const CodeValidator = require('../../lib/validators/code-validator');
 const SecurityValidator = require('../../lib/validators/security-validator');
 const PerformanceValidator = require('../../lib/validators/performance-validator');
@@ -198,6 +199,75 @@ const jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9";`;
 
       expect(result.score).toBeLessThan(100);
       expect(result.metrics.secretsFound).toBeGreaterThan(0);
+    });
+
+    test('should not spawn npm audit when the project has no lockfile', async () => {
+      // `npm audit` exits ENOLOCK without a lockfile, so the subprocess can only
+      // ever cost time. It used to run anyway — seconds of npm startup, spent
+      // synchronously, for a guaranteed-empty result.
+      await fs.writeJson(path.join(testProjectPath, 'package.json'), {
+        name: 'no-lockfile-project',
+        version: '1.0.0',
+        dependencies: { lodash: '^4.17.21' },
+      });
+
+      // Spy on every spawner, not just the one the current implementation uses —
+      // otherwise a revert to the synchronous form would slip through unseen.
+      // Spies only bite because the validator reaches child_process through the
+      // module object; the companion test below keeps it that way.
+      const spawners = [
+        'exec',
+        'execSync',
+        'execFile',
+        'execFileSync',
+        'spawn',
+        'spawnSync',
+      ];
+      const spies = spawners.map(name => jest.spyOn(childProcess, name));
+
+      try {
+        const result = await validator._scanVulnerabilities(testProjectPath);
+
+        spies.forEach((spy, i) =>
+          expect([spawners[i], spy.mock.calls.length]).toEqual([spawners[i], 0])
+        );
+        expect(result.issues).toEqual([]);
+        expect(result.vulnerabilities).toBe(0);
+        expect(result.dependencyIssues).toBe(0);
+      } finally {
+        spies.forEach(spy => spy.mockRestore());
+      }
+    });
+
+    test('should reach child_process through the module object', async () => {
+      // A destructured `const { execSync } = require('child_process')` closes
+      // over the original function, so jest.spyOn on the module property never
+      // sees the call — which is how the previous npm-audit spawn stayed
+      // invisible to tests. Keep the property access so the spy above has teeth.
+      const source = await fs.readFile(
+        path.join(__dirname, '../../lib/validators/security-validator.js'),
+        'utf8'
+      );
+
+      expect(source).toMatch(/require\('child_process'\)/);
+      expect(source).not.toMatch(
+        /\{[^}]*\bexec\w*\b[^}]*\}\s*=\s*require\('child_process'\)/
+      );
+    });
+
+    test('should recognise every lockfile npm audit can read', async () => {
+      expect(await validator._hasLockfile(testProjectPath)).toBe(false);
+
+      for (const lockfile of [
+        'package-lock.json',
+        'npm-shrinkwrap.json',
+        'yarn.lock',
+      ]) {
+        const lockPath = path.join(testProjectPath, lockfile);
+        await fs.writeFile(lockPath, '');
+        expect(await validator._hasLockfile(testProjectPath)).toBe(true);
+        await fs.remove(lockPath);
+      }
     });
   });
 
