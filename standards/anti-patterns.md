@@ -29,6 +29,47 @@ failing test**. Backend = vitest, mobile = jest.
 **Why:** these flows have legal/audit implications; the test is the canary
 against a silent regression.
 
+## A test times out where it yields — never raise the timeout to fix a flake
+
+**A per-test timeout can only fire where the test hands control back to the
+runtime.** Synchronous work — module load, a cold `render`, the first
+`fireEvent.changeText` — blocks the very timer that would kill it, so wall-clock
+is not the risk metric. Measured: tests with no `await` at all passed at
+14,405 ms and at **50,723 ms** under a 5,000 ms budget, while an *awaiting* test
+in the same file died at 12,647 ms. **The flaky test is rarely the slow one; it
+is the awaiting one.**
+
+Yielding is necessary but not sufficient — the yield must reach the event loop's
+**timer phase**. `waitFor` polls on real interval timers, so it reliably gets
+there; a microtask-only `act(async () => {})` settle usually does not (an
+awaiting `act()` test passed at 15,562 ms). So:
+
+- **When the awaited work is a mocked immediately-resolved promise, `waitFor`
+  buys nothing but exposure.** Settle it inside `act()` and assert
+  synchronously. Check the mock first — a `waitFor` over a genuinely deferred or
+  never-resolving promise must stay.
+- **Fire an async handler inside the act scope**, not before it:
+  `await act(async () => { fireEvent.press(…) })`. `fireEvent`'s own `act()`
+  covers only the synchronous part of the handler; post-`await` `setState` lands
+  outside it.
+- **Never raise the timeout.** It re-prices the symptom and leaves the
+  load-scaling intact. *Precedent: one such raise (5 s → 15 s) bought 3× while
+  machine load ate 20×; the next failure was 19,111 ms — over the raised ceiling
+  too.*
+- **Verify cold.** A warm jest transform cache hides this class completely: one
+  file was green across three full runs and failed **2 of 3** with
+  `npx jest --clearCache` first (21,885 ms / 5,831 ms), the passing run clearing
+  the budget by 543 ms. A green warm run is not evidence a timeout flake is
+  fixed — which is exactly how one such "fix" shipped incomplete and its file
+  still failed cold afterwards.
+
+**Why:** every symptom points at the wrong test. The slowest test is the safest
+one, the failure is non-deterministic and machine-dependent, and React emits
+**zero** "not wrapped in act" warnings — so the act-warning theory is not the
+mechanism. *Precedent: three regression rows on one codebase (alate 63,
+2026-07-26a, 2026-07-26b) before the pattern was named; the third was found only
+by inspecting the structural twin of the second, and it was already failing.*
+
 ## No hardcoded colours, fonts, or alpha values (was #10)
 
 Every colour, font family, and alpha tint comes from a theme token
