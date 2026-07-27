@@ -258,7 +258,7 @@ appear when something *else* fails.
 - [ ] **litmus `@smoke` tag.** The pre-merge smoke subset assumes a litmus
   critical-golden-path job that doesn't exist yet. Deferred to a follow-up litmus
   PR — until then the full suite runs post-merge only.
-- [x] **RESOLVED (2026-07-27, PR #33) — the verifier is alate-shaped, so the
+- [x] **RESOLVED (2026-07-27, PR #33 — d1b2dc2) — the verifier is alate-shaped, so the
   pipeline is only fully usable in one of the three repos it ships to.**
   `verifierPrompt` hard-wired alate's mobile loop — `eas update --channel
   preview`, double-relaunch, `adb exec-out screencap`, measure %-positions —
@@ -290,4 +290,8 @@ appear when something *else* fails.
   stubbed) and asserts on the emitted prompts — so "no phase hardcodes one
   repo's toolchain" is now a test, not a convention. Wired into `npm test` + CI.
 
-  Follow-up: loom's CLAUDE.md workaround is removed in a separate loom PR.
+  Follow-up: loom's CLAUDE.md workaround is removed in loom PR #24.
+
+  Still true after this fix: `researched-build` has never completed a real
+  end-to-end run. This makes the verify phase *reachable* from all three repos,
+  not *proven* in any of them.
