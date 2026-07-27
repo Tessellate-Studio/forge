@@ -84,7 +84,11 @@ other's work (the reviewer reads a diff it didn't write; skeptics refute review
 findings). The deeper `adversarial-review` workflow is also available for
 large diffs. Scripts + agent charters live under the forge plugin's
 `references/workflows/` and `references/agents/`; both degrade gracefully to
-single-agent when unavailable. Tactical/trivial changes stay single-agent.
+single-agent when unavailable. Tactical/trivial changes stay single-agent. When
+a change renders UI, pass this repo's own verification loop as
+`context.verify` (`surface` / `publish` / `apply` / `capture` / `confirm` /
+`measure`) — the verify phase assumes no stack and reverse-engineers anything
+you leave out.
 
 ## Project
 

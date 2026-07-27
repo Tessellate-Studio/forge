@@ -258,15 +258,36 @@ appear when something *else* fails.
 - [ ] **litmus `@smoke` tag.** The pre-merge smoke subset assumes a litmus
   critical-golden-path job that doesn't exist yet. Deferred to a follow-up litmus
   PR — until then the full suite runs post-merge only.
-- [ ] **The verifier is alate-shaped, so the pipeline is only fully usable in
-  one of the three repos it ships to.** `verifierPrompt` hard-wires alate's
-  mobile loop — `eas update --channel preview`, double-relaunch, `adb
-  exec-out screencap`, measure %-positions — which is meaningless for loom (a
-  Shopify embedded app; admin dashboard + extensions) and only partly right for
-  mood-layer (Expo, but its own channels/conventions). Found 2026-07-27 while
-  retrofitting loom's CLAUDE.md; the interim workaround documented there is to
-  pass `rendersUI: false` from loom and use build-feature's own runtime check.
-  Real fix: make the verify phase take its publish/capture/measure commands from
-  the caller's `context` (the same arg the tester now uses to avoid hardcoding
-  alate's Jest/RNTL conventions) instead of embedding one app's toolchain, or
-  split a web-verifier variant. Until then, `rendersUI: true` is alate-only.
+- [x] **RESOLVED (2026-07-27, PR #33) — the verifier is alate-shaped, so the
+  pipeline is only fully usable in one of the three repos it ships to.**
+  `verifierPrompt` hard-wired alate's mobile loop — `eas update --channel
+  preview`, double-relaunch, `adb exec-out screencap`, measure %-positions —
+  which is meaningless for loom (a Shopify embedded app; admin dashboard +
+  extensions) and only partly right for mood-layer (Expo, but its own
+  channels/conventions). Found 2026-07-27 while retrofitting loom's CLAUDE.md;
+  the interim workaround documented there was to pass `rendersUI: false` from
+  loom and use build-feature's own runtime check.
+
+  **Resolution:** the verify phase now takes its commands from the caller's
+  `context.verify` — `{ surface, publish, apply, capture, confirm, measure }` —
+  the same portability move `contextBlock` already makes for the tester and
+  implementer. The four steps are always named so the verifier knows what has to
+  happen; an unsupplied one is discovered from the repo and never defaulted to a
+  known stack, and a repo with no determinable surface returns a
+  `structuralLimit` instead of improvising another repo's toolchain. Kept as one
+  generalised prompt rather than a split web-verifier variant: the steps
+  decompose cleanly across mobile OTA, browser and embedded admin, and a second
+  variant would be a second thing to keep mirrored with the charter.
+
+  Two things the fix surfaced that the question hadn't named. `fixPrompt` had
+  the same leak one layer down — it told every fix round to run `npx tsc
+  --noEmit && npx jest --no-coverage`, and the verify fix loop routes through it,
+  so leaving it would have half-landed the change. And the scripts had **no
+  automated coverage at all**: the parse check was a command pasted between
+  sessions, which is why three of the defects in Amendments 1 and 2 shipped.
+  `references/__tests__/` now loads them the way the runtime does (strip
+  `export` off `meta`, wrap in an async function, run in a `vm` with the globals
+  stubbed) and asserts on the emitted prompts — so "no phase hardcodes one
+  repo's toolchain" is now a test, not a convention. Wired into `npm test` + CI.
+
+  Follow-up: loom's CLAUDE.md workaround is removed in a separate loom PR.
