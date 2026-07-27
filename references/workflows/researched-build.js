@@ -18,7 +18,11 @@ export const meta = {
 //   criteria         string[]        — objective acceptance criteria
 //   rendersUI        boolean         — run the device-verify phase?
 //   task             string          — what is being built (title + description)
-//   context          object          — repo, goals, framework notes
+//   context          object          — repo, goals, framework notes. Optional
+//                    `context.verify` carries THIS repo's verification loop:
+//                    { surface, publish, apply, capture, confirm, measure }.
+//                    Without it the verifier discovers the loop from the repo;
+//                    it never falls back to any one app's toolchain.
 //   reviewScriptPath string          — absolute path to adversarial-review.js;
 //                    when set, the RFD review phase runs it as a nested
 //                    sub-workflow (single source of review logic). Falls back
@@ -220,6 +224,63 @@ const contextBlock = Object.keys(context).length
   ? `Repo context (authoritative — do NOT assume another repo's stack):\n${JSON.stringify(context, null, 2)}`
   : 'No repo context supplied — discover the repo\'s conventions (test framework, directory layout, theme tokens) by reading the repo before writing anything. Do not assume any particular stack.'
 
+// How this repo puts a built change in front of a human, from the CALLER's
+// context — the same portability move contextBlock makes for the tester.
+// These commands are app-specific: alate publishes an EAS OTA and screenshots
+// over adb, loom deploys a Shopify extension and screenshots a browser,
+// mood-layer drives its own Expo channels. Hardcoding one of them here is what
+// made `rendersUI: true` alate-only, leaving the pipeline fully usable in one
+// of the three repos forge ships to (rfd-001, open question #6). Anything
+// unsupplied is DISCOVERED from the repo — never defaulted to a known stack,
+// because a plausible-looking wrong command is worse than no command.
+const verifyContext = context.verify || {}
+
+const VERIFY_STEPS = [
+  ['publish', 'PUBLISH', 'get the built change onto the surface a user would see it on (OTA channel, preview deploy, dev store, local server)'],
+  ['apply', 'APPLY', 'make that surface actually load the new build (relaunch, hard reload, fresh session) — serving the previous build is the default failure here'],
+  ['capture', 'CAPTURE', 'take an image of the rendered result that you can read'],
+  ['confirm', 'CONFIRM', 'prove the captured surface is running the build you just published and not an older one'],
+]
+
+// A step may be one command or several. Anything that is neither a string nor
+// an array of them is treated as absent — but that is the ONLY thing silently
+// dropped here, because a dropped step reads as "not supplied" and sends the
+// verifier off to improvise, which is the failure this whole change exists to
+// stop (cf. the stringified-args bug that severed the first live review from
+// its target — rfd-001, Amendment 1).
+function verifyCommand(value) {
+  if (Array.isArray(value)) {
+    return value
+      .filter((v) => typeof v === 'string' && v.trim())
+      .map((v) => v.trim())
+      .join('; ')
+  }
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+const verifySteps = VERIFY_STEPS.map(([key, label, brief]) => {
+  const supplied = verifyCommand(verifyContext[key])
+  return {
+    supplied,
+    line: supplied ? `  - ${label} — ${supplied}` : `  - ${label} — not supplied, DISCOVER it: ${brief}.`,
+  }
+})
+
+const verifySurface = verifyCommand(verifyContext.surface)
+
+const verifyBlock = [
+  'STEP 2 — put the built change in front of you, then prove that what you captured IS it.' +
+    (verifySteps.some((step) => step.supplied)
+      ? ' The steps below come from the caller\'s repo context: run the supplied commands as given, and do not substitute another repo\'s toolchain.'
+      : ' The caller supplied no `context.verify` commands, so every step has to be worked out from the repo first.') +
+    ' Anything marked DISCOVER you work out from THIS repo (README, package.json scripts, CI config, its own docs) before running it — this pipeline ships to mobile, web and embedded-app repos alike, so assume no particular stack.',
+  verifySurface ? `Observation surface: ${verifySurface}` : '',
+  verifySteps.map((step) => step.line).join('\n'),
+  'Set updateConfirmed from whether CONFIRM actually succeeded. If it did not, report updateConfirmed:false and do NOT present the measurements as results. If you cannot establish how to publish or capture this repo\'s UI at all, STOP and return structuralLimit "no verification surface determined for this repo" rather than improvising another repo\'s toolchain.',
+]
+  .filter(Boolean)
+  .join('\n')
+
 function researcherPrompt() {
   const rounds =
     tier === 'rfd'
@@ -281,8 +342,12 @@ function fixPrompt(findings, priorImpl, kind, priorTests) {
       ? `STEP 2 — ensure the tests are present (re-materialize any that are missing after checkout):\n${JSON.stringify(priorTests.testFiles, null, 2)}`
       : '',
     `Prior change notes: ${priorImpl?.notes || '(none)'}`,
+    contextBlock,
     `STEP 3 — address these ${label} with the smallest correct change:\n${JSON.stringify(findings, null, 2)}`,
-    'Then run `npx tsc --noEmit && npx jest --no-coverage` green and re-commit ON THE SAME BRANCH so the accumulated work travels together. Return the updated diff and branch ref. Do not introduce new issues; do not weaken tests. If you could not recover the prior implementation, say so explicitly in notes and do NOT return a diff built against the wrong tree.',
+    // The gate commands are the repo's own, not a fixed pair: fix rounds run in
+    // every consuming repo, and naming one repo's runner here reintroduces the
+    // portability bug the verify phase was just freed from.
+    'Then run the repo\'s own typecheck + test commands green (the full suite, not just the new tests) and re-commit ON THE SAME BRANCH so the accumulated work travels together. Return the updated diff and branch ref. Do not introduce new issues; do not weaken tests. If you could not recover the prior implementation, say so explicitly in notes and do NOT return a diff built against the wrong tree.',
   ]
     .filter(Boolean)
     .join('\n\n')
@@ -329,9 +394,11 @@ function verifierPrompt(failed, currentImpl) {
     'You are the VERIFIER. You CANNOT edit code — you publish, measure, and report only.',
     currentImpl?.branchRef
       ? `STEP 1 — get the built code into your checkout FIRST. The implementation lives on branch \`${currentImpl.branchRef}\`, NOT on your current branch; the main loop does not integrate it until after this workflow returns. Check that branch out before building. Then confirm the files below are actually present — if they are not, STOP and return structuralLimit "could not obtain the implementation branch" rather than measuring the wrong bundle:\n${JSON.stringify(currentImpl.filesChanged || [], null, 2)}`
-      : 'STEP 1 — no implementation branch ref was returned. STOP: return structuralLimit "no implementation branch to verify" rather than publishing an OTA from an unchanged checkout and measuring the old app.',
-    'STEP 2 — publish the OTA to the device channel (alate: preview), apply via double-relaunch, screenshot with adb, and confirm via logcat that the running bundle is the one you just published. Set updateConfirmed accordingly — if you cannot confirm it, report updateConfirmed:false and do NOT present stale measurements as results.',
-    'STEP 3 — MEASURE each criterion as a % position. Numbers, not "looks fine".',
+      : 'STEP 1 — no implementation branch ref was returned. STOP: return structuralLimit "no implementation branch to verify" rather than publishing from an unchanged checkout and measuring the build that was already there.',
+    verifyBlock,
+    verifyCommand(verifyContext.measure)
+      ? `STEP 3 — MEASURE each criterion off the captured image: ${verifyCommand(verifyContext.measure)}. Numbers, not "looks fine".`
+      : 'STEP 3 — MEASURE each criterion off the captured image as a position/proportion of the captured surface. Numbers, not "looks fine".',
     criteriaBlock,
     failed && failed.length ? `Re-verify — prior failures to re-measure:\n${failed.map((c) => `- ${c}`).join('\n')}` : '',
     'If a criterion is unsatisfiable by tweaking (e.g. "fill screen" with two small elements), set structuralLimit instead of looping.',
