@@ -33,8 +33,8 @@ against a silent regression.
 
 **A per-test timeout can only fire where the test hands control back to the
 runtime.** Synchronous work — module load, a cold `render`, the first
-`fireEvent.changeText` — blocks the very timer that would kill it, so wall-clock
-is not the risk metric. Measured: tests with no `await` at all passed at
+`fireEvent.changeText`, any `execSync`/`*Sync` call — blocks the very timer that
+would kill it, so wall-clock is not the risk metric. Measured: tests with no `await` at all passed at
 14,405 ms and at **50,723 ms** under a 5,000 ms budget, while an *awaiting* test
 in the same file died at 12,647 ms. **The flaky test is rarely the slow one; it
 is the awaiting one.**
@@ -48,6 +48,12 @@ awaiting `act()` test passed at 15,562 ms). So:
   buys nothing but exposure.** Settle it inside `act()` and assert
   synchronously. Check the mock first — a `waitFor` over a genuinely deferred or
   never-resolving promise must stay.
+- **Time the steps before you trust the stack.** The reported frame is just
+  whichever call yielded first, so it is routinely an innocent one. Instrument
+  each step and fix whatever actually burned the budget. *Precedent: a 5,000 ms
+  budget blown by 13,021 ms of `execSync('npm audit')` — reported against a
+  59 ms `generateDocs` two calls downstream. The audit could not even succeed
+  (no lockfile → `ENOLOCK`), so the fix was to delete the work, not defer it.*
 - **Fire an async handler inside the act scope**, not before it:
   `await act(async () => { fireEvent.press(…) })`. `fireEvent`'s own `act()`
   covers only the synchronous part of the handler; post-`await` `setState` lands
