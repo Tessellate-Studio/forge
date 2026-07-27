@@ -258,3 +258,15 @@ appear when something *else* fails.
 - [ ] **litmus `@smoke` tag.** The pre-merge smoke subset assumes a litmus
   critical-golden-path job that doesn't exist yet. Deferred to a follow-up litmus
   PR — until then the full suite runs post-merge only.
+- [ ] **The verifier is alate-shaped, so the pipeline is only fully usable in
+  one of the three repos it ships to.** `verifierPrompt` hard-wires alate's
+  mobile loop — `eas update --channel preview`, double-relaunch, `adb
+  exec-out screencap`, measure %-positions — which is meaningless for loom (a
+  Shopify embedded app; admin dashboard + extensions) and only partly right for
+  mood-layer (Expo, but its own channels/conventions). Found 2026-07-27 while
+  retrofitting loom's CLAUDE.md; the interim workaround documented there is to
+  pass `rendersUI: false` from loom and use build-feature's own runtime check.
+  Real fix: make the verify phase take its publish/capture/measure commands from
+  the caller's `context` (the same arg the tester now uses to avoid hardcoding
+  alate's Jest/RNTL conventions) instead of embedding one app's toolchain, or
+  split a web-verifier variant. Until then, `rendersUI: true` is alate-only.
