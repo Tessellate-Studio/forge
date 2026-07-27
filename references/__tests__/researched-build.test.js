@@ -48,6 +48,13 @@ function expectNoHardcodedToolchain(prompt) {
   expect(leaked).toEqual([]);
 }
 
+// The two steps `rendersUI: true` cannot run without. Kept minimal on purpose:
+// everything else stays optional and is discovered from the repo.
+const MINIMAL_VERIFY = {
+  publish: 'npm run deploy:dev',
+  capture: 'browser screenshot of the embedded admin iframe',
+};
+
 const BASE_ARGS = {
   tier: 'pitch',
   task: 'Show a sizing badge on the product card',
@@ -56,6 +63,7 @@ const BASE_ARGS = {
     'Badge text is legible at 320px width',
   ],
   rendersUI: true,
+  context: { repo: 'loom', verify: MINIMAL_VERIFY },
 };
 
 // A Shopify embedded app — the repo the hardcoded verifier locked out.
@@ -176,19 +184,17 @@ describe('verifier prompt — publish/apply/capture/confirm come from the caller
     expect(prompt).toContain('adb exec-out screencap -p');
   });
 
-  it('names each missing step rather than silently dropping it', async () => {
-    const prompt = await verifyPrompt({
-      ...BASE_ARGS,
-      context: { repo: 'loom', verify: { publish: 'npm run deploy:dev' } },
-    });
+  it('names each optional step it was not given rather than dropping it', async () => {
+    const prompt = await verifyPrompt(BASE_ARGS);
 
-    expect(prompt).toContain('npm run deploy:dev');
+    expect(prompt).toContain(MINIMAL_VERIFY.publish);
+    expect(prompt).toContain(MINIMAL_VERIFY.capture);
 
-    // The four unsupplied steps still have to happen — the verifier is told to
-    // work them out from the repo, not to skip them.
-    for (const step of ['APPLY', 'CAPTURE', 'CONFIRM', 'MEASURE']) {
-      expect(prompt).toContain(step);
-    }
+    // apply and confirm weren't supplied, but they still have to happen — the
+    // verifier is told to work them out from the repo, not to skip them.
+    expect(prompt).toMatch(/APPLY — not supplied, DISCOVER it/);
+    expect(prompt).toMatch(/CONFIRM — not supplied, DISCOVER it/);
+    expect(prompt).toContain('MEASURE');
     expectNoHardcodedToolchain(prompt);
   });
 
@@ -197,27 +203,94 @@ describe('verifier prompt — publish/apply/capture/confirm come from the caller
       ...BASE_ARGS,
       context: {
         repo: 'loom',
-        verify: { publish: ['npm run build', 'npm run deploy:dev'] },
+        verify: {
+          ...MINIMAL_VERIFY,
+          publish: ['npm run build', 'npm run deploy:dev'],
+        },
       },
     });
 
     expect(prompt).toContain('npm run build; npm run deploy:dev');
   });
+});
 
-  it('treats a context with no step commands as nothing supplied', async () => {
-    // `surface` alone describes where to look but not how to get there — the
-    // verifier still has four steps to work out, and must be told so.
-    const prompt = await verifyPrompt({
-      ...BASE_ARGS,
-      context: { repo: 'loom', verify: { surface: 'the admin dashboard' } },
+describe('rendersUI:true requires the steps it cannot run without', () => {
+  it('refuses before spawning a single agent when context.verify is absent', async () => {
+    const { result, calls } = await runWorkflow('researched-build.js', {
+      args: { ...BASE_ARGS, context: { repo: 'loom' } },
     });
 
-    expect(prompt).toContain('Observation surface: the admin dashboard');
-    expect(prompt).toContain('no `context.verify` commands');
+    // The whole point: this costs nothing. No researcher, no tester, no
+    // implementer, no reviewer - the caller finds out immediately.
+    expect(calls).toEqual([]);
+    expect(result.error).toMatch(/context\.verify/);
+  });
+
+  it('names exactly which steps are missing', async () => {
+    const { result } = await runWorkflow('researched-build.js', {
+      args: {
+        ...BASE_ARGS,
+        context: { repo: 'loom', verify: { publish: 'npm run deploy:dev' } },
+      },
+    });
+
+    // The missing-list names only what is actually missing — `publish` still
+    // appears later, in the sentence showing the shape to pass.
+    expect(result.error).toContain('context.verify is missing: capture.');
+  });
+
+  it('does not count a surface or a blank string as a step', async () => {
+    const { result } = await runWorkflow('researched-build.js', {
+      args: {
+        ...BASE_ARGS,
+        context: {
+          repo: 'loom',
+          verify: {
+            surface: 'the admin dashboard',
+            publish: '   ',
+            capture: '',
+          },
+        },
+      },
+    });
+
+    expect(result.error).toMatch(/publish/);
+    expect(result.error).toMatch(/capture/);
+  });
+
+  it('offers rendersUI:false as the way out', async () => {
+    const { result } = await runWorkflow('researched-build.js', {
+      args: { ...BASE_ARGS, context: {} },
+    });
+
+    expect(result.error).toMatch(/rendersUI: false/);
+  });
+
+  it('lets a non-UI change through untouched', async () => {
+    const { result, calls } = await runWorkflow('researched-build.js', {
+      args: { ...BASE_ARGS, rendersUI: false, context: { repo: 'loom' } },
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(calls.map(call => call.label)).toEqual([
+      'research',
+      'test',
+      'implement',
+      'review',
+    ]);
+  });
+
+  it('runs the full pipeline once the two steps are present', async () => {
+    const { result, calls } = await runWorkflow('researched-build.js', {
+      args: BASE_ARGS,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(calls.map(call => call.label)).toContain('verify');
   });
 });
 
-describe('verifier prompt — no context supplied', () => {
+describe('verifier prompt — optional steps still discovered', () => {
   it('falls back to repo discovery, never to a default stack', async () => {
     const prompt = await verifyPrompt(BASE_ARGS);
 

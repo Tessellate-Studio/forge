@@ -148,10 +148,11 @@ Invoke the **Workflow** tool with:
   OBJECT, never a JSON-encoded string — a stringified args reaches the script
   as one string and severs it from its inputs.
 
-**When `rendersUI: true`, put this repo's verification loop in
-`context.verify`.** The verify phase runs whatever you give it and assumes no
-stack, so an omitted step is one the verifier has to reverse-engineer from the
-repo — and it will stop with a `structuralLimit` rather than guess:
+**`rendersUI: true` REQUIRES `context.verify.publish` and
+`context.verify.capture`.** The workflow returns an error and spawns no agents
+without them — those two can't be reverse-engineered cheaply, and a wrong guess
+measures the wrong build. Everything else is optional and discovered from the
+repo when absent:
 
 ```
 context: {
@@ -167,11 +168,17 @@ context: {
 }
 ```
 
-Every field is optional and every repo's differ — alate's are the EAS/adb loop
-in `references/device-loop.md`, loom's are the Shopify ones above. `apply` and
-`confirm` are the two people leave out, and leaving them out is how a run
-measures the *previous* build and reports it as a verdict on this one. Full
-contract: `${CLAUDE_PLUGIN_ROOT}/references/agents/verifier-prompt.md`.
+Every repo's differ — alate's are the EAS/adb loop in
+`references/device-loop.md`, loom's are the Shopify ones above. `apply` and
+`confirm` are optional but are the two people leave out, and leaving them out is
+how a run measures the *previous* build and reports it as a verdict on this one
+— supply them when you know them. A step can be a list of commands, not just
+one. Full contract:
+`${CLAUDE_PLUGIN_ROOT}/references/agents/verifier-prompt.md`.
+
+If a change genuinely shouldn't be measured on a surface, pass
+`rendersUI: false` — don't pass `true` with a made-up `publish` to get past the
+check.
 
 The workflow runs researcher → tester (failing tests) → implementer (worktree) →
 reviewer (adversarial; a multi-lens panel + skeptic verification for RFD) with a

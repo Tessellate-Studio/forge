@@ -18,11 +18,14 @@ export const meta = {
 //   criteria         string[]        — objective acceptance criteria
 //   rendersUI        boolean         — run the device-verify phase?
 //   task             string          — what is being built (title + description)
-//   context          object          — repo, goals, framework notes. Optional
+//   context          object          — repo, goals, framework notes.
 //                    `context.verify` carries THIS repo's verification loop:
 //                    { surface, publish, apply, capture, confirm, measure }.
-//                    Without it the verifier discovers the loop from the repo;
-//                    it never falls back to any one app's toolchain.
+//                    REQUIRED when rendersUI is true: `publish` + `capture`
+//                    (the run is rejected before any agent spawns without
+//                    them). The rest are optional and discovered from the repo;
+//                    nothing ever falls back to one app's toolchain. A step may
+//                    be a single command or an array of them.
 //   reviewScriptPath string          — absolute path to adversarial-review.js;
 //                    when set, the RFD review phase runs it as a nested
 //                    sub-workflow (single source of review logic). Falls back
@@ -49,12 +52,55 @@ const reviewScriptPath = input.reviewScriptPath || ''
 const MAX_REVIEW_ROUNDS = 2
 const MAX_VERIFY_ROUNDS = 3
 
+// A verify step may be given as one command or several. Anything that is
+// neither a string nor an array of them counts as absent — the only thing
+// silently dropped here, because a dropped step reads as "not supplied" and
+// sends the verifier off to improvise (cf. the stringified-args bug that
+// severed the first live review from its target — rfd-001, Amendment 1).
+function verifyCommand(value) {
+  if (Array.isArray(value)) {
+    return value
+      .filter((v) => typeof v === 'string' && v.trim())
+      .map((v) => v.trim())
+      .join('; ')
+  }
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+const verifyContext = context.verify || {}
+
 if (!task && criteria.length === 0) {
   return {
     tier,
     error:
       'No task or criteria provided — refusing to build without an explicit target. ' +
       'Pass args as a JSON object: { tier, criteria, rendersUI, task, context }.',
+  }
+}
+
+// `rendersUI: true` is a request to have the rendered result MEASURED. Honour
+// it or reject it — never accept it and quietly skip the measuring, which is
+// what happened when the verifier could not work out how to reach the app: the
+// run returned a normal-looking result with a structuralLimit buried in a field
+// nobody reads. Same failure shape as the wrong-repo review (Amendment 1), and
+// the same answer: fail loudly at the boundary.
+//
+// Only publish + capture are required. They are the two the verifier cannot
+// reverse-engineer cheaply, and a wrong guess at either measures the wrong
+// thing. apply / confirm / measure / surface stay optional and are discovered
+// from the repo. This costs nothing: no agent has been spawned yet.
+const REQUIRED_VERIFY_STEPS = ['publish', 'capture']
+if (rendersUI) {
+  const missing = REQUIRED_VERIFY_STEPS.filter((key) => !verifyCommand(verifyContext[key]))
+  if (missing.length) {
+    return {
+      tier,
+      error:
+        `rendersUI: true asks for the built change to be measured on a real surface, but context.verify is missing: ${missing.join(', ')}. ` +
+        'The verifier cannot work out how this repo publishes and captures a build cheaply enough to guess, and a wrong guess measures the wrong build. ' +
+        'Pass context.verify = { publish, capture } at minimum — apply, confirm, measure and surface stay optional and are discovered from the repo. ' +
+        'Or set rendersUI: false if this change should not be verified on a surface.',
+    }
   }
 }
 
@@ -233,30 +279,14 @@ const contextBlock = Object.keys(context).length
 // of the three repos forge ships to (rfd-001, open question #6). Anything
 // unsupplied is DISCOVERED from the repo — never defaulted to a known stack,
 // because a plausible-looking wrong command is worse than no command.
-const verifyContext = context.verify || {}
-
+// (`verifyContext` and `verifyCommand` are defined up with the arg guards, which
+// need them to reject a rendersUI run that cannot actually verify anything.)
 const VERIFY_STEPS = [
   ['publish', 'PUBLISH', 'get the built change onto the surface a user would see it on (OTA channel, preview deploy, dev store, local server)'],
   ['apply', 'APPLY', 'make that surface actually load the new build (relaunch, hard reload, fresh session) — serving the previous build is the default failure here'],
   ['capture', 'CAPTURE', 'take an image of the rendered result that you can read'],
   ['confirm', 'CONFIRM', 'prove the captured surface is running the build you just published and not an older one'],
 ]
-
-// A step may be one command or several. Anything that is neither a string nor
-// an array of them is treated as absent — but that is the ONLY thing silently
-// dropped here, because a dropped step reads as "not supplied" and sends the
-// verifier off to improvise, which is the failure this whole change exists to
-// stop (cf. the stringified-args bug that severed the first live review from
-// its target — rfd-001, Amendment 1).
-function verifyCommand(value) {
-  if (Array.isArray(value)) {
-    return value
-      .filter((v) => typeof v === 'string' && v.trim())
-      .map((v) => v.trim())
-      .join('; ')
-  }
-  return typeof value === 'string' ? value.trim() : ''
-}
 
 const verifySteps = VERIFY_STEPS.map(([key, label, brief]) => {
   const supplied = verifyCommand(verifyContext[key])
@@ -268,15 +298,14 @@ const verifySteps = VERIFY_STEPS.map(([key, label, brief]) => {
 
 const verifySurface = verifyCommand(verifyContext.surface)
 
+// PUBLISH and CAPTURE are always present here — the arg guard above rejects a
+// rendersUI run without them — so this never has to describe a fully empty
+// context.
 const verifyBlock = [
-  'STEP 2 — put the built change in front of you, then prove that what you captured IS it.' +
-    (verifySteps.some((step) => step.supplied)
-      ? ' The steps below come from the caller\'s repo context: run the supplied commands as given, and do not substitute another repo\'s toolchain.'
-      : ' The caller supplied no `context.verify` commands, so every step has to be worked out from the repo first.') +
-    ' Anything marked DISCOVER you work out from THIS repo (README, package.json scripts, CI config, its own docs) before running it — this pipeline ships to mobile, web and embedded-app repos alike, so assume no particular stack.',
+  'STEP 2 — put the built change in front of you, then prove that what you captured IS it. The steps below come from the caller\'s repo context: run the supplied commands as given, and do not substitute another repo\'s toolchain. Anything marked DISCOVER you work out from THIS repo (README, package.json scripts, CI config, its own docs) before running it — this pipeline ships to mobile, web and embedded-app repos alike, so assume no particular stack.',
   verifySurface ? `Observation surface: ${verifySurface}` : '',
   verifySteps.map((step) => step.line).join('\n'),
-  'Set updateConfirmed from whether CONFIRM actually succeeded. If it did not, report updateConfirmed:false and do NOT present the measurements as results. If you cannot establish how to publish or capture this repo\'s UI at all, STOP and return structuralLimit "no verification surface determined for this repo" rather than improvising another repo\'s toolchain.',
+  'Set updateConfirmed from whether CONFIRM actually succeeded. If it did not, report updateConfirmed:false and do NOT present the measurements as results. If the supplied commands do not actually get you to a surface you can capture, STOP and return structuralLimit "no verification surface determined for this repo" rather than improvising another repo\'s toolchain to get there.',
 ]
   .filter(Boolean)
   .join('\n')

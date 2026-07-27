@@ -274,7 +274,12 @@ appear when something *else* fails.
   implementer. The four steps are always named so the verifier knows what has to
   happen; an unsupplied one is discovered from the repo and never defaulted to a
   known stack, and a repo with no determinable surface returns a
-  `structuralLimit` instead of improvising another repo's toolchain. Kept as one
+  `structuralLimit` instead of improvising another repo's toolchain.
+  **Tightened in PR #35:** `publish` + `capture` are now *required* when
+  `rendersUI: true`, rejected at arg-normalization time before any agent spawns
+  — accepting the run and silently not measuring anything was the same
+  ask-for-X-and-get-a-normal-looking-result-without-it failure as Amendment 1.
+  The other four stay optional and discovered. Kept as one
   generalised prompt rather than a split web-verifier variant: the steps
   decompose cleanly across mobile OTA, browser and embedded admin, and a second
   variant would be a second thing to keep mirrored with the charter.
