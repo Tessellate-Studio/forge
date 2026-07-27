@@ -27,12 +27,7 @@ current branch. Use `git worktree add` when the current branch has uncommitted
 work to preserve. Separate code commits from doc commits; run the app's full
 test suite before either commit.
 
-## Merged branches — let them be deleted
-
-Let the merged head branch go. Leaving GitHub's "Automatically delete head
-branches" (`delete_branch_on_merge`) on is fine, as is `gh pr merge
---delete-branch`. Don't rename merged branches to `done/<original>`, and
-don't treat a deleted merged branch as something to restore.
+## Merged branches — delete them, or mark them `done/`; both are fine
 
 **Nothing is lost when a merged branch is deleted.** A PR's commits stay
 reachable at `refs/pull/<n>/head` for the life of the repo — including the
@@ -47,10 +42,51 @@ That recovers the branch tip and its full history for investigation, and it
 works even for a PR that was merged and then reverted — the reverted content
 is still readable at that ref.
 
-This replaces an earlier rule that required renaming merged branches to
-`done/<original>` and called deletion lossy. It isn't: the premise was wrong,
-and on a repo with auto-delete enabled the rule generated a contradiction at
-every merge instead of an action worth taking.
+So deletion is safe, and it is the simplest end state: leaving GitHub's
+"Automatically delete head branches" (`delete_branch_on_merge`) on is fine, as
+is `gh pr merge --delete-branch`.
+
+Keeping a merged branch is also fine — **rename it `done/<original>`**
+(`git branch -m <original> done/<original>`). The prefix is a pruning marker,
+not an archive: it records "merged, safe to delete without re-verifying".
+
+That marker earns its keep because **under squash merge, git cannot tell you a
+branch was merged.** Squashing rewrites the commits, so the branch tip is never
+an ancestor of the default branch: `git branch --merged` lists nothing, and
+`git branch -d` refuses with *"the branch is not fully merged"*. Verified on a
+squash-only repo (`allow_merge_commit: false`) against 37 real `done/` branches.
+So on these repos the prefix carries information git has no way to derive, and
+`-D` is the only delete that works — the rename is what licenses it, because
+you asserted "merged" at the moment you knew it was true.
+
+```bash
+# List first. `refs/heads/done/*` silently matches only un-nested names
+# (6 of 37 here) — `*` does not cross `/`. Use `**`.
+git for-each-ref --format='%(refname:short)' 'refs/heads/done/**'
+git for-each-ref --format='%(refname:short)' 'refs/heads/done/**' | xargs -r git branch -D
+```
+
+The two settle into one lifecycle — `done/` is the staging state, deletion is
+the end state — so pick per repo and don't treat the choice as a contradiction:
+
+- **Auto-delete on** — nothing to do; the head branch goes at merge.
+- **Auto-delete off** — rename to `done/<original>` rather than leaving a
+  merged branch under its original name, then prune periodically.
+
+Either way the *remote* side is settled at merge; `done/` is about the local
+branch list you actually read every day.
+
+Two things stay wrong either way: **leaving a merged branch under its original
+name** (indistinguishable from live work, so every later sweep has to re-verify
+it), and **treating a deleted merged branch as something to restore** — fetch
+the `refs/pull` ref above instead.
+
+This supersedes two earlier swings. The first required the `done/` rename and
+called deletion lossy; the premise was wrong. The second banned the rename on
+that correction, which overshot — deletion being safe is not a reason the
+pruning marker can't exist. What actually generated a contradiction at every
+merge was pairing a mandatory rename with auto-delete, and naming the repo
+setting as the deciding input removes it.
 
 ## Merge on green — the default
 
