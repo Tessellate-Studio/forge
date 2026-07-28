@@ -136,7 +136,7 @@ Add to your project's `CLAUDE.md` (typically in a "Documentation" section):
 
 All docs follow [`PROJECT_DOCS.md`](./PROJECT_DOCS.md): a single guide mapping every 
 documentation type to its location. Check it before creating or moving any doc. 
-It reflects the forge platform standard [`forge/standards/doc-placement.md`](https://github.com/Tessellate-Studio/forge/blob/main/standards/doc-placement.md).
+It reflects the forge platform standard [`forge/standards/doc-placement.md`](https://github.com/Tessellate-Studio/forge/blob/master/standards/doc-placement.md).
 ```
 
 ### 3. Consolidate existing scattered docs (one time)
@@ -164,4 +164,4 @@ If docs are scattered across multiple files, consolidate them following the `PRO
 
 **Loom (Alate for Brands, 2026-07-15):** https://github.com/Tessellate-Studio/loom/blob/main/PROJECT_DOCS.md
 
-**Mood Layer (2026-07-15):** https://github.com/Tessellate-Studio/mood-layer/blob/main/PROJECT_DOCS.md
+**Mood Layer (2026-07-15):** https://github.com/Tessellate-Studio/mood-layer/blob/master/PROJECT_DOCS.md
