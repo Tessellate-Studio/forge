@@ -33,11 +33,11 @@ against a silent regression.
 
 **A per-test timeout can only fire where the test hands control back to the
 runtime.** Synchronous work — module load, a cold `render`, the first
-`fireEvent.changeText`, any `execSync`/`*Sync` call — blocks the very timer that
-would kill it, so wall-clock is not the risk metric. Measured: tests with no `await` at all passed at
-14,405 ms and at **50,723 ms** under a 5,000 ms budget, while an *awaiting* test
-in the same file died at 12,647 ms. **The flaky test is rarely the slow one; it
-is the awaiting one.**
+`fireEvent.changeText`, any `execSync`/`*Sync` call — blocks the very timer
+that would kill it, so wall-clock is not the risk metric. Measured: tests with
+no `await` at all passed at 14,405 ms and at **50,723 ms** under a 5,000 ms
+budget, while an *awaiting* test in the same file died at 12,647 ms. **The
+flaky test is rarely the slow one; it is the awaiting one.**
 
 Yielding is necessary but not sufficient — the yield must reach the event loop's
 **timer phase**. `waitFor` polls on real interval timers, so it reliably gets
