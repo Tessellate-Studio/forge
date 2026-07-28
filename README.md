@@ -24,6 +24,7 @@ inherits it — interchangeable, inter-usable, self-learning (via reviewed PRs).
 | `skills/build-feature/` | Implement + verify a change end-to-end on-device until it objectively passes. |
 | `skills/roadmap-pulse/` | Weekly planning-doc honesty pass + rubric-scored priorities. |
 | `skills/new-app/` | Scaffold a new platform-wired app from a requirements brief. |
+| `skills/security-sweep/` | Dependency vulnerability sweep — triage, safe auto-fix, dismiss accepted residuals. Implements `standards/security-triage.md`. |
 | `standards/workflows.md` | **Single home** for all working rules (branch placement, TDD, quality pass, status updates, etc.). |
 | `standards/anti-patterns.md` | The 14 app-agnostic build guardrails. |
 | `standards/authoritative-claims.md` | The core rule: cite a source or label a hypothesis. |
