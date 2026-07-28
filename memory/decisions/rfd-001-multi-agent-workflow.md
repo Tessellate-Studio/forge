@@ -263,10 +263,19 @@ appear when something *else* fails.
   `verifierPrompt` hard-wired alate's mobile loop — `eas update --channel
   preview`, double-relaunch, `adb exec-out screencap`, measure %-positions —
   which is meaningless for loom (a Shopify embedded app; admin dashboard +
-  extensions) and only partly right for mood-layer (Expo, but its own
-  channels/conventions). Found 2026-07-27 while retrofitting loom's CLAUDE.md;
-  the interim workaround documented there was to pass `rendersUI: false` from
-  loom and use build-feature's own runtime check.
+  extensions) and for mood-layer. Found 2026-07-27 while retrofitting loom's
+  CLAUDE.md; the interim workaround documented there was to pass
+  `rendersUI: false` from loom and use build-feature's own runtime check.
+
+  **Correction (2026-07-27):** this question originally described mood-layer as
+  "Expo, but its own channels/conventions". That was wrong, and wrong in the
+  direction that matters — mood-layer has **no `expo-updates` dependency**, so
+  it has no update channels and no OTA path *at all*; `eas.json` defines build
+  profiles only. Its verify loop is Expo Go over Metro, or a cloud APK build
+  (`gh workflow run build-android-apk.yml`) plus `adb install -r`. "Its own
+  channels" implied a variant of alate's loop that someone could adapt; the
+  truth is there is nothing to adapt. Documented per-repo in mood-layer's
+  CLAUDE.md (PR #46).
 
   **Resolution:** the verify phase now takes its commands from the caller's
   `context.verify` — `{ surface, publish, apply, capture, confirm, measure }` —

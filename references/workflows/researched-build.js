@@ -273,8 +273,9 @@ const contextBlock = Object.keys(context).length
 // How this repo puts a built change in front of a human, from the CALLER's
 // context — the same portability move contextBlock makes for the tester.
 // These commands are app-specific: alate publishes an EAS OTA and screenshots
-// over adb, loom deploys a Shopify extension and screenshots a browser,
-// mood-layer drives its own Expo channels. Hardcoding one of them here is what
+// over adb, loom deploys a Shopify extension and screenshots a browser, and
+// mood-layer has no OTA path at all (no expo-updates) — it reloads in Expo Go
+// or installs a cloud-built APK. Hardcoding one of them here is what
 // made `rendersUI: true` alate-only, leaving the pipeline fully usable in one
 // of the three repos forge ships to (rfd-001, open question #6). Anything
 // unsupplied is DISCOVERED from the repo — never defaulted to a known stack,

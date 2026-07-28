@@ -5,8 +5,8 @@
  * only mechanical guard on the agent prompts it emits. They exist chiefly to
  * hold one property: **no phase may hardcode one consuming repo's toolchain.**
  * forge ships to alate (Expo/EAS/adb), loom (Shopify embedded app) and
- * mood-layer (Expo, own channels); a prompt that names alate's commands makes
- * that phase unusable in the other two.
+ * mood-layer (Expo with no expo-updates, so no OTA path at all); a prompt that
+ * names alate's commands makes that phase unusable in the other two.
  *
  * See memory/decisions/rfd-001-multi-agent-workflow.md, open question #6.
  */
