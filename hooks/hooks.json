@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/forge-freshness.mjs\"",
+            "timeout": 30,
+            "statusMessage": "Checking forge plugin freshness..."
+          }
+        ]
+      }
+    ]
+  }
+}
