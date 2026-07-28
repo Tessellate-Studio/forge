@@ -1,0 +1,23 @@
+# Canonical author identities.
+#
+# Seventy commits accumulated six identities for two actual authors — a bare
+# GitHub noreply address that does not link to the profile, a placeholder
+# `mailt@example.com` from a misconfigured git user, a personal address, and
+# two name variants. This file canonicalises them for `git log`, `git blame`,
+# `git shortlog -sne`, and anything else that reads mailmap.
+#
+# Deliberately NOT a history rewrite: this repo is cloned onto every machine by
+# the Claude Code plugin system, so a force-push would leave every marketplace
+# clone diverged and needing manual repair, and would dangle every commit SHA
+# recorded in memory/decisions/ and past PR bodies.
+#
+# Format: Canonical Name <canonical@email> <address-seen-in-history>
+# A bare `Name <email>` line canonicalises the NAME for every commit already
+# using that email.
+
+Saptami K <79509062+ramsaptami@users.noreply.github.com>
+Saptami K <79509062+ramsaptami@users.noreply.github.com> <ramsaptami@users.noreply.github.com>
+Saptami K <79509062+ramsaptami@users.noreply.github.com> <ramsaptami@gmail.com>
+Saptami K <79509062+ramsaptami@users.noreply.github.com> <mailt@example.com>
+
+Claude <noreply@anthropic.com> <claude@anthropic.com>
