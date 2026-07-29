@@ -3,7 +3,9 @@
 The cross-app build guardrails every Tessellate app inherits via the `forge`
 plugin. Each rule is one crisp directive + why + a one-line precedent — read
 before building. App-specific anti-patterns stay in each app's own
-`memory/project_anti_patterns.md`; these are the shared twelve.
+`memory/project_anti_patterns.md`; these are the shared ones. (Deliberately not
+a count — it said "the shared twelve" while the file held seventeen rules. A
+number here goes stale on the next promotion and nothing fails to say so.)
 
 Stable titles, not integers (integers collide across apps). The parenthetical is
 the original alate AP number for traceability.
@@ -288,6 +290,50 @@ because no one said "merge" — pure waste, and every commit landing on
 master meanwhile widened the gap it would have to reconcile.* Sibling of
 the concurrent-session rule (that's don't-corrupt-the-op; this is
 don't-let-it-rot).
+
+## A test timeout fires where the test YIELDS, not where the time is SPENT
+
+When a component test times out, do **not** start by rewriting the `await`. A
+jest/vitest timeout can only interrupt at a yield that reaches the event loop's
+timer phase — `waitFor` polls on real interval timers and reliably gets there; a
+microtask-only `await act(async () => {})` usually does not. So the `await` you
+are looking at is where the bill is *presented*, and very often not where it was
+*incurred*. Diagnose in three steps, in this order:
+
+1. **Time each step, not the test.** One `Date.now()` around each line names the
+   culprit in a single run. Test-level duration only gives you the total.
+2. **Then ask: expensive, or expensive *once*?** Repeat the same step three
+   times in one test. A per-call cost needs optimising; a first-call cost needs
+   *relocating* — opposite fixes. This is the step that gets skipped.
+3. **Fix it where it belongs.** One-time costs (first render of a screen, first
+   render of a component only one branch mounts, first use of a lazily
+   initialised module) go in `beforeAll` with an **explicit hook timeout** —
+   hooks share the same default the cost overruns, so the override is
+   load-bearing, not decoration. Per-call costs get optimised instead.
+
+**Verify cold, and in the full file.** `jest --clearCache` before each run; a
+green warm run is not evidence. A solo repro of the failing test is a *different
+program* and will lie to you — one such test measured alone reported `render`
+4,938 ms / `changeText` 3,073 ms; in its real file those were 11 ms and
+5,553 ms.
+
+**Watch for the test that escapes.** A synchronous test never yields, so it can
+absorb seconds invisibly and always pass; the bill then lands on the first
+*awaiting* test, which looks like the broken one. Deliberately parking cost in a
+synchronous test therefore "works", but it is order-dependent and stops working
+silently the moment someone adds an awaiting test above it — prefer `beforeAll`.
+
+**Why:** this class produced five regressions across four files and roughly
+eight PRs on one app, and several of those PRs each moved a real cost without
+fixing the flake, because timing was read at test granularity — where the bill
+lands — instead of step granularity, where it is incurred. It also stops being a
+CI-only nuisance once a pre-push hook runs the suite: then it blocks pushes.
+*Precedent: alate's `FitResultErrorCard` — three PRs targeted an `await act`
+costing **14 ms** while a single `changeText` cost **5,553 ms**; and
+`ShareMeasurementsScreen` — a first render (~3.1 s) plus the first render of the
+`ActivityIndicator` a button swaps in while busy (~2.2 s), both billed to
+whichever test awaited first. 12,275–15,242 ms → 49 ms once paid in
+`beforeAll`.*
 
 ---
 
