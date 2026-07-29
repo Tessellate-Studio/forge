@@ -227,10 +227,18 @@ gh pr list --state open --json number,headRefName,files \
   --jq '.[] | select(any(.files[]; .path=="BACKLOG.md")) | "#\(.number) \(.headRefName)"'
 ```
 
-- **Never bundle a shared-doc edit with a code change in one PR.** Land the code,
-  then the doc entry, as separate PRs. Bundling lets a doc-level problem take a
-  correct code fix down with it.
-- **If your change makes a doc claim stale, fix it in your own PR** — never leave it
+- **Keep a shared-doc edit in its own commit — one PR is fine.** What must not
+  happen is a *single commit* carrying both the doc entry and the code change:
+  that is what lets a doc-level problem take a correct code fix down with it,
+  because `git revert` then cannot drop one without the other. Separate commits
+  keep that escape hatch open at no cost, and the doc stays reviewable next to
+  the change it describes.
+  *(Widened 2026-07-29 — this previously demanded separate PRs. Over-corrected:
+  it bought revert-safety that commit separation already gives, while splitting
+  one change across two review surfaces and leaving the second PR to be
+  forgotten. Contention is handled by the who-else-is-in-this-file check above,
+  not by splitting PRs.)*
+- **If your change makes a doc claim stale, fix it in the same PR** — never leave it
   to another session that "agreed to take it". Two sessions each deferring is how a
   wrong line survives both their merges.
 - **Treat a contended anchor as a shared resource.** Append-only lists where everyone

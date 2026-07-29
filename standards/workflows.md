@@ -125,8 +125,8 @@ before every commit/push. Full rule:
 Worktree isolation does not prevent two branches editing the same doc or the same
 lane. Before touching a regression log, BACKLOG, digest or tracker — or starting a
 fix in a busy area — list the open PRs already in that file, keep shared-doc edits
-in their own PR, and fix any claim your own change makes stale rather than handing
-it to another session. Full rule:
+in their own **commit** (same PR is fine), and fix any claim your own change makes
+stale rather than handing it to another session. Full rule:
 [`anti-patterns.md` → "Concurrent branches collide in content"](./anti-patterns.md).
 
 ## Bug-fix pre-flight — read the regression log FIRST
