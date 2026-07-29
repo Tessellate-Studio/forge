@@ -124,9 +124,11 @@ before every commit/push. Full rule:
 
 Worktree isolation does not prevent two branches editing the same doc or the same
 lane. Before touching a regression log, BACKLOG, digest or tracker — or starting a
-fix in a busy area — list the open PRs already in that file, keep shared-doc edits
-in their own **commit** (same PR is fine), and fix any claim your own change makes
-stale rather than handing it to another session. Full rule:
+fix in a busy area — list the open PRs already in that file, and fix any claim your
+own change makes stale rather than handing it to another session. Commit
+boundaries follow the logical change as usual: a doc edit that is part of the
+change goes in its commit; a separate concern (a regression-log row, a BACKLOG
+status) gets its own commit, same PR is fine. Full rule:
 [`anti-patterns.md` → "Concurrent branches collide in content"](./anti-patterns.md).
 
 ## Bug-fix pre-flight — read the regression log FIRST

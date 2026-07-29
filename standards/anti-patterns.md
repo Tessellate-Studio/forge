@@ -227,17 +227,23 @@ gh pr list --state open --json number,headRefName,files \
   --jq '.[] | select(any(.files[]; .path=="BACKLOG.md")) | "#\(.number) \(.headRefName)"'
 ```
 
-- **Keep a shared-doc edit in its own commit — one PR is fine.** What must not
-  happen is a *single commit* carrying both the doc entry and the code change:
-  that is what lets a doc-level problem take a correct code fix down with it,
-  because `git revert` then cannot drop one without the other. Separate commits
-  keep that escape hatch open at no cost, and the doc stays reviewable next to
-  the change it describes.
-  *(Widened 2026-07-29 — this previously demanded separate PRs. Over-corrected:
-  it bought revert-safety that commit separation already gives, while splitting
-  one change across two review surfaces and leaving the second PR to be
-  forgotten. Contention is handled by the who-else-is-in-this-file check above,
-  not by splitting PRs.)*
+- **Commit boundaries follow the logical change, not the file type.** This is
+  ordinary git hygiene and needs no special rule: one commit per coherent change.
+  A doc edit that is *part of* a change — the API doc for an endpoint you just
+  altered, the comment describing new behaviour, the README line your flag made
+  wrong — belongs **in that commit**. Splitting it out makes the commit
+  incomplete and ships a moment where the docs contradict the code. A doc edit
+  that is *its own* concern — a regression-log row, a BACKLOG status, an
+  unrelated fix you want to ride along — is a separate commit, and may sit in the
+  same PR.
+  *(Corrected 2026-07-29. This rule twice demanded a doc/code split — first by PR,
+  then by commit. Both were wrong: they made the file's type the deciding input
+  instead of whether it is the same change. Under the old wording, updating a
+  function and its docstring was a rule violation, which nobody was ever going to
+  follow. The real lesson from the row-77 revert stands and is narrower: a
+  **regression-log row is a separate concern from the fix it describes**, so it
+  belongs in its own commit — not because it is a doc, but because it is a
+  different change.)*
 - **If your change makes a doc claim stale, fix it in the same PR** — never leave it
   to another session that "agreed to take it". Two sessions each deferring is how a
   wrong line survives both their merges.
