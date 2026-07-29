@@ -49,9 +49,11 @@ All in `forge/standards/workflows.md` unless noted:
   verify `HEAD` before every commit/push (`anti-patterns.md`).
 - **Shared docs & duplicate work** — before editing a regression log / BACKLOG /
   tracker, list the open PRs already in that file; before starting anything, scan open
-  PR titles for your intent (a duplicate wastes a whole branch). Shared-doc edits get
-  their own **commit** (same PR is fine — just never the same commit as the code);
-  date-key new log rows, never a sequential number (`anti-patterns.md`).
+  PR titles for your intent (a duplicate wastes a whole branch). Commit boundaries
+  follow the logical change as usual — a doc edit that is part of the change goes in
+  its commit; a separate concern (regression-log row, BACKLOG status) gets its own,
+  same PR is fine. Date-key new log rows, never a sequential number
+  (`anti-patterns.md`).
 - **Bug-fix pre-flight** — read `memory/project_regression_log.md` BEFORE any
   code; log new fixes there after.
 - **TDD** — failing test first, suite green before commit.
