@@ -100,6 +100,7 @@ function git(args) {
     encoding: 'utf8',
     timeout: GIT_TIMEOUT_MS,
     stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
   }).trim();
 }
 
@@ -186,6 +187,7 @@ function runCli(bin, args) {
     encoding: 'utf8',
     timeout: CLI_TIMEOUT_MS,
     stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
   });
 }
 
@@ -319,6 +321,10 @@ function spawnWorker() {
     const child = spawn(process.execPath, [selfPath, '--repair'], {
       detached: true,
       stdio: 'ignore',
+      // On Windows `detached` allocates a NEW console for the child, which
+      // steals foreground focus. The worker has no console output to show
+      // (stdio is 'ignore'; it logs to forge-freshness.log), so hide it.
+      windowsHide: true,
       env: { ...process.env },
     });
     child.unref();
