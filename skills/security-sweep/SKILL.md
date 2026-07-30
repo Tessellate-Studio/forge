@@ -13,11 +13,17 @@ Follow the triage policy in `Tessellate-Studio/forge` → `standards/security-tr
 
 ## Apps in scope
 
-| App | GitHub | Local checkout | Package roots |
-|---|---|---|---|
-| alate | `Tessellate-Studio/alate` (private) | `C:/Users/mailt/Documents/Tessellate/apps/alate` | `mobile/` **and** `backend/` |
-| badige | `Tessellate-Studio/badige` (private) | `C:/Users/mailt/Documents/Tessellate/apps/badige` | `.` |
-| mood-layer | `Tessellate-Studio/mood-layer` (public) | `C:/Users/mailt/Documents/Tessellate/apps/mood-layer` | `.` |
+**The caller supplies scope.** Which apps to sweep, and where they are checked
+out locally, come from the invoking prompt or scheduled task — not from this
+file. Machine-specific paths do not belong in a versioned, public skill.
+
+Package roots per app, which *are* stable and worth recording here:
+
+| App | Repo | Package roots |
+|---|---|---|
+| alate | `Tessellate-Studio/alate` (private) | `mobile/` **and** `backend/` |
+| badige | `Tessellate-Studio/badige` (private) | `.` |
+| mood-layer | `Tessellate-Studio/mood-layer` (public) | `.` |
 
 Shared audit log: `Tessellate-Studio/litmus` → `auto-ship-log.md` (default branch `main`).
 
