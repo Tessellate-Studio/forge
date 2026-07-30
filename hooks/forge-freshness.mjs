@@ -45,6 +45,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isVersionPinBlocked } from './lib/version-pin.js';
 
 const MARKETPLACE = 'tessellate-forge';
 const PLUGIN = 'forge';
@@ -127,6 +128,16 @@ function installedEntry() {
   }
   const entries = manifest?.plugins?.[`${PLUGIN}@${MARKETPLACE}`] ?? [];
   return entries.find((e) => e.scope === 'user') ?? entries[0] ?? null;
+}
+
+/** Clone HEAD sha, or null when it can't be read. Part of the version-pin block fingerprint. */
+function cloneHead() {
+  try {
+    const sha = git(['rev-parse', 'HEAD']);
+    return /^[0-9a-f]{40}$/.test(sha) ? sha : null;
+  } catch {
+    return null;
+  }
 }
 
 function behindCount() {
@@ -285,6 +296,10 @@ function repair() {
         ts: Date.now(),
         ok: healthy,
         versionPinned,
+        // Fingerprint of the world this verdict was reached in. A version-pinned verdict
+        // stays authoritative only while both still hold; see isVersionPinBlocked().
+        pinnedAtVersion: versionPinned ? versionAfter : undefined,
+        pinnedAtCloneHead: versionPinned ? cloneHead() : undefined,
         from: versionBefore,
         to: versionAfter,
         behindBefore,
@@ -417,34 +432,51 @@ function hook() {
 
   if (!cloneExists) return { problems, notes };
 
+  // Whether a repair is even worth spawning is decided BEFORE describing the drift, so the
+  // description can say what will actually happen. Announcing "a repair has been queued"
+  // and then not queueing one is how a user ends up waiting on a fix that is never coming.
+  const failures = state.consecutiveFailures ?? 0;
+  const backedOff = failures >= MAX_FAILURES_BEFORE_BACKOFF;
+  const interval = backedOff ? BACKOFF_INTERVAL_MS : CHECK_INTERVAL_MS;
+  const due = !state.lastFetch || Date.now() - state.lastFetch > interval;
+  const pinBlocked = isVersionPinBlocked(last, entry, { cacheStale, behind, head: cloneHead() });
+
+  // A live problem earns a spawn ahead of the check interval — noticing one is the whole
+  // point. It does NOT earn an exemption from the failure backoff: a live problem is exactly
+  // what a failing repair leaves behind, so letting it override the backoff made that
+  // backoff unreachable in the only situation it exists for.
+  const willRepair = !pinBlocked && (due || (liveProblem && !backedOff));
+  const queued = willRepair ? ' A repair has been queued.' : '';
+
   if (cacheStale) {
     problems.push(
       `forge standards in the plugin cache (v${entry.version}) differ from the marketplace ` +
-        `clone on disk — the clone has rules that were never extracted. A repair has been queued.`
+        `clone on disk — the clone has rules that were never extracted.${queued}`
     );
   }
 
   if (behind) {
     problems.push(
-      `the ${MARKETPLACE} clone is ${behind} commit(s) behind origin/master. A repair has been queued.`
+      `the ${MARKETPLACE} clone is ${behind} commit(s) behind origin/master.${queued}`
     );
   }
 
-  // Decide whether to kick the detached worker. Backoff after repeated failures so a
-  // broken CLI doesn't spawn a doomed process on every single session start.
-  const failures = state.consecutiveFailures ?? 0;
-  const interval = failures >= MAX_FAILURES_BEFORE_BACKOFF ? BACKOFF_INTERVAL_MS : CHECK_INTERVAL_MS;
-  const due = !state.lastFetch || Date.now() - state.lastFetch > interval;
-
-  if (due || liveProblem) {
-    if (failures >= MAX_FAILURES_BEFORE_BACKOFF) {
-      problems.push(
-        `automatic repair has failed ${failures} times in a row — it is now backed off to ` +
-          `daily. See ${logPath} and fix it manually.`
-      );
-    }
-    spawnWorker();
+  if (pinBlocked) {
+    problems.push(
+      `automatic repair is latched off for this one — retrying cannot fix version-pinned ` +
+        `staleness, so it has stopped trying. Fix it with a forced reinstall: ` +
+        `claude plugin uninstall ${PLUGIN}@${MARKETPLACE} && ` +
+        `claude plugin install ${PLUGIN}@${MARKETPLACE}. The latch releases on its own if ` +
+        `the clone or the installed version moves.`
+    );
+  } else if (backedOff && willRepair) {
+    problems.push(
+      `automatic repair has failed ${failures} times in a row — it is now backed off to ` +
+        `daily. See ${logPath} and fix it manually.`
+    );
   }
+
+  if (willRepair) spawnWorker();
 
   return { problems, notes };
 }

@@ -33,10 +33,11 @@
     "./integrations": "./standards-cli/lib/integrations/index.js"
   },
   "scripts": {
-    "test": "npm run test:standards && npm run test:rubric && npm run test:workflows",
+    "test": "npm run test:standards && npm run test:rubric && npm run test:workflows && npm run test:hooks",
     "test:standards": "jest --config standards-cli/jest.config.js",
     "test:rubric": "jest --config rubric/jest.config.js",
     "test:workflows": "jest --config references/jest.config.js",
+    "test:hooks": "jest --config hooks/jest.config.js",
     "test:coverage": "jest --config standards-cli/jest.config.js --coverage && jest --config rubric/jest.config.js --coverage",
     "lint": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ --fix",
     "lint:check": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/",
