@@ -25,6 +25,7 @@ inherits it — interchangeable, inter-usable, self-learning (via reviewed PRs).
 | `skills/roadmap-pulse/` | Weekly planning-doc honesty pass + rubric-scored priorities. |
 | `skills/new-app/` | Scaffold a new platform-wired app from a requirements brief. |
 | `skills/security-sweep/` | Dependency vulnerability sweep — triage, safe auto-fix, dismiss accepted residuals. Implements `standards/security-triage.md`. |
+| `skills/crash-monitor/` | Daily Sentry + GitHub Issues triage — noise filters, confidence-gated auto-fix, revert cooldown. |
 | `standards/workflows.md` | **Single home** for all working rules (branch placement, TDD, quality pass, status updates, etc.). |
 | `standards/anti-patterns.md` | The 14 app-agnostic build guardrails. |
 | `standards/authoritative-claims.md` | The core rule: cite a source or label a hypothesis. |
