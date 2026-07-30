@@ -224,7 +224,7 @@ Everything built here ships to **test/preview** (OTA to the `preview` channel), 
    - Labels: `pulse-auto-build`, `auto-generated`
 4. **Auto-merge:** enable auto-merge via `gh pr merge --squash --auto <pr-number>`.
 5. **Update BACKLOG:** mark the entry with status `DONE — <date>, PR #<n>` and the merged SHA once it lands. Collapse to a one-line tombstone per the "Docs stay lean" standard.
-6. **Log:** append to `BoTessellate/litmus` auto-ship-log.md:
+6. **Log:** append to `Tessellate-Studio/litmus` auto-ship-log.md (default branch `main`):
    `| <date> | roadmap-pulse | <repo> | PR #<n> | <1-line what> | P0 auto-build |`
 
 **Cap at 2 items per run.** If more than 2 items qualify, build the top 2 by score. The rest stay in the priority list for next week (or the user picks them up manually).
