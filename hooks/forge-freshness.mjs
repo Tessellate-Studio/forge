@@ -22,6 +22,25 @@
  * time the hook runs. It makes the NEXT session correct. That limit is inherent, not a
  * defect — the hook says so in its message rather than implying it self-heals in place.
  *
+ * OFF SWITCH: set FORGE_FRESHNESS_DISABLE=1 and neither mode runs. Nothing else to undo.
+ *
+ * RATE CEILING. This hook spawns a process on session start, so a repair that cannot succeed
+ * is a repair that runs forever — observed 2026-07-29, one console window per session for a
+ * whole working day. Three independent limits, deliberately layered, because the first two
+ * require correctly diagnosing the failure and the third does not:
+ *
+ *   1. isVersionPinBlocked()  — latches off the one drift a retry provably cannot fix.
+ *   2. consecutiveFailures    — backs repeated genuine failures down to daily.
+ *   3. MIN_SPAWN_INTERVAL_MS  — a floor on ANY spawn, whatever the reason. This is the one
+ *                               that covers failure modes nobody has characterised yet, so
+ *                               nothing is allowed to bypass it. When adding a new "but we
+ *                               should really check now" condition, put it inside this floor.
+ *
+ * The floor is measured from lastATTEMPT, which advances on every spawn. Measuring from
+ * lastFetch (which only advances on SUCCESS) is what made limits 1 and 2 unreachable: a
+ * failing fetch left the check permanently due. If state cannot be persisted the throttle
+ * cannot work, so the hook fails CLOSED and skips the repair rather than run it unbounded.
+ *
  * SHIPPED WITH THE PLUGIN, registered via hooks/hooks.json. Two consequences:
  *
  *   - All mutable state (throttle, lock, log) lives under the user's ~/.claude/hooks/,
@@ -46,6 +65,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isVersionPinBlocked } from './lib/version-pin.js';
+import { shouldSpawnRepair } from './lib/spawn-decision.js';
 
 const MARKETPLACE = 'tessellate-forge';
 const PLUGIN = 'forge';
@@ -53,6 +73,9 @@ const PLUGIN = 'forge';
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // network check at most hourly (worker is detached, so this costs no session latency)
 const BACKOFF_INTERVAL_MS = 24 * 60 * 60 * 1000; // after repeated failures, back off to daily
 const MAX_FAILURES_BEFORE_BACKOFF = 3;
+// Hard rate ceiling. NOTHING bypasses this — not a live problem, not a fresh install, not a
+// failure mode nobody has thought of yet. See the "RATE CEILING" note in the header.
+const MIN_SPAWN_INTERVAL_MS = 10 * 60 * 1000;
 const LOCK_STALE_MS = 15 * 60 * 1000;
 const GIT_TIMEOUT_MS = 20_000;
 const CLI_TIMEOUT_MS = 180_000;
@@ -77,13 +100,16 @@ function readState() {
   }
 }
 
+/** @returns {boolean} whether the patch actually reached disk. */
 function writeState(patch) {
   try {
     fs.mkdirSync(hooksDir, { recursive: true });
     // Merge rather than overwrite: hook mode and worker mode both own different fields.
     fs.writeFileSync(statePath, JSON.stringify({ ...readState(), ...patch }, null, 2));
+    return true;
   } catch {
     /* a read-only state file must never break session start */
+    return false;
   }
 }
 
@@ -437,16 +463,41 @@ function hook() {
   // and then not queueing one is how a user ends up waiting on a fix that is never coming.
   const failures = state.consecutiveFailures ?? 0;
   const backedOff = failures >= MAX_FAILURES_BEFORE_BACKOFF;
-  const interval = backedOff ? BACKOFF_INTERVAL_MS : CHECK_INTERVAL_MS;
-  const due = !state.lastFetch || Date.now() - state.lastFetch > interval;
   const pinBlocked = isVersionPinBlocked(last, entry, { cacheStale, behind, head: cloneHead() });
 
-  // A live problem earns a spawn ahead of the check interval — noticing one is the whole
-  // point. It does NOT earn an exemption from the failure backoff: a live problem is exactly
-  // what a failing repair leaves behind, so letting it override the backoff made that
-  // backoff unreachable in the only situation it exists for.
-  const willRepair = !pinBlocked && (due || (liveProblem && !backedOff));
-  const queued = willRepair ? ' A repair has been queued.' : '';
+  // Throttle on lastATTEMPT, not lastFetch. lastFetch only advances when a fetch SUCCEEDS
+  // (deliberately — see the fetch handler in repair()), so gating on it meant any persistent
+  // fetch failure left the check permanently due and spawned a worker on every session.
+  // An attempt counts as an attempt whether or not it achieved anything.
+  const decision = shouldSpawnRepair({
+    now: Date.now(),
+    lastAttempt: state.lastAttempt,
+    intervalMs: backedOff ? BACKOFF_INTERVAL_MS : CHECK_INTERVAL_MS,
+    minIntervalMs: MIN_SPAWN_INTERVAL_MS,
+    liveProblem,
+    backedOff,
+    pinBlocked,
+  });
+  // Spawn first, describe second. Recording the attempt can fail (read-only state file), and
+  // that turns a queued repair into a skipped one — so the outcome has to be known before any
+  // message claims it happened.
+  //
+  // The record is written BEFORE the spawn and the spawn only happens if it survived: without
+  // persistable state the throttle above cannot function, and an unthrottleable repair loop is
+  // worse than no repair at all. This is the one place the hook deliberately fails CLOSED, and
+  // it reports rather than swallows — a silently disabled self-repair is precisely the failure
+  // this hook exists to catch.
+  let spawned = false;
+  let attemptUnrecordable = false;
+  if (decision.spawn) {
+    if (writeState({ lastAttempt: Date.now() })) {
+      spawned = spawnWorker();
+    } else {
+      attemptUnrecordable = true;
+    }
+  }
+
+  const queued = spawned ? ' A repair has been queued.' : '';
 
   if (cacheStale) {
     problems.push(
@@ -469,19 +520,34 @@ function hook() {
         `claude plugin install ${PLUGIN}@${MARKETPLACE}. The latch releases on its own if ` +
         `the clone or the installed version moves.`
     );
-  } else if (backedOff && willRepair) {
+  } else if (backedOff && spawned) {
     problems.push(
       `automatic repair has failed ${failures} times in a row — it is now backed off to ` +
         `daily. See ${logPath} and fix it manually.`
     );
   }
 
-  if (willRepair) spawnWorker();
+  if (attemptUnrecordable) {
+    problems.push(
+      `cannot record a repair attempt (${statePath} is not writable), so the automatic ` +
+        `repair was skipped rather than run unthrottled — it would otherwise retry on every ` +
+        `session. Fix that file's permissions, or set FORGE_FRESHNESS_DISABLE=1 to turn this ` +
+        `check off entirely.`
+    );
+  }
 
   return { problems, notes };
 }
 
 // ---------------------------------------------------------------- entry
+
+// OFF SWITCH. Checked before anything else, and before either mode runs, so setting it stops
+// both the session-start check and any new worker. Deliberately silent: a hook that printed a
+// notice every session would be its own kind of nuisance. Unsetting it resumes normal
+// behaviour with no other state to undo.
+if (/^(1|true|yes|on)$/i.test(process.env.FORGE_FRESHNESS_DISABLE ?? '')) {
+  process.exit(0);
+}
 
 if (process.argv.includes('--repair')) {
   try {
