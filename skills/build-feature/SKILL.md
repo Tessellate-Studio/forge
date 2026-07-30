@@ -350,6 +350,15 @@ good PRs and destroys feedback speed, so the bulk of E2E runs *post*-merge.
 6. Report with the **bottom line first**, the measured verdicts, the screenshot,
    and only the sections that have real content (per the repo's communication
    style). If you added a regression-worthy fix, log it.
+7. **Worktree cleanup.** Before reporting done, prune stale git worktrees left
+   by this session or earlier ones. Run `git worktree list` — any worktree
+   whose branch is merged or whose path sits outside `.claude/worktrees/` and
+   is no longer needed gets `git worktree remove --force <path>`. Then
+   `git worktree prune` to clear dangling refs. On Windows, deeply-nested
+   React Native build caches may exceed MAX_PATH — use `subst Z: <parent>;
+   cmd /c "rmdir /s /q Z:\<dir>"; subst Z: /d` as a fallback for orphaned
+   directories that `git worktree remove` can't delete. Don't leave worktree
+   directories cluttering the project's parent folder.
 
 ## Step 7 — Closing retro (MANDATORY — answer in the final report, don't skip)
 
@@ -407,6 +416,7 @@ promote into the relevant skill or standard so the next build inherits it.
   guidance for the initial implementation, not a post-hoc check.
 - Status update (Step 6): BACKLOG / regression-log / tracker entry that spawned
   this work gets its status + PR + SHA updated in the same PR.
+- Worktree cleanup (Step 6): `git worktree list` → remove stale → `git worktree prune`.
 - Closing retro (Step 7, mandatory): least-confident seams / what the user
   can't see / what would've been faster — answered with evidence, then routed
   (test, tracker entry, or skill update).
