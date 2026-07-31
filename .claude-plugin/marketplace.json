@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Build platform for Tessellate apps — shared skills (plan, build-feature, roadmap-pulse, new-app, security-sweep, crash-monitor), standards, CLIs, RICE-based scoring, and multi-agent build workflows.",
-    "version": "0.7.1"
+    "version": "0.7.2"
   },
   "plugins": [
     {

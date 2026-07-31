@@ -127,6 +127,30 @@ Quick summary of the four failure modes:
 
 Rewrites use the templates in [`references/rewrite-patterns.md`](references/rewrite-patterns.md). Read it before drafting rewrites so the rewrites blend with each doc's house style.
 
+**Also check the checkouts themselves, not just their logs.** The honesty pass
+runs `git log` against each scoped repo's local checkout — but a checkout can
+lie by *state* while its log reads fine: parked on a branch whose PR merged
+weeks ago, N commits behind origin, or carrying uncommitted changes nobody
+remembers. (Found in practice, 2026-07-31: one tool repo parked 23-behind on a
+long-merged branch — which made a session read its standards as missing rules
+that had shipped — plus dirty trees in two app repos.) For every repo in the
+scope table:
+
+```bash
+git -C <checkout> fetch origin --quiet
+git -C <checkout> rev-parse --abbrev-ref HEAD          # parked branch?
+git -C <checkout> rev-list --left-right --count HEAD...origin/<default>
+git -C <checkout> status --porcelain | wc -l           # dirty count
+```
+
+Fix only what is provably safe, report the rest:
+- Parked on a branch whose PR is **MERGED** → rename to `done/<branch>`,
+  checkout the default branch, `git pull --ff-only`.
+- Clean checkout behind origin → `git pull --ff-only`.
+- Dirty files or unpushed commits → **never discard; report** with the file
+  list. They may be another live session's work. Unstaged *deletions* of
+  committed files may be restored (content is in git; nothing is lost).
+
 **Critical:** Step 2 onward operates ONLY on items confirmed truly-open by Step 1. A ghost item shouldn't get scored.
 
 ### Step 2 — Context pull (current goals)
