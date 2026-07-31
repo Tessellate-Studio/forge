@@ -111,6 +111,63 @@ the second, already failing; `FitResultErrorCard` — three PRs targeted an
 `ActivityIndicator` a button swaps in while busy (~2.2 s), both billed to
 whichever test awaited first. 12,275–15,242 ms → 49 ms once paid in `beforeAll`.*
 
+## A re-export from a hub module turns "one value" into "the whole graph"
+
+**A module that imports the world makes every one of its exports expensive to
+import — including the ones it merely re-exports from somewhere cheap.** The
+callsite gives no hint: `import { tabPillScrollClearance } from '../navigation/AppNavigator'`
+reads exactly like any other import while pulling eleven screens plus
+`native-stack` and `bottom-tabs`.
+
+The multiplier is jest: **each test file gets a fresh module registry**, so the
+graph is rebuilt per file, not once per run. *"Every single test file constructs
+the module graph from scratch and has to pay for that cost"* — a 6 s graph across
+100 test files burns 10 minutes doing no testing
+([marvinh.dev](https://marvinh.dev/blog/speeding-up-javascript-ecosystem-part-7/)).
+
+Measured on one app, cold, per test file:
+
+| suite | modules loaded | module-load cost removed |
+|---|---|---|
+| `navigator.avatarGate.test.ts` | 803 → **25** | 94 % |
+| `HomeScreen.test.tsx` | 741 → **120** | 82 % |
+| `screenSmoke.test.tsx` | 663 → **409** | 30 % |
+
+The `navigator.avatarGate` case wanted **four lines of pure logic**
+(`return avatar ? 'Main' : 'AvatarSetup'`) and loaded 778 modules to reach them.
+
+So:
+
+- **`import type` is load-bearing, not style.** Babel elides an import whose
+  specifiers are all used as types, so one keyword is the entire difference
+  between a free import and a 600-module one. Mark type-only imports explicitly;
+  do not leave it to inference that the next edit can silently break.
+- **Put the leaf where it belongs, and do not re-export it from the hub.** A
+  re-export "for convenience" is exactly the mechanism. If a constant lives in
+  the component that defines it, import it from there.
+- **Auditing direct importers does not predict breakage.** The real consumer can
+  be a *sibling package* reached transitively. *Precedent: an audit of every
+  direct importer passed, and two suites still failed with
+  `(0 , _native.createScreenFactory) is not a function` — because a screen pulled
+  the navigator, the navigator pulled `native-stack`, and `native-stack` consumes
+  `@react-navigation/native`'s internals.*
+- **CI will not catch this.** All 824 tests stayed green through every instance
+  above. Guard it with a lint rule — `@typescript-eslint/no-restricted-imports`
+  with `allowTypeImports: true` names hub modules and permits types while
+  erroring on value imports.
+
+**Why:** it is invisible, it compounds per test file, and nothing goes red.
+Atlassian removed barrel files across 90,000+ files for **~50 % faster unit
+tests** (up to 10× on some packages) and **75 % fewer build minutes**
+([atlassian.com](https://www.atlassian.com/blog/atlassian-engineering/faster-builds-when-removing-barrel-files));
+Next.js ships `optimizePackageImports` to rewrite these imports automatically,
+worth 15–70 % on dev builds
+([vercel.com](https://vercel.com/blog/how-we-optimized-package-imports-in-next-js)).
+*Precedent: four instances in four days on one app — and one of them had a
+correct example (`AccountScreen` importing the same constant from the leaf)
+sitting in the same codebase, and was still missed in review.* Full decision:
+`memory/decisions/rfd-002-module-graph-cost-as-a-platform-rule.md`.
+
 ## No hardcoded colours, fonts, or alpha values (was #10)
 
 Every colour, font family, and alpha tint comes from a theme token
