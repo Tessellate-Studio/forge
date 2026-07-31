@@ -31,7 +31,7 @@ failing test**. Backend = vitest, mobile = jest.
 **Why:** these flows have legal/audit implications; the test is the canary
 against a silent regression.
 
-## A test times out where it yields — never raise the timeout to fix a flake
+## A test timeout fires where the test YIELDS, not where the time is SPENT — and never raise the timeout
 
 **A per-test timeout can only fire where the test hands control back to the
 runtime.** Synchronous work — module load, a cold `render`, the first
@@ -44,18 +44,34 @@ flaky test is rarely the slow one; it is the awaiting one.**
 Yielding is necessary but not sufficient — the yield must reach the event loop's
 **timer phase**. `waitFor` polls on real interval timers, so it reliably gets
 there; a microtask-only `act(async () => {})` settle usually does not (an
-awaiting `act()` test passed at 15,562 ms). So:
+awaiting `act()` test passed at 15,562 ms). So the `await` you are looking at is
+where the bill is *presented*, and very often not where it was *incurred*. **Do
+not start by rewriting it.**
+
+### Diagnose in this order
+
+1. **Time each step, not the test.** One `Date.now()` around each line names the
+   culprit in a single run. Test-level duration only gives you the total, and
+   the reported frame is just whichever call yielded first — routinely an
+   innocent one. *Precedent: a 5,000 ms budget blown by 13,021 ms of
+   `execSync('npm audit')` — reported against a 59 ms `generateDocs` two calls
+   downstream. The audit could not even succeed (no lockfile → `ENOLOCK`), so the
+   fix was to delete the work, not defer it.*
+2. **Then ask: expensive, or expensive *once*?** Repeat the same step three
+   times in one test. A per-call cost needs optimising; a first-call cost needs
+   *relocating* — opposite fixes. This is the step that gets skipped.
+3. **Fix it where it belongs.** One-time costs (first render of a screen, first
+   render of a component only one branch mounts, first use of a lazily
+   initialised module) go in `beforeAll` with an **explicit hook timeout** —
+   hooks share the same default the cost overruns, so the override is
+   load-bearing, not decoration. Per-call costs get optimised instead.
+
+### Then apply these
 
 - **When the awaited work is a mocked immediately-resolved promise, `waitFor`
   buys nothing but exposure.** Settle it inside `act()` and assert
   synchronously. Check the mock first — a `waitFor` over a genuinely deferred or
   never-resolving promise must stay.
-- **Time the steps before you trust the stack.** The reported frame is just
-  whichever call yielded first, so it is routinely an innocent one. Instrument
-  each step and fix whatever actually burned the budget. *Precedent: a 5,000 ms
-  budget blown by 13,021 ms of `execSync('npm audit')` — reported against a
-  59 ms `generateDocs` two calls downstream. The audit could not even succeed
-  (no lockfile → `ENOLOCK`), so the fix was to delete the work, not defer it.*
 - **Fire an async handler inside the act scope**, not before it:
   `await act(async () => { fireEvent.press(…) })`. `fireEvent`'s own `act()`
   covers only the synchronous part of the handler; post-`await` `setState` lands
@@ -64,19 +80,93 @@ awaiting `act()` test passed at 15,562 ms). So:
   load-scaling intact. *Precedent: one such raise (5 s → 15 s) bought 3× while
   machine load ate 20×; the next failure was 19,111 ms — over the raised ceiling
   too.*
-- **Verify cold.** A warm jest transform cache hides this class completely: one
-  file was green across three full runs and failed **2 of 3** with
-  `npx jest --clearCache` first (21,885 ms / 5,831 ms), the passing run clearing
-  the budget by 543 ms. A green warm run is not evidence a timeout flake is
-  fixed — which is exactly how one such "fix" shipped incomplete and its file
-  still failed cold afterwards.
+- **Verify cold, and in the full file.** A warm jest transform cache hides this
+  class completely: one file was green across three full runs and failed **2 of
+  3** with `npx jest --clearCache` first (21,885 ms / 5,831 ms), the passing run
+  clearing the budget by 543 ms. A solo repro of the failing test is a *different
+  program* and will lie to you — one such test measured alone reported `render`
+  4,938 ms / `changeText` 3,073 ms; in its real file those were 11 ms and
+  5,553 ms. A green warm run is not evidence a timeout flake is fixed — which is
+  exactly how one such "fix" shipped incomplete and its file still failed cold
+  afterwards.
+- **Watch for the test that escapes.** A synchronous test never yields, so it can
+  absorb seconds invisibly and always pass; the bill then lands on the first
+  *awaiting* test, which looks like the broken one. Deliberately parking cost in a
+  synchronous test therefore "works", but it is order-dependent and stops working
+  silently the moment someone adds an awaiting test above it — prefer `beforeAll`.
 
 **Why:** every symptom points at the wrong test. The slowest test is the safest
 one, the failure is non-deterministic and machine-dependent, and React emits
 **zero** "not wrapped in act" warnings — so the act-warning theory is not the
-mechanism. *Precedent: three regression rows on one codebase (alate 63,
-2026-07-26a, 2026-07-26b) before the pattern was named; the third was found only
-by inspecting the structural twin of the second, and it was already failing.*
+mechanism. This class produced five regressions across four files and roughly
+eight PRs on one app, and several of those PRs each moved a real cost without
+fixing the flake, because timing was read at test granularity — where the bill
+lands — instead of step granularity, where it is incurred. It also stops being a
+CI-only nuisance once a pre-push hook runs the suite: then it blocks pushes.
+*Precedents: three regression rows (alate 63, 2026-07-26a, 2026-07-26b) before
+the pattern was named, the third found only by inspecting the structural twin of
+the second, already failing; `FitResultErrorCard` — three PRs targeted an
+`await act` costing **14 ms** while a single `changeText` cost **5,553 ms**; and
+`ShareMeasurementsScreen` — a first render (~3.1 s) plus the first render of the
+`ActivityIndicator` a button swaps in while busy (~2.2 s), both billed to
+whichever test awaited first. 12,275–15,242 ms → 49 ms once paid in `beforeAll`.*
+
+## A re-export from a hub module turns "one value" into "the whole graph"
+
+**A module that imports the world makes every one of its exports expensive to
+import — including the ones it merely re-exports from somewhere cheap.** The
+callsite gives no hint: `import { tabPillScrollClearance } from '../navigation/AppNavigator'`
+reads exactly like any other import while pulling eleven screens plus
+`native-stack` and `bottom-tabs`.
+
+The multiplier is jest: **each test file gets a fresh module registry**, so the
+graph is rebuilt per file, not once per run. *"Every single test file constructs
+the module graph from scratch and has to pay for that cost"* — a 6 s graph across
+100 test files burns 10 minutes doing no testing
+([marvinh.dev](https://marvinh.dev/blog/speeding-up-javascript-ecosystem-part-7/)).
+
+Measured on one app, cold, per test file:
+
+| suite | modules loaded | module-load cost removed |
+|---|---|---|
+| `navigator.avatarGate.test.ts` | 803 → **25** | 94 % |
+| `HomeScreen.test.tsx` | 741 → **120** | 82 % |
+| `screenSmoke.test.tsx` | 663 → **409** | 30 % |
+
+The `navigator.avatarGate` case wanted **four lines of pure logic**
+(`return avatar ? 'Main' : 'AvatarSetup'`) and loaded 778 modules to reach them.
+
+So:
+
+- **`import type` is load-bearing, not style.** Babel elides an import whose
+  specifiers are all used as types, so one keyword is the entire difference
+  between a free import and a 600-module one. Mark type-only imports explicitly;
+  do not leave it to inference that the next edit can silently break.
+- **Put the leaf where it belongs, and do not re-export it from the hub.** A
+  re-export "for convenience" is exactly the mechanism. If a constant lives in
+  the component that defines it, import it from there.
+- **Auditing direct importers does not predict breakage.** The real consumer can
+  be a *sibling package* reached transitively. *Precedent: an audit of every
+  direct importer passed, and two suites still failed with
+  `(0 , _native.createScreenFactory) is not a function` — because a screen pulled
+  the navigator, the navigator pulled `native-stack`, and `native-stack` consumes
+  `@react-navigation/native`'s internals.*
+- **CI will not catch this.** All 824 tests stayed green through every instance
+  above. Guard it with a lint rule — `@typescript-eslint/no-restricted-imports`
+  with `allowTypeImports: true` names hub modules and permits types while
+  erroring on value imports.
+
+**Why:** it is invisible, it compounds per test file, and nothing goes red.
+Atlassian removed barrel files across 90,000+ files for **~50 % faster unit
+tests** (up to 10× on some packages) and **75 % fewer build minutes**
+([atlassian.com](https://www.atlassian.com/blog/atlassian-engineering/faster-builds-when-removing-barrel-files));
+Next.js ships `optimizePackageImports` to rewrite these imports automatically,
+worth 15–70 % on dev builds
+([vercel.com](https://vercel.com/blog/how-we-optimized-package-imports-in-next-js)).
+*Precedent: four instances in four days on one app — and one of them had a
+correct example (`AccountScreen` importing the same constant from the leaf)
+sitting in the same codebase, and was still missed in review.* Full decision:
+`memory/decisions/rfd-002-module-graph-cost-as-a-platform-rule.md`.
 
 ## No hardcoded colours, fonts, or alpha values (was #10)
 
@@ -296,50 +386,6 @@ because no one said "merge" — pure waste, and every commit landing on
 master meanwhile widened the gap it would have to reconcile.* Sibling of
 the concurrent-session rule (that's don't-corrupt-the-op; this is
 don't-let-it-rot).
-
-## A test timeout fires where the test YIELDS, not where the time is SPENT
-
-When a component test times out, do **not** start by rewriting the `await`. A
-jest/vitest timeout can only interrupt at a yield that reaches the event loop's
-timer phase — `waitFor` polls on real interval timers and reliably gets there; a
-microtask-only `await act(async () => {})` usually does not. So the `await` you
-are looking at is where the bill is *presented*, and very often not where it was
-*incurred*. Diagnose in three steps, in this order:
-
-1. **Time each step, not the test.** One `Date.now()` around each line names the
-   culprit in a single run. Test-level duration only gives you the total.
-2. **Then ask: expensive, or expensive *once*?** Repeat the same step three
-   times in one test. A per-call cost needs optimising; a first-call cost needs
-   *relocating* — opposite fixes. This is the step that gets skipped.
-3. **Fix it where it belongs.** One-time costs (first render of a screen, first
-   render of a component only one branch mounts, first use of a lazily
-   initialised module) go in `beforeAll` with an **explicit hook timeout** —
-   hooks share the same default the cost overruns, so the override is
-   load-bearing, not decoration. Per-call costs get optimised instead.
-
-**Verify cold, and in the full file.** `jest --clearCache` before each run; a
-green warm run is not evidence. A solo repro of the failing test is a *different
-program* and will lie to you — one such test measured alone reported `render`
-4,938 ms / `changeText` 3,073 ms; in its real file those were 11 ms and
-5,553 ms.
-
-**Watch for the test that escapes.** A synchronous test never yields, so it can
-absorb seconds invisibly and always pass; the bill then lands on the first
-*awaiting* test, which looks like the broken one. Deliberately parking cost in a
-synchronous test therefore "works", but it is order-dependent and stops working
-silently the moment someone adds an awaiting test above it — prefer `beforeAll`.
-
-**Why:** this class produced five regressions across four files and roughly
-eight PRs on one app, and several of those PRs each moved a real cost without
-fixing the flake, because timing was read at test granularity — where the bill
-lands — instead of step granularity, where it is incurred. It also stops being a
-CI-only nuisance once a pre-push hook runs the suite: then it blocks pushes.
-*Precedent: alate's `FitResultErrorCard` — three PRs targeted an `await act`
-costing **14 ms** while a single `changeText` cost **5,553 ms**; and
-`ShareMeasurementsScreen` — a first render (~3.1 s) plus the first render of the
-`ActivityIndicator` a button swaps in while busy (~2.2 s), both billed to
-whichever test awaited first. 12,275–15,242 ms → 49 ms once paid in
-`beforeAll`.*
 
 ---
 

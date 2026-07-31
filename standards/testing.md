@@ -72,6 +72,55 @@ artifact — APKs are never built on a laptop.
   regression log + BACKLOG with priority; cosmetic → BACKLOG.
 - Sign-off is the human's — never claim UAT passed on the user's behalf.
 
+## Measuring test performance (do this before optimising anything)
+
+Test-speed work goes wrong in a specific way: the numbers lie. Follow this or the
+conclusion will be confidently wrong.
+
+**Wall clock across separate runs is not evidence.** On thermally-throttling
+hardware the *same* variant measured **93 / 43 / 22 / 21 s** across four
+consecutive cold runs as the machine came off the throttle — a spread wider than
+almost any change worth measuring. A before/after taken from two separate
+invocations measures the weather.
+
+**Pair the variants inside ONE invocation.** Write both as test files and run
+them together:
+
+```bash
+npx jest --no-cache --maxWorkers=2 --no-coverage src/__tests__/__pairL.test.tsx src/__tests__/__pairR.test.tsx
+```
+
+Two worker processes, so each pays its own transform; `--no-cache` stops the
+second reading the first's disk cache. Both see identical machine state. Read the
+per-suite times jest prints beside each `PASS`.
+
+**Always run the A-vs-A control first** — the same variant on both sides.
+Measured noise floor: **72.214 s vs 72.183 s = 0.04 %**. Without that number no
+paired result is trustworthy. Then swap sides to cancel left/right asymmetry. The
+method is mildly *conservative*: the two suites run concurrently, so a saving in
+one slightly benefits the other.
+
+**Prefer metrics that cannot drift.** Module counts are deterministic; a
+within-run ratio (numerator and denominator from the same run) cancels drift.
+Quote wall clock only from a paired run.
+
+**For per-module attribution, instrument the transformer, not the test.** Wrap
+`babel-jest`, record transform time per file, and inject a prologue/epilogue that
+computes execution self-time. **The prologue must charge the module's own
+transform time to the *parent* frame before pushing its own** — otherwise parents
+absorb their children and the attribution is garbage. Cost of the instrument
+itself: unmeasurable (46.1 s instrumented vs 46.4 s not).
+
+**Cold module load is mostly transform.** Measured across 449 modules: **23,695
+ms transform vs 11,572 ms execute**. The lever is therefore how many modules get
+pulled, not how fast they run — see "A re-export from a hub module turns 'one
+value' into 'the whole graph'" in `standards/anti-patterns.md`.
+
+**Know what a full-run saving actually is.** Transform is paid once per cold run
+(jest's on-disk cache is shared across workers and suites); execution is paid per
+suite. Removing a dependency from one suite saves that suite's execution every
+time, but the transform only if no other suite still pulls it.
+
 ## Adding E2E for a new app
 
 1. Create `litmus/e2e/<app>/` mirroring the alate layout
