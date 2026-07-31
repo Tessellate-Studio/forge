@@ -1,7 +1,7 @@
 # RFD 002: Module-graph cost as a platform rule
 
 **Date:** 2026-07-30
-**State:** published
+**State:** committed
 **Author:** Saptami Ram (with Claude Opus 5)
 
 ## Background
