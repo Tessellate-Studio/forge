@@ -252,8 +252,36 @@ example sitting in the same codebase and was still missed.
    authored as #460's fifth commit but pushed ~19 h after that PR's
    squash-merge, so it never reached master from there.
 3. **Promote to `error`** once alate is clean for one full cycle. ~5 min.
+   **Done — [alate#468](https://github.com/Tessellate-Studio/alate/pull/468)**
+   (2026-07-31). The cycle counted was #467's own CI: lint-mobile green with the
+   rule live, zero hits — plus the structural argument that the pattern can only
+   fire on AppNavigator imports, whose named exports are all types, so a hit is
+   a regression by construction. CI's lint-mobile stays continue-on-error; the
+   teeth are local `npm run lint` and the editor.
 4. **Roll to loom / mood-layer / badige** via their own eslint configs, hub list
    per repo, `warn` → `error` on the same ladder. Only after alate proves it.
+   **Surveyed all three on 2026-07-31; outcomes differ by structure, which is
+   the point of a per-repo hub list:**
+   - **mood-layer — shipped at `warn`**
+     ([mood-layer#49](https://github.com/Tessellate-Studio/mood-layer/pull/49),
+     `4bad3f3`). Every screen already used `import type`; one line-level
+     exemption in `screenSmoke.test.tsx`, whose stated purpose is rendering the
+     REAL navigator end-to-end. Its `pickInitialRoute` deliberately stays on the
+     hub — sole external consumer is that same smoke file, which loads the whole
+     graph anyway, so a leaf extraction would change no measured cost. Extract
+     on the second consumer. Pattern probe-verified against the `@/` alias form.
+   - **loom — not applicable, no rule added.** Serverless API handlers (each an
+     entry point and its own graph root) + a Next.js admin that code-splits per
+     page. No hub exists; the only barrel-file grep hits were node_modules. A
+     rule with an empty hub list is dead config. Revisit if a shared-module hub
+     ever appears.
+   - **badige — deferred, recorded.** A real barrel exists
+     (`src/navigation/index.ts` re-exporting four navigators) but its sole
+     consumer is `App.tsx` importing `RootNavigator` — the entry point, which
+     legitimately loads everything. Repo is dormant (last commit a build
+     chore), on legacy `.eslintrc.js`, with a dirty working tree and the
+     documented dual-clone history. Bootstrapping the guard there is cost
+     without benefit today; apply it when badige development resumes.
 
 Deliberately NOT in scope: the litmus check (see Alternatives), and any sweep of
 other repos for existing offenders — this is a ratchet, not a cleanup.
