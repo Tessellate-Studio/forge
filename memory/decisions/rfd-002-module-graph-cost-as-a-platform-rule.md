@@ -246,6 +246,11 @@ example sitting in the same codebase and was still missed.
 2. **alate PR — ESLint rule at `warn`.** One config file; hub list is
    `navigation/AppNavigator` (the only known hub). Verify `lint-mobile` still
    passes and that the two alate#460 fixes keep it silent. ~30 min.
+   **Done — [alate#467](https://github.com/Tessellate-Studio/alate/pull/467)**
+   (plus the eight screens converted to explicit `import type`, which the rule
+   rightly flagged as syntactic value imports). Ported to its own PR: it was
+   authored as #460's fifth commit but pushed ~19 h after that PR's
+   squash-merge, so it never reached master from there.
 3. **Promote to `error`** once alate is clean for one full cycle. ~5 min.
 4. **Roll to loom / mood-layer / badige** via their own eslint configs, hub list
    per repo, `warn` → `error` on the same ladder. Only after alate proves it.
