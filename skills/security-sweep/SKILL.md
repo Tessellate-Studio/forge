@@ -46,6 +46,13 @@ repo root has its own lockfile too, but it audits clean; don't stop there.
   requires `node_modules` in both `backend/` and `mobile/`, and a fresh worktree
   isn't bootstrapped. Switch the main checkout's branch, do the work, then
   restore the original branch when finished.
+- **Record the starting ref before you touch anything** — `git rev-parse
+  --abbrev-ref HEAD`, and `git rev-parse HEAD` as well when it prints `HEAD`
+  (alate is routinely left on a detached commit). Step 6 restores it, and there
+  is no way to recover it once you have switched away.
+- **Every branch you create is yours to delete** — see Step 6. The sweep opens
+  four to five branches a cycle; unless they are cleaned up they accumulate in
+  every repo indefinitely.
 - alate's `master` is the default branch; so is badige's. litmus uses `main`.
 
 ## Step 1: Scan for vulnerabilities
@@ -323,6 +330,81 @@ For critical/no-patch: 1-line summary with link + **inline explanation of what's
 
 If all apps are clean: `"No open vulnerabilities — clean sweep."`
 
+## Step 6: Clean up the branches this sweep created
+
+A sweep that leaves its branches behind is a sweep that quietly litters four
+repos every fortnight. By 2026-08-03 there were **13 stale `security-sweep/*`
+branches** across the five repos, the oldest from 2026-07-28 — none of them
+deleted, because `delete_branch_on_merge` was `false` everywhere. Do both
+halves below; the setting prevents the next mess, the sweep only cleans its own.
+
+### 6a. Make sure the repo deletes merged branches for you
+
+Check once per repo per sweep — it's one call and it is the fix that lasts:
+
+```bash
+gh api repos/Tessellate-Studio/<repo> -q '.delete_branch_on_merge'
+```
+
+If `false`, turn it on (this is a repo settings change — it is in scope for the
+sweep because the sweep is what creates the branches):
+
+```bash
+gh api -X PATCH repos/Tessellate-Studio/<repo> -F delete_branch_on_merge=true
+```
+
+With this on, GitHub deletes the remote branch the moment the PR squash-merges
+and later sweeps need no remote cleanup at all.
+
+### 6b. Delete the local branch — GitHub can't do this half
+
+`delete_branch_on_merge` only touches the remote. The local branch in the
+checkout survives, and so does its now-dangling remote-tracking ref.
+
+**Verify the PR actually merged before deleting anything.** Never infer it from
+the branch being "old":
+
+```bash
+gh pr list -R Tessellate-Studio/<repo> --head <branch> --state all -q '.[0].state'
+```
+
+Only when that prints `MERGED`:
+
+```bash
+git -C <checkout> remote prune origin
+git -C <checkout> branch -D <branch>
+```
+
+**`-D` is required, and that is expected — not a warning sign.** These PRs are
+squash-merged, so the branch tip is never an ancestor of the default branch
+(`gh api .../compare/<default>...<branch>` reports `ahead_by=1` even though the
+content is fully merged). `git branch -d` will always refuse. The merged-PR
+check above is what makes `-D` safe; without it, `-D` is a data-loss risk.
+
+Do this only for branches **this sweep created**. If you find older
+`security-sweep/*` branches from previous runs, they are safe to clean the same
+way — merged-PR check first, every time — but say so in the summary rather than
+deleting them silently.
+
+### 6c. Then restore the checkout
+
+Delete the branches first, restore last — you cannot delete the branch you are
+standing on. Return each checkout to the branch (or detached commit) you found
+it on, and record that ref at the very start of the sweep
+(`git rev-parse --abbrev-ref HEAD`, plus `git rev-parse HEAD` when it is
+detached) because you cannot recover it afterwards.
+
+> **Watch for the base moving under you.** `git checkout -b <branch>
+> origin/master` pins the branch to whatever `origin/master` was *at that
+> moment*. On a long sweep another automation can advance the default branch,
+> and a later `git fetch` will not move your branch. On 2026-08-03 this put a
+> loom commit on a branch created from a two-day-old base while the real work
+> sat on local `main`. Before opening the PR, confirm the branch actually
+> contains your commit (`git log --oneline -1 <branch>`) and that the PR's file
+> list matches what you intended (`gh pr view <n> --json files`). If the base
+> drifted, fast-forward the branch onto your commit rather than force-resetting
+> it.
+
 ## CRITICAL RULES
 
 - NEVER `npm audit fix --force` — it can bump react-native to a new major and break the native build
@@ -337,4 +419,5 @@ If all apps are clean: `"No open vulnerabilities — clean sweep."`
 - The disposition log is mandatory — it's the audit trail. Use each app's existing file
 - Auto-ship log entries are mandatory for every auto-merged PR
 - When in doubt about classification, route to 2b (tracked issue) — false negatives are worse than false positives
+- Clean up every branch this sweep created (Step 6) — and NEVER `git branch -D` one without first confirming its PR reads `MERGED`
 - Restore each checkout to the branch you found it on when the sweep finishes
