@@ -9,7 +9,7 @@ Planning docs drift. Priorities drift. Dependencies hide. Goals shift week-to-we
 
 This skill is a weekly project-management pulse. It does six things in sequence — none of them new individually, but doing them *together*, *consistently*, and *with sourced reasoning* is the value:
 
-1. **Honesty pass** — strip the ghosts (items still listed as open that actually shipped; items marked shipped from orphan branches that never merged).
+1. **Honesty pass** — strip the ghosts in *both* directions: items still listed as open that actually shipped, items marked shipped from orphan branches that never merged, and items claiming pending external work (env, cron, endpoint, table) that is already live — probed against the running system, not re-read from the doc.
 2. **Context pull** — read `RELEASE_V2.md` for current launch-state signals; surface inferred urgencies; accept user overrides.
 3. **Dependency inference** — spot which open tasks block which; confirm with user; persist confirmed dependencies back into the BACKLOG entries.
 4. **RICE scoring** — invoke rubric-sdk per open task using the RICE framework (Reach × Impact × Confidence / Effort); adjust with reusability, strategic fit, and dependency-unblock multiplier overlays.
@@ -116,7 +116,7 @@ For all subsequent runs, skip Step 0 entirely.
 
 For each in-scope doc, scan for state-claims and verify each against the source of truth. Full detection logic in [`references/staleness-detection.md`](references/staleness-detection.md) — read it before running.
 
-Quick summary of the four failure modes:
+Quick summary of the five failure modes:
 
 | Failure mode | The check |
 |---|---|
@@ -124,6 +124,15 @@ Quick summary of the four failure modes:
 | **Shipped-from-orphan-branch** | `git branch --contains <cited-sha>` does NOT list `master` |
 | **Deferred-without-source** | Entry body contains `parked` / `v2` / `deferred` but no `because` / link / rationale |
 | **Stale file:line citations** | Cited file moved or symbol drifted to a different line |
+| **Still-pending-but-actually-live** | Entry claims outstanding *external* state (env var, cron, table, endpoint, DNS, runner) — **probe the live system**; run the entry's own `**Verify:**` block instead of quoting it |
+
+**The last one hunts in the opposite direction from the others and is easy to
+forget.** The first four ask "claims done — is it?". The fifth asks "claims
+pending — is it?". Both produce ghosts; the fifth's ghosts are worse, because
+they manufacture work for the user and hide shipped features from scoring. It
+was added after a P1 entry sat "PENDING, four steps outstanding" for a month
+while the pipeline ran fine every six hours — and its listed steps named the
+wrong secret store, so following them would have done nothing.
 
 Rewrites use the templates in [`references/rewrite-patterns.md`](references/rewrite-patterns.md). Read it before drafting rewrites so the rewrites blend with each doc's house style.
 
