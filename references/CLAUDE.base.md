@@ -48,7 +48,7 @@ All in `forge/standards/workflows.md` unless noted:
 - **Concurrent sessions** — worktree-isolate every task; SHA-explicit git;
   verify `HEAD` before every commit/push (`anti-patterns.md`).
 - **Shared docs & duplicate work** — before editing a regression log / BACKLOG /
-  tracker, list the open PRs already in that file; before starting anything, scan open
+  runbook, list the open PRs already in that file; before starting anything, scan open
   PR titles for your intent (a duplicate wastes a whole branch). Commit boundaries
   follow the logical change as usual — a doc edit that is part of the change goes in
   its commit; a separate concern (regression-log row, BACKLOG status) gets its own,
@@ -59,17 +59,19 @@ All in `forge/standards/workflows.md` unless noted:
 - **TDD** — failing test first, suite green before commit.
 - **Quality pass** — before committing any non-trivial diff (UI or not):
   `/code-review`, then `/simplify`, re-run tests, commit cleanups separately.
-- **Status update** — change came from a BACKLOG / regression-log / tracker
+- **Status update** — change came from a BACKLOG / regression-log / runbook
   entry? Update that entry (status, PR, SHA) in the same PR.
 - **External-tool decisions** — decided setups go in
-  `docs/user-actions-tracker.md` before the session ends, in a fixed format:
+  `docs/manual-runbook.md` before the session ends, in a fixed format:
   **What's left:** [one line] · **Steps:** [numbered, copy-pasteable] ·
   **Verify:** [how to confirm it worked]. Finished setups move to a `## Done`
-  one-liner. History, context and rejected options go in BACKLOG; the tracker
+  one-liner. History, context and rejected options go in BACKLOG; the runbook
   holds exactly-how, nothing else (`forge/standards/workflows.md`).
 - **Doc placement** — one location per doc type: `forge/standards/doc-placement.md`.
-- **User-facing runbooks** — follow `docs/_USER_DOC_TEMPLATE.md`: what this is →
-  numbered steps with real links → how to verify.
+- **Standalone runbooks** — a procedure big enough to need its own file (rather
+  than a `manual-runbook.md` section) follows `docs/_USER_DOC_TEMPLATE.md`: what
+  this is → numbered steps with real links → how to verify. Same anatomy, own
+  file.
 
 ## Build workflows — let the skills carry the process
 
@@ -107,7 +109,7 @@ optional and discovered from the repo when absent.
   proposing "should we build X?"
 - `USER_PATHS.md` — happy + edge + uncovered user flows.
 - `WEEKLY_DIGEST.md` — append-only weekly priority history (roadmap-pulse).
-- `docs/user-actions-tracker.md` — every decided external-tool setup, exact steps.
+- `docs/manual-runbook.md` — every decided external-tool setup, exact steps.
 - `memory/` — app-specific regression log, anti-patterns, design vision.
 
 ## Testing

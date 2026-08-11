@@ -123,7 +123,7 @@ before every commit/push. Full rule:
 ## Shared planning docs — check who else is in the file
 
 Worktree isolation does not prevent two branches editing the same doc or the same
-lane. Before touching a regression log, BACKLOG, digest or tracker — or starting a
+lane. Before touching a regression log, BACKLOG, digest or runbook — or starting a
 fix in a busy area — list the open PRs already in that file, and fix any claim your
 own change makes stale rather than handing it to another session. Commit
 boundaries follow the logical change as usual: a doc edit that is part of the
@@ -175,7 +175,7 @@ for a true one-liner:
 ## Status update on completion — close the loop on source docs
 
 If the feature or fix originated from a tracked item — a BACKLOG.md entry, a
-regression-log row, a RELEASE checklist line, a tracker TODO — **update that
+regression-log row, a RELEASE checklist line, a runbook TODO — **update that
 entry in the same PR** that ships the change: status (DONE + date), the PR
 number, and the merged SHA once it lands. A tracked item whose fix shipped but
 whose entry still says "open" is how work gets re-done and users re-ask.
@@ -264,17 +264,23 @@ by the presence of the `schedule:` key.
 every private repo's Actions stopped mid-session. Public repos kept running,
 which is what made it legible as a budget problem rather than a config one.*
 
-## External-tool actions — log DECIDED steps
+## External-tool actions — the manual runbook
+
+Every app keeps one `docs/manual-runbook.md`: the standing runbook for setups a
+**human** must perform in someone else's console — the steps no script can take
+for them. (Called `user-actions-tracker.md` until 2026-08-11. A procedure large
+enough to deserve its own file still gets one, shaped by
+`docs/_USER_DOC_TEMPLATE.md`; the manual runbook is where everything else lives.)
 
 When a session decides which external tool/provider to use for a setup (DNS,
-email, OAuth app, CI secret, …), an entry lands in the app's
-`docs/user-actions-tracker.md` **before the session ends** — actual provider,
+email, OAuth app, CI secret, …), an entry lands in it **before the session
+ends** — actual provider,
 actual values, numbered copy-pasteable steps (never "if you choose A vs B"
 branches), verification command(s), and a "where to look" diagnostic. Not an
 evaluation of options (that's BACKLOG); only the decided outcome. BACKLOG holds
-*what + why*; the tracker holds *exactly how*. Cross-link, don't copy.
+*what + why*; the runbook holds *exactly how*. Cross-link, don't copy.
 
-### The tracker's shape — same in every repo
+### The runbook's shape — same in every repo
 
 One header block (purpose + status legend + the move-to-Done rule), a **Status at
 a glance** table linking to the sections, then one section per open setup:
@@ -306,7 +312,7 @@ running, split it.
 **What does NOT belong:** why the decision was made, what was evaluated and
 rejected, what changed in which PR, narrated findings. That is BACKLOG's job and
 git history's job. If a paragraph would still read fine with *"probably"* in it,
-or if it tells a story rather than issuing an instruction, it is not tracker
+or if it tells a story rather than issuing an instruction, it is not runbook
 content. A reader should be able to scan the table, find their one action, and
 do it without reading a word of context.
 
