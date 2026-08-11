@@ -58,6 +58,7 @@ Copy and adapt the template:
 
 | File | Purpose | Audience | Update |
 |---|---|---|---|
+| **manual-runbook.md** | The standing runbook for setups only a human can do in an external console: what's left → steps → verify. Shape: `workflows.md` → "External-tool actions" | The operator | When a setup is decided, and again when it's finished |
 | **LAUNCH_SEQUENCE.md** | Launch playbook (phases, gates, external setup) | Product + Ops | When launch strategy changes |
 | **[DEPENDENCY_ALERTS.md](../../forge/standards/doc-placement.md)** | Dependabot + npm audit triage | Backend team | When alert arrives |
 | ... |

@@ -333,7 +333,7 @@ good PRs and destroys feedback speed, so the bulk of E2E runs *post*-merge.
    `${CLAUDE_PLUGIN_ROOT}/standards/anti-patterns.md` → "Merge on green by default".
 3. **Update the source doc in the SAME PR.** If this feature/fix originated
    from a tracked item — a BACKLOG.md entry, a regression-log row, a RELEASE
-   checklist line, a tracker TODO — update that entry before reporting done:
+   checklist line, a runbook TODO — update that entry before reporting done:
    status (DONE + date) + PR number, and the merged SHA once it lands. A shipped
    change whose entry still says "open" is how work gets re-done and the user
    has to re-ask. Full rule: `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` →
@@ -390,7 +390,7 @@ way to know).
 
 Route the answers, don't just state them: an unexercised seam worth
 protecting → regression log or a test; a user-invisible systemic risk → fix it
-or land a tracker/BACKLOG entry; an efficiency lesson that generalizes →
+or land a runbook/BACKLOG entry; an efficiency lesson that generalizes →
 promote into the relevant skill or standard so the next build inherits it.
 
 ---
@@ -414,9 +414,9 @@ promote into the relevant skill or standard so the next build inherits it.
   device screenshot against the design vision; fix + re-verify.
 - `/frontend-design` — during build (Step 2, NEW web/screen surfaces): design
   guidance for the initial implementation, not a post-hoc check.
-- Status update (Step 6): BACKLOG / regression-log / tracker entry that spawned
+- Status update (Step 6): BACKLOG / regression-log / runbook entry that spawned
   this work gets its status + PR + SHA updated in the same PR.
 - Worktree cleanup (Step 6): `git worktree list` → remove stale → `git worktree prune`.
 - Closing retro (Step 7, mandatory): least-confident seams / what the user
   can't see / what would've been faster — answered with evidence, then routed
-  (test, tracker entry, or skill update).
+  (test, runbook entry, or skill update).

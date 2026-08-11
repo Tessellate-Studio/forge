@@ -310,7 +310,7 @@ deps-bootstrap guard live in code-standards.
 
 Worktree isolation stops branches corrupting each other's *git state*. It does
 nothing about two branches editing the same *content*. Before editing a shared
-planning doc (regression log, BACKLOG, weekly digest, user-actions tracker,
+planning doc (regression log, BACKLOG, weekly digest, manual runbook,
 CHANGELOG) — or starting a fix in an area someone else is already in — list who
 else is in that file:
 

@@ -20,7 +20,7 @@ package id, or platform.
 - **Domain anti-patterns to seed:** <anything app-specific you already know NOT to
   build — goes into memory/, separate from the shared set>
 - **External setups expected:** <DNS, OAuth, email, payments — tracked in
-  docs/user-actions-tracker.md as they're decided>
+  docs/manual-runbook.md as they're decided>
 
 ## What the skill does NOT need
 

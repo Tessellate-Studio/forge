@@ -135,7 +135,7 @@ wiring`, `blocked on <console>`.
 
 **The check — probe the system, do not re-read the entry.**
 
-1. **Run the entry's own verification block.** The user-actions-tracker format
+1. **Run the entry's own verification block.** The manual-runbook format
    mandates a `**Verify:**` section precisely so this is possible. *Execute it*
    rather than quoting it. If an entry has no runnable verify block, that is
    itself a finding — report it, because the entry is unfalsifiable.
