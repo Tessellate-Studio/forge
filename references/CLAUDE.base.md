@@ -61,8 +61,12 @@ All in `forge/standards/workflows.md` unless noted:
   `/code-review`, then `/simplify`, re-run tests, commit cleanups separately.
 - **Status update** — change came from a BACKLOG / regression-log / tracker
   entry? Update that entry (status, PR, SHA) in the same PR.
-- **External-tool decisions** — decided setups get numbered, copy-pasteable
-  steps in `docs/user-actions-tracker.md` before the session ends.
+- **External-tool decisions** — decided setups go in
+  `docs/user-actions-tracker.md` before the session ends, in a fixed format:
+  **What's left:** [one line] · **Steps:** [numbered, copy-pasteable] ·
+  **Verify:** [how to confirm it worked]. Finished setups move to a `## Done`
+  one-liner. History, context and rejected options go in BACKLOG; the tracker
+  holds exactly-how, nothing else (`forge/standards/workflows.md`).
 - **Doc placement** — one location per doc type: `forge/standards/doc-placement.md`.
 - **User-facing runbooks** — follow `docs/_USER_DOC_TEMPLATE.md`: what this is →
   numbered steps with real links → how to verify.

@@ -79,7 +79,9 @@ sibling of the other app repos.
   `{{APP_NAME}}` / `{{PACKAGE_ID}}`, and put anything app-specific under
   "App-specific" (`{{APP_DELTAS}}`). Do **not** edit the shared rules inline —
   they come from forge.
-- `docs/_USER_DOC_TEMPLATE.md`, `docs/user-actions-tracker.md` (empty TODO),
+- `docs/_USER_DOC_TEMPLATE.md`, `docs/user-actions-tracker.md` (header block +
+  legend + an empty "Status at a glance" table + `## Done`, per the tracker shape
+  in `standards/workflows.md`, so the first entry lands in-format),
   `docs/SECURITY.md` (disposition-log stub referencing the shared triage policy).
 - `memory/` — empty `project_regression_log.md` + `project_anti_patterns.md`
   (app-specific only; the shared eleven live in forge), seeded with any
