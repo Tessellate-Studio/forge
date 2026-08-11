@@ -8,8 +8,9 @@ This file is the operational manual for Step 1 of the roadmap-pulse workflow —
 2. [Shipped-from-orphan-branch](#shipped-from-orphan-branch)
 3. [Deferred-without-source](#deferred-without-source)
 4. [Stale file:line citations](#stale-fileline-citations)
-5. [Cross-failure cases](#cross-failure-cases)
-6. [MCP-tracked state (Supabase, etc.)](#mcp-tracked-state)
+5. [**Still-pending-but-actually-live**](#still-pending-but-actually-live)
+6. [Cross-failure cases](#cross-failure-cases)
+7. [MCP-tracked state (Supabase, etc.)](#mcp-tracked-state)
 
 ---
 
@@ -104,6 +105,92 @@ This file is the operational manual for Step 1 of the roadmap-pulse workflow —
 
 - **Don't be over-eager about line drift.** ±5 lines usually still indicates the right place. Only surface large drifts.
 - **Gitignored files (`android/`, `ios/`):** skip — line numbers there are inherently fragile.
+
+---
+
+## Still-pending-but-actually-live
+
+**The other four failure modes all hunt in one direction — "claims done, isn't."
+This one is the inverse, and nothing was looking for it: "claims pending, is
+actually live."** Both are ghosts. The inverse one is worse in practice, because
+it manufactures work: it puts steps in front of the user that are already done,
+and it hides a shipped feature from prioritisation.
+
+**Found in practice, 2026-08-11 (Alate).** A P1 entry read *"go-live wiring —
+PENDING … the cron/Resend path is dark"* and listed four Vercel env/cron steps.
+Every one of them was already satisfied and had been for about a month: the
+trigger was a `pg_cron` job succeeding every 6 h, its secrets lived in Supabase
+Vault rather than Vercel env, and the endpoint was returning HTTP 200. The pulse
+had scanned that entry repeatedly and re-reported it as pending each time,
+because *nothing in the honesty pass ever probed the live system for an entry
+that claimed to be unfinished.* Worse, the stale steps pointed at the wrong
+secret store, so following them would have changed nothing and looked like a
+failure of the feature.
+
+**The trigger.** Any entry whose remaining work is **external state** rather
+than code: an env var, a secret, a cron job, a DB table or row, a deployed
+endpoint, a DNS record, a registered runner, a dashboard setting. Signals:
+`PENDING`, `user action`, `what's left`, `not live until`, `dark`, `needs
+wiring`, `blocked on <console>`.
+
+**The check — probe the system, do not re-read the entry.**
+
+1. **Run the entry's own verification block.** The user-actions-tracker format
+   mandates a `**Verify:**` section precisely so this is possible. *Execute it*
+   rather than quoting it. If an entry has no runnable verify block, that is
+   itself a finding — report it, because the entry is unfalsifiable.
+2. **Probe the mechanism, not the config surface.** A dashboard showing a
+   variable proves someone typed something; a 200 from the endpoint proves the
+   whole chain. Prefer the deepest observable.
+3. **Follow the actual data path before trusting the entry's description of
+   it.** The 2026-08-11 case turned on the entry naming the wrong store — read
+   the function/handler source to see where it *really* reads from.
+
+Recipes, cheapest first:
+
+```sql
+-- Scheduled work: is it registered, active, and succeeding?
+select jobid, schedule, command, active from cron.job;
+select status, return_message, start_time from cron.job_run_details
+  where jobid = <id> order by start_time desc limit 5;
+
+-- What did the endpoint it calls actually return? (pg_net)
+select status_code, left(content::text, 400), created
+  from net._http_response order by created desc limit 10;
+
+-- Does the feature have data to act on? Zero rows explains a zero-work run
+-- WITHOUT proving the send/act path works.
+select count(*) from public.<table>;
+
+-- Where does the job really read its secrets? Read the source, don't assume.
+select prosrc from pg_proc where proname = '<function>';
+```
+
+```bash
+# Registered CI runners / infra by name — job history answers "is it alive"
+# even when the org endpoint 403s.
+gh api repos/<org>/<repo>/actions/runs/<id>/jobs --jq '.jobs[]|"\(.name) \(.runner_name)"'
+gh repo list <org> --limit 30 --json name   # does the cited repo exist at all?
+```
+
+**Grading the result — three outcomes, not two:**
+
+| Probe says | Entry becomes |
+|---|---|
+| Every claimed-pending step is satisfied | **Close it**, citing the probe output verbatim |
+| Some satisfied, some genuinely outstanding | **Rewrite to only what is left** — and say what was verified done, so it is not re-listed next week |
+| The path runs but has never done real work (0 rows, `sent: 0`) | **Stays open, narrowed** — "wired and running; the *N* path has never executed". Not proven live for users |
+
+That third row is the one to get right. A cron returning `{"ok":true,"sent":0}`
+proves the plumbing and proves nothing about the payload. Narrow the entry to
+the real remaining test — usually an end-to-end round-trip with actual data —
+rather than closing it or leaving the whole thing open.
+
+**Cost control.** These are read-only and cheap, but do not probe every entry.
+Probe only entries claiming *external* pending state — typically a handful per
+run. Never mutate to test: no inserting a fake row, no sending a real email, no
+flipping a setting. If proving it needs a write, that is a finding to hand the
+user, not something to do unattended.
 
 ---
 
