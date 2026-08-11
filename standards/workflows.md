@@ -274,6 +274,42 @@ branches), verification command(s), and a "where to look" diagnostic. Not an
 evaluation of options (that's BACKLOG); only the decided outcome. BACKLOG holds
 *what + why*; the tracker holds *exactly how*. Cross-link, don't copy.
 
+### The tracker's shape — same in every repo
+
+One header block (purpose + status legend + the move-to-Done rule), a **Status at
+a glance** table linking to the sections, then one section per open setup:
+
+```markdown
+## <Setup name>
+
+**Status:** <emoji> <one line — what state it is actually in>
+
+**What's left:** <one line — the action, or "nothing, blocked on X">
+
+**Steps:**
+
+1. <copy-pasteable, with the real values>
+
+**Verify:** <command(s), then checkboxes for what a good result looks like>
+```
+
+Legend: ✅ done · 🟡 in progress (action left) · 🚧 blocked (not on you) ·
+📖 reference · 🔲 not started.
+
+**When a setup is finished, MOVE IT.** Delete its section, add a one-liner under
+a `## Done` heading at the bottom, and repoint its table row at `#done`. A
+finished setup left as a full section is the main way this file rots — it reads
+as outstanding work and buries the items that actually are. A small residual is
+fine in a Done one-liner; a whole section is not. If half an item is still
+running, split it.
+
+**What does NOT belong:** why the decision was made, what was evaluated and
+rejected, what changed in which PR, narrated findings. That is BACKLOG's job and
+git history's job. If a paragraph would still read fine with *"probably"* in it,
+or if it tells a story rather than issuing an instruction, it is not tracker
+content. A reader should be able to scan the table, find their one action, and
+do it without reading a word of context.
+
 ## Doc placement
 
 Every documentation type has one defined location — see
