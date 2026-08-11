@@ -1,7 +1,7 @@
 {
   "name": "@tessellate-studio/forge",
   "version": "0.5.0",
-  "description": "Tessellate build platform: Claude Code plugin (skills + standards) plus the standards/bp and rubric CLIs — one repo, installed from GitHub.",
+  "description": "Tessellate build platform: Claude Code plugin (skills + standards) plus the standards/bp and rubric CLIs \u2014 one repo, installed from GitHub.",
   "main": "index.js",
   "bin": {
     "standards": "standards-cli/cli/index.js",
@@ -97,10 +97,14 @@
     ]
   },
   "overrides": {
-    "brace-expansion": "^5.0.8",
+    "brace-expansion": "^5.0.9",
     "lint-staged": {
       "micromatch": "^4.0.8",
       "yaml": "^2.8.3"
+    },
+    "js-yaml": "^4.3.1",
+    "@istanbuljs/load-nyc-config": {
+      "js-yaml": "^3.15.1"
     }
   }
 }
