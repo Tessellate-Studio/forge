@@ -5,14 +5,14 @@
     "url": "https://github.com/Tessellate-Studio"
   },
   "metadata": {
-    "description": "Build platform for Tessellate apps — shared skills (plan, build-feature, roadmap-pulse, new-app, security-sweep, crash-monitor), standards, CLIs, RICE-based scoring, and multi-agent build workflows.",
-    "version": "0.7.3"
+    "description": "Build platform for Tessellate apps — shared skills (plan, build-feature, roadmap-pulse, new-app, security-sweep, crash-monitor, device-test), standards, CLIs, RICE-based scoring, and multi-agent build workflows.",
+    "version": "0.8.0"
   },
   "plugins": [
     {
       "name": "forge",
       "source": "./",
-      "description": "Shared build skills (build-feature, plan, roadmap-pulse, new-app, security-sweep, crash-monitor), platform standards, the cross-app anti-pattern set, RICE scoring, multi-agent build workflows (researched-build, adversarial-review) with reusable agent charters, and the standards/bp + rubric CLIs."
+      "description": "Shared build skills (build-feature, plan, roadmap-pulse, new-app, security-sweep, crash-monitor, device-test), platform standards, the cross-app anti-pattern set, RICE scoring, multi-agent build workflows (researched-build, adversarial-review) with reusable agent charters, and the standards/bp + rubric CLIs."
     }
   ]
 }

@@ -183,6 +183,63 @@ whose entry still says "open" is how work gets re-done and users re-ask.
 branch — see "Speak from authority" in
 [`authoritative-claims.md`](./authoritative-claims.md).)
 
+## Device-test queue — enqueue what only a human with the phone can verify
+
+Some changes need a human holding the device: gesture feel, animation quality,
+camera/share-sheet flows, multi-step journeys on real accounts, anything gated
+behind a store-track install. A session that ships such a change does not wait
+to be asked — it **enqueues the test before ending the turn**, so a later
+`/forge:device-test` drain session can walk the user through everything
+pending, across apps, in one sitting.
+
+**Queue only what you cannot verify yourself.** adb screenshots, logcat,
+`adb shell input` taps on a connected device, jest, Metro — all self-serve; do
+those and don't queue them. The queue holds the residue that needs human hands
+or human judgment.
+
+**The queue is one pinned GitHub issue per app repo** — title
+`Device test queue`, label `device-test-queue`. Items are comments on it:
+comments never merge-conflict across concurrent branches, and issues put zero
+files in the repo, so nothing can leak into the app package. If the issue or
+label doesn't exist yet, create and pin it (self-healing beats asking):
+
+```bash
+gh label create device-test-queue --repo Tessellate-Studio/<repo> \
+  --color 5319e7 --description "Pinned queue of on-device tests" || true
+gh issue create --repo Tessellate-Studio/<repo> --title "Device test queue" \
+  --label device-test-queue \
+  --body "Pending on-device tests. Sessions append comments in the format from forge standards/workflows.md → Device-test queue; /forge:device-test drains them. Do not edit others' comments except the Status line at drain time."
+gh issue pin <n> --repo Tessellate-Studio/<repo>
+```
+
+**Enqueue = one comment on that issue, in this fixed format** (drain sessions
+parse it — keep the bold field names exactly):
+
+```markdown
+### <one line: what changed, user-visible phrasing>
+- **PR:** #<n> · **SHA:** <merged sha, or "unmerged — branch <name>">
+- **Delivery:** <how it reaches the phone: production OTA (published/pending) |
+  needs tag build v<x.y.z> | Expo Go | dev build | APK sideload>
+- **Needs runtime:** <expo.version / versionCode / fingerprint the installed
+  app must have for this change to be receivable, or "any">
+- **Steps:** <numbered, from app-open to the moment of truth>
+- **Expect:** <what a pass looks like, concretely>
+- **Status:** OPEN
+```
+
+- **Needs runtime** is the field that saves the sitting: an OTA stranded by a
+  runtime-fingerprint drift is untestable until a new store build is installed.
+  Record what the phone must run, so the drain session skips-with-reason
+  ("needs the v1.2.2 tag build — install first") instead of chasing a stale OTA.
+- Items are closed by **editing the comment's Status line**
+  (`**Status:** ✅ done <date>` or `**Status:** ❌ failed → <link>`) — never by
+  deleting the comment. A failed test's findings go to the app's regression log
+  or a new issue; the Status line links there. The queue holds tests, not
+  investigations.
+- Enqueue in the same session that ships the change — a queued item written
+  while the context is warm has real Steps and a real Expect; one written later
+  from the diff has neither.
+
 ## Docs stay lean — shipped items collapse to a one-line tombstone
 
 The PR is the permanent home of implementation detail (diff, decisions,
