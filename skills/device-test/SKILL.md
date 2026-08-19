@@ -1,12 +1,14 @@
 ---
 name: device-test
-description: Drains the per-repo "Device test queue" GitHub issues across all Tessellate mobile apps (alate, mood-layer, badige) in one phone-in-hand sitting. Sessions enqueue on-device tests they cannot self-verify (per forge standards/workflows.md → "Device-test queue"); this skill fetches every OPEN item, verifies the right build/OTA is actually on the connected device per app, walks the user through each test's Steps + Expect, and closes items by editing their Status line — filing failures to the app's regression log or issues instead of fixing mid-drain. Use whenever the user asks to "drain the device test queue", "run device tests", "what needs testing on my phone", "walk me through device testing", "device test session", or passively "anything waiting on my phone?" / "what do I need to test?". Empty queues everywhere is a valid, quiet result. Output is a per-app walkthrough plus a wrap-up table: passed / failed→filed / skipped-stranded and what unblocks each skip.
+description: Drains the per-repo "Device test queue" GitHub issues across all Tessellate mobile apps (alate, mood-layer, badige) — AGENT-FIRST. The agent executes every adb-automatable step itself (launch, taps, text entry, screenshots, logcat) and verifies Expect from what it captures; the human is pulled in only for steps marked HUMAN: (gesture feel, camera/biometrics, real accounts, iOS). Sessions enqueue tests per forge standards/workflows.md → "Device-test queue"; this skill fetches every OPEN item, verifies the right build/OTA is on the connected device per app, runs or walks each test, and closes items by editing their Status line — filing failures instead of fixing mid-drain. Use whenever the user asks to "drain the device test queue", "run device tests", "what needs testing on my phone", "device test session", passively "anything waiting on my phone?" — or on a schedule/idle moment whenever a device is adb-connected: agent-only items need no invitation. Empty queues everywhere is a valid, quiet result. Output is a wrap-up table: passed / failed→filed / skipped-stranded / needs-human, with what unblocks each.
 ---
 
 # Device test drain
 
-Sessions across three app repos ship changes that only a human with the phone
-can verify — gesture feel, camera flows, store-track installs. Each one
+Sessions across three app repos ship changes that need a real phone to verify.
+Most of those steps an agent can drive itself over adb; only judgment calls and
+human-only surfaces (gesture feel, camera, real accounts, iOS) need the user —
+and the queue format marks exactly those with `HUMAN:`. Each shipping session
 enqueues a test item (the enqueue rule and the fixed comment format live in
 [`standards/workflows.md` → "Device-test queue"](../../standards/workflows.md)
 — single home; this skill never restates it). This skill is the other half:
@@ -48,13 +50,23 @@ enqueued needs rewriting when the delivery path changes.
 3. **All queues empty → say so and stop.** Quiet is a correct result — don't
    invent work.
 
-### Step 1 — Plan the sitting
+### Step 1 — Split the work: agent items vs human items
 
-Present one short table before any testing: app · item title · Needs runtime ·
-**testable-now verdict**. Order apps alate → mood-layer → badige (heaviest
-delivery check first, while attention is fresh); the user can reorder or scope
-down. This is the only up-front question of the session — everything after
-runs item by item without re-asking.
+Classify every OPEN item by its Steps: **agent-runnable** (no `HUMAN:` prefix
+anywhere — every step is adb-executable) vs **needs-human** (at least one
+`HUMAN:` step). Then:
+
+- **Agent-runnable items: just run them (Step 2 → 3), no question asked.**
+  This is the self-maintenance path — the user should not be consulted about
+  tests an agent can execute and judge from a screenshot/logcat.
+- **Needs-human items:** present one short table — app · item · the specific
+  `HUMAN:` steps · Needs runtime · testable-now verdict — and walk them with
+  the user if they're present. If the user isn't in the loop right now, leave
+  those items OPEN, report them in the wrap-up, and still run all their
+  non-HUMAN steps as a smoke pass (a crash on launch shouldn't wait for a
+  human sitting to be discovered).
+
+Order apps alate → mood-layer → badige.
 
 ### Step 2 — Per app: verify delivery BEFORE walking items
 
@@ -83,13 +95,23 @@ badige` or its known package id); if the item's SHA is newer than the installed
 APK, ask the user to dispatch the APK workflow (or locate an existing artifact
 with `gh run list`), then `adb install -r` the downloaded artifact.
 
-### Step 3 — Walk the items, one at a time
+### Step 3 — Execute the items, agent-first
 
 For each OPEN item on the current app:
 
-1. Present **Steps** and **Expect** verbatim from the comment. The user does
-   the taps; you watch the seams you can reach — `adb logcat` for errors,
-   `adb exec-out screencap -p` when a visual verdict helps.
+1. **Execute every non-`HUMAN:` step yourself**: `adb shell am force-stop` /
+   `monkey -p <pkg> 1` or `am start` to launch, `adb shell input tap/swipe/
+   text/keyevent` for interaction, `adb exec-out screencap -p` after each
+   meaningful step, `adb logcat` filtered on the app for errors. Judge
+   **Expect** from the captured screenshot/logcat — Read the PNG, state the
+   verdict with what you saw, keep the final screenshot for the wrap-up.
+   Coordinates: take a screenshot first and derive tap targets from it rather
+   than guessing; if a target can't be located confidently after two
+   attempts, downgrade the item to needs-human with a note — never close on
+   a guessed tap.
+   For `HUMAN:` steps (and only those), hand the phone to the user with the
+   step + Expect verbatim; you keep watching logcat/screenshots around their
+   action.
 2. **Pass** → edit the comment's Status line (never delete, never new comment):
    ```bash
    gh api repos/Tessellate-Studio/<repo>/issues/comments/<comment-id> \
@@ -104,7 +126,9 @@ For each OPEN item on the current app:
 
 ### Step 4 — Wrap up
 
-One table: item · app · verdict (✅ / ❌ → filed link / ⏸ stranded → unblock).
+One table: item · app · verdict (✅ agent-verified, with screenshot / ✅ human-
+confirmed / ❌ → filed link / ⏸ stranded → unblock / 🙋 needs-human → the
+specific `HUMAN:` steps waiting).
 Then, per the user's communication style: what they need to do (installs,
 promotions), what got filed for follow-up sessions. If any repo's queue issue
 had drifted from the format (unparseable comments), say which comment — don't

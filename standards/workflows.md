@@ -88,11 +88,19 @@ pruning marker can't exist. What actually generated a contradiction at every
 merge was pairing a mandatory rename with auto-delete, and naming the repo
 setting as the deciding input removes it.
 
-## Merge on green — the default
+## Merge on green — a STANDING directive, not a per-task instruction
 
-Open PRs ready (not draft) and merge as soon as CI is green. Full rule + the
-carve-outs (outward-facing / hard-to-reverse / explicit hold):
-[`anti-patterns.md` → "Merge on green by default"](./anti-patterns.md).
+Open PRs ready (not draft) and merge as soon as CI is green — **without being
+told, without asking, on every PR** (user directive 2026-08-19: merge-on-green
+is a build directive, not something to be requested each time). "PR open,
+awaiting merge" is not an end state; either the merge is armed or a named
+carve-out applies (outward-facing / hard-to-reverse / explicit user hold —
+full list: [`anti-patterns.md` → "Merge on green by default"](./anti-patterns.md)).
+
+**Arm it at PR-open, don't babysit it:** right after `gh pr create`, run
+`gh pr merge <n> --squash --auto` — GitHub merges the moment checks pass, with
+no watcher process to time out or die with the session. If the repo rejects
+`--auto` (auto-merge disabled in settings), fall back to the gated watch:
 
 **Gate the merge on the check command's OWN exit status — never through a
 pipe.** `gh pr checks N --watch | tail` reports tail's exit code, not the
@@ -100,6 +108,33 @@ checks', so `&& gh pr merge` fires even when a check failed. Same trap:
 `npm audit | tail; echo $?`. Correct shape:
 `gh pr checks N --watch >/dev/null && gh pr merge N --squash`. (Precedent:
 2026-07-25, forge PR #22 merged past a red Security Scan exactly this way.)
+
+## Local gates stay light — the runner is the authoritative gate
+
+The laptop is not CI. Full test suites, full-repo typechecks and full-repo
+lints belong on the self-hosted runners, where they gate the merge; local
+hooks exist only to catch cheap mistakes before a push, and they must be
+**proportional to the diff** (user directive 2026-08-19, after concurrent
+local suites repeatedly overheated the machine and blocked pushes on
+timeout-flake):
+
+- **Docs-only diff** (every changed file is `*.md` or otherwise untestable) →
+  hooks skip typecheck, lint and tests entirely. Running a test suite to
+  gate a README line is the failure mode this rule exists to kill.
+- **Code diff** → local hooks run at most a SCOPED typecheck (only the
+  workspaces with changed files) plus cheap greps (secrets, branch guard).
+  Never a full jest/vitest suite locally — that is the runner's job, and the
+  merge is already gated on it.
+- Timeouts inside tests must carry headroom for slow dev machines (a 5s
+  budget that CI meets in 1s can sit at 4.8s locally — precedent: alate
+  `colorExtractor.test.ts`, 2026-08-19); but the primary fix is not running
+  the suite locally at all.
+- One heavy local job at a time. Two `npm ci` runs plus a jest suite in
+  parallel produced every local "failure" of 2026-08-19 — all of them
+  timeout flake, none of them real.
+
+Escape hatches stay: a hook may offer a full-suite mode behind an explicit
+env var for whoever wants belt-and-braces locally. The default is light.
 
 ## Orphan-branch fixes — port AUTOMATICALLY, do not ask
 
@@ -227,6 +262,14 @@ parse it — keep the bold field names exactly):
 - **Status:** OPEN
 ```
 
+- **Write Steps machine-first.** The drain agent executes every step it can
+  reach itself — app launch/force-stop, navigation taps (`adb shell input
+  tap`/`text`/`keyevent`), screenshots (`adb exec-out screencap -p`), logcat
+  watches — and involves the human only for what genuinely needs judgment or
+  a human-only surface (gesture feel, animation quality, camera/biometrics,
+  real-account sign-ins, iOS/TestFlight where there is no adb). Prefix those
+  steps with `HUMAN:`; an item whose steps carry no `HUMAN:` prefix is fully
+  agent-verifiable and gets tested and closed with zero user involvement.
 - **Needs runtime** is the field that saves the sitting: an OTA stranded by a
   runtime-fingerprint drift is untestable until a new store build is installed.
   Record what the phone must run, so the drain session skips-with-reason
