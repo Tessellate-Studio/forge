@@ -67,6 +67,33 @@ jobs:
       fail_on_error: false   # advisory; flip to true once tuned
 ```
 
+## Freshness check (SessionStart)
+
+`autoUpdate` on a git marketplace does not actually pull the clone, and
+`claude plugin update` compares version strings only — so a plugin can sit stale
+for days while reporting success. `hooks/forge-freshness.mjs` runs at session
+start, checks for that drift, and repairs it in a detached background worker.
+
+It never blocks session start and cannot fix the session that triggers it — the
+plugin is already loaded by then, so a repair makes the *next* session correct.
+
+**Turning it off:**
+
+```bash
+FORGE_FRESHNESS_DISABLE=1     # neither the check nor any worker runs
+```
+
+Set it in your environment to silence the check entirely — nothing else to undo,
+and unsetting it resumes normal behaviour. Prefer this over disabling the whole
+plugin, which would also take the skills and standards with it.
+
+Because it spawns a process per session, a repair that *cannot* succeed is a
+repair that runs forever. Three layered limits prevent that: the version-pin
+latch, the consecutive-failure backoff, and a hard floor on how often any worker
+may spawn for any reason. If you add a new "but we should really check now"
+condition, put it *inside* that floor — see the header of
+`hooks/forge-freshness.mjs`.
+
 ## Layering rule
 
 App CLAUDE.md files stay **one page** — always-true facts + one-line pointers
