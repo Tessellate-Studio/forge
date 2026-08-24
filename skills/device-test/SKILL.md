@@ -123,6 +123,11 @@ For each OPEN item on the current app:
    the sitting stays short; the fix is its own session with its own branch.
 4. **Stranded** (Step 2 verdict) → leave `**Status:** OPEN`, report it in the
    wrap-up with the exact unblock ("install the v1.2.2 internal-track build").
+5. **Whenever Status leaves OPEN** (pass or fail, steps 2–3) → minimize the
+   comment as Resolved right after the Status edit, so the queue doesn't grow
+   unscrollable — see `standards/workflows.md` → "Device-test queue" for the
+   GraphQL call (REST has no minimize endpoint). Stranded items (step 4) stay
+   un-minimized — they're still open work, not closed queue items.
 
 ### Step 4 — Wrap up
 

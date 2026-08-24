@@ -304,6 +304,26 @@ parse it — keep the bold field names exactly):
   deleting the comment. A failed test's findings go to the app's regression log
   or a new issue; the Status line links there. The queue holds tests, not
   investigations.
+- **After editing the Status line, minimize the comment as Resolved** — GitHub's
+  native hide/minimize (the same menu as Spam/Abuse/Duplicate/Outdated on any
+  comment's `...` button) collapses it to a one-line "X hidden items" summary
+  without deleting anything, so a long-running queue doesn't force users to
+  scroll past — and expand — every closed item just to find the Status line at
+  the bottom. REST has no endpoint for this; use the GraphQL mutation with the
+  comment's `node_id` (from the same `issues/comments/<id>` fetch used to read
+  the body):
+  ```bash
+  gh api graphql -f query='
+  mutation($id: ID!) {
+    minimizeComment(input: {subjectId: $id, classifier: RESOLVED}) {
+      minimizedComment { isMinimized minimizedReason }
+    }
+  }' -f id="<node_id>"
+  ```
+  `RESOLVED` fits both outcomes here (✅ done and ❌ failed → filed) — the
+  *queue item* is resolved either way; the classifier isn't judging whether the
+  underlying bug is fixed. A human can still un-hide any comment from the same
+  menu, so this is reversible, unlike deletion.
 - Enqueue in the same session that ships the change — a queued item written
   while the context is warm has real Steps and a real Expect; one written later
   from the diff has neither.
