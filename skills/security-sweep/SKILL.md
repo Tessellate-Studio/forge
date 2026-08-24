@@ -179,7 +179,13 @@ These are safe to fix automatically:
    - Create branch: `security-sweep/<app>-deps-<date>`
    - Commit with message: `fix(deps): patch <package> — <CVE or advisory ID>`
    - Open PR with labels: `security-sweep`, `auto-generated`
-   - Auto-merge: `gh pr merge --squash --auto <pr-number>`
+   - Auto-merge: `gh pr merge --squash --auto <pr-number>` — but only after
+     confirming this repo has a real merge gate for `--auto` to wait on; see
+     `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Merge on green"
+     before the first run against a new repo. No gate → gated watch instead,
+     every time (never assume `--auto`'s success means it waited — this skill
+     runs unattended, so a silent instant-merge here ships unverified code
+     with nobody watching).
    - Log to `Tessellate-Studio/litmus` auto-ship-log.md:
      `| <date> | security-sweep | <repo> | PR #<n> | patch <package> | <CVE/advisory> |`
 7. If tests regress vs baseline: **discard the lockfile change** (`git checkout

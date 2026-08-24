@@ -255,7 +255,12 @@ Everything built here ships to **test/preview** (OTA to the `preview` channel), 
    - Title: `feat(<scope>): <task title>`
    - Body: standard build-feature output — TLDR, what changed, test coverage, acceptance criteria verdicts
    - Labels: `pulse-auto-build`, `auto-generated`
-4. **Auto-merge:** enable auto-merge via `gh pr merge --squash --auto <pr-number>`.
+4. **Auto-merge:** enable auto-merge via `gh pr merge --squash --auto <pr-number>` —
+   but only after confirming this repo has a real merge gate for `--auto` to
+   wait on; see `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Merge on
+   green" before the first run against a new repo. No gate → gated watch
+   instead, every time (this skill runs unattended, so a silent instant-merge
+   here ships unverified code with nobody watching).
 5. **Update BACKLOG:** mark the entry with status `DONE — <date>, PR #<n>` and the merged SHA once it lands. Collapse to a one-line tombstone per the "Docs stay lean" standard.
 6. **Log:** append to `Tessellate-Studio/litmus` auto-ship-log.md (default branch `main`):
    `| <date> | roadmap-pulse | <repo> | PR #<n> | <1-line what> | P0 auto-build |`
