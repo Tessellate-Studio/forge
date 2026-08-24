@@ -164,7 +164,12 @@ Body:
 
 Labels: `crash-monitor`, `auto-generated`.
 
-5. **Auto-merge:** `gh pr merge --squash --auto <pr-number>`
+5. **Auto-merge:** `gh pr merge --squash --auto <pr-number>` — but only after
+   confirming this repo has a real merge gate for `--auto` to wait on; see
+   `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Merge on green" before
+   the first run against a new repo. No gate → gated watch instead, every
+   time (this skill runs unattended, so a silent instant-merge here ships
+   unverified code with nobody watching).
 6. **Tag the source:** resolve the Sentry issue, or close the GitHub issue referencing the PR
 7. **Log to the auto-ship log:** append to `Tessellate-Studio/litmus` `auto-ship-log.md` (default branch `main`; create the file if missing):
    `| <date> | crash-monitor | <repo> | PR #<n> | <1-line what> | <Sentry ID or Issue #> |`

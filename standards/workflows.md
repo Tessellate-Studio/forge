@@ -100,7 +100,32 @@ full list: [`anti-patterns.md` → "Merge on green by default"](./anti-patterns.
 **Arm it at PR-open, don't babysit it:** right after `gh pr create`, run
 `gh pr merge <n> --squash --auto` — GitHub merges the moment checks pass, with
 no watcher process to time out or die with the session. If the repo rejects
-`--auto` (auto-merge disabled in settings), fall back to the gated watch:
+`--auto` (auto-merge disabled in settings), fall back to the gated watch below.
+
+**`--auto` succeeding is not proof it will wait — verify the repo actually has
+a merge gate before trusting it.** GitHub's auto-merge only blocks on required
+status checks; if the repo has none configured, `--auto` reports success and
+merges the PR **immediately**, before CI even starts, with no error to catch —
+the exact same success message as the case where it genuinely waited. A repo
+can have no required checks for reasons that have nothing to do with the
+`gh pr merge` command itself: no branch-protection rule exists yet, or (the
+sharper trap) the plan tier can't have one at all — a private repo on GitHub's
+free tier 403s on `gh api repos/<owner>/<repo>/branches/<default>/protection`
+with "Upgrade to GitHub Pro or make this repository public," meaning `--auto`
+can *never* gate there no matter how it's configured. **Check this once per
+repo, before the first `--auto` of the session**
+(`gh api repos/<owner>/<repo>/branches/<default-branch>/protection` — a 403/404
+means no gate exists) and route accordingly: if it succeeds and lists
+`required_status_checks`, `--auto` is safe to trust for the rest of the
+session; if it 403s/404s, use the gated watch (below) for **every** merge in
+that repo, not just when `--auto` is rejected — rejection and "succeeds with
+nothing to wait on" look identical from the command's own exit code, so the
+repo-level check is the only way to tell them apart. (Precedent: 2026-08-24,
+alate — five PRs in one session each merged within 1-2 seconds of `--auto`,
+CI still queued/running on the self-hosted runners at merge time; the
+branch-protection check 403'd with the free-tier message above. Every `--auto`
+merge in that repo has been landing before its own CI result exists, silently,
+since the repo's creation — not a one-off.)
 
 **Gate the merge on the check command's OWN exit status — never through a
 pipe.** `gh pr checks N --watch | tail` reports tail's exit code, not the

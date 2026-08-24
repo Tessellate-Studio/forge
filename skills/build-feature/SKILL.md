@@ -328,13 +328,22 @@ good PRs and destroys feedback speed, so the bulk of E2E runs *post*-merge.
    `master` directly.
 2. **Open the PR ready (not draft) and arm the merge IMMEDIATELY — this is a
    standing directive, never a question.** Right after `gh pr create`, run
-   `gh pr merge <n> --squash --auto`; if the repo has auto-merge disabled, fall
-   back to the gated watch (`gh pr checks <n> --watch >/dev/null && gh pr merge
-   <n> --squash` — the exit-status gate, never a pipe). Do not ask the user
-   whether to merge, do not park a green PR waiting for a manual look, do not
-   report "PR open, awaiting merge" as an end state. Hold only for the
-   carve-outs (outward-facing / hard-to-reverse, or an explicit user hold), and
-   say which carve-out applies when you do. Full rule:
+   `gh pr merge <n> --squash --auto` — but only once you've confirmed THIS repo
+   has a real merge gate for `--auto` to wait on
+   (`gh api repos/<owner>/<repo>/branches/<default-branch>/protection` — a
+   403/404 means it doesn't, most commonly a private repo on GitHub's free
+   tier, which can never have one). No gate (or auto-merge outright disabled)
+   → use the gated watch for every merge in this repo instead:
+   `gh pr checks <n> --watch >/dev/null && gh pr merge <n> --squash` — the
+   exit-status gate, never a pipe (`| tail && ...` reports tail's exit code,
+   not the checks'). `--auto` reports the same success whether it actually
+   waited or merged instantly with nothing to gate on, so this check is the
+   only way to tell those apart — don't infer it from the command's exit
+   code. Do not ask the user whether to merge, do not park a green PR waiting
+   for a manual look, do not report "PR open, awaiting merge" as an end
+   state. Hold only for the carve-outs (outward-facing / hard-to-reverse, or
+   an explicit user hold), and say which carve-out applies when you do. Full
+   rule: `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Merge on green" /
    `${CLAUDE_PLUGIN_ROOT}/standards/anti-patterns.md` → "Merge on green by default".
 3. **Update the source doc in the SAME PR.** If this feature/fix originated
    from a tracked item — a BACKLOG.md entry, a regression-log row, a RELEASE
