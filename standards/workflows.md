@@ -243,6 +243,17 @@ whose entry still says "open" is how work gets re-done and users re-ask.
 branch — see "Speak from authority" in
 [`authoritative-claims.md`](./authoritative-claims.md).)
 
+**If the fix also has a tracked GitHub issue, close it the same way — via a
+keyword in the PR body, not a follow-up edit.** GitHub only auto-closes an
+issue on merge when the PR body (or a commit message) contains a closing
+keyword — `Fixes #<n>` / `Closes #<n>` / `Resolves #<n>` — immediately
+followed by the issue number. A plain reference like `[#<n>](url)` does
+nothing; the issue merges still open. (alate #596/#599, 2026-08-25: PR #599's
+body linked `[#596]` without the keyword, so the fix shipped but #596 stayed
+open until the user closed it by hand hours later.) Use the exact issue
+number, one keyword per issue, in the PR body — that's checked at merge time
+and survives squash merges, unlike a commit message buried mid-branch.
+
 ## Device-test queue — enqueue what only a human with the phone can verify
 
 Some changes need a human holding the device: gesture feel, animation quality,
