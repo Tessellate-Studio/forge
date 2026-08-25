@@ -112,7 +112,10 @@ For each OPEN item on the current app:
    For `HUMAN:` steps (and only those), hand the phone to the user with the
    step + Expect verbatim; you keep watching logcat/screenshots around their
    action.
-2. **Pass** → edit the comment's Status line (never delete, never new comment):
+2. **Pass** → edit the comment's Status line (never delete, never new comment),
+   then minimize it as Resolved so the queue doesn't grow unscrollable — see
+   `standards/workflows.md` → "Device-test queue" for the GraphQL call (REST
+   has no minimize endpoint):
    ```bash
    gh api repos/Tessellate-Studio/<repo>/issues/comments/<comment-id> \
      -X PATCH -f body="<original body with Status: OPEN → ✅ done <date>>"
@@ -121,13 +124,13 @@ For each OPEN item on the current app:
    file it where the app's rules say — regression-log row via PR, or a GitHub
    issue — and set `**Status:** ❌ failed → <link>`. **Do not fix mid-drain**:
    the sitting stays short; the fix is its own session with its own branch.
+   **Do not minimize this comment** — the bug is still open regardless of
+   where it's tracked now; hiding it under "Resolved" reads as handled and
+   risks it getting forgotten. It stays fully visible in the queue until
+   someone actually fixes it and a later drain flips it to ✅ done.
 4. **Stranded** (Step 2 verdict) → leave `**Status:** OPEN`, report it in the
    wrap-up with the exact unblock ("install the v1.2.2 internal-track build").
-5. **Whenever Status leaves OPEN** (pass or fail, steps 2–3) → minimize the
-   comment as Resolved right after the Status edit, so the queue doesn't grow
-   unscrollable — see `standards/workflows.md` → "Device-test queue" for the
-   GraphQL call (REST has no minimize endpoint). Stranded items (step 4) stay
-   un-minimized — they're still open work, not closed queue items.
+   Stays un-minimized too — it's still open work, not a closed queue item.
 
 ### Step 4 — Wrap up
 
