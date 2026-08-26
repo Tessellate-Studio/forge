@@ -569,17 +569,24 @@ const { problems, notes } = result;
 if (problems.length > 0 || notes.length > 0) {
   const lines = [...problems, ...notes].map((p) => `- ${p}`).join('\n');
   const stale = problems.length > 0;
+  // additionalContext MUST be nested under hookSpecificOutput with a
+  // hookEventName — a top-level additionalContext key is silently ignored
+  // ("Hook JSON output had unrecognized keys"), so the model never saw these
+  // warnings. Verified against the debug log of a live session, 2026-08-26.
   process.stdout.write(
     JSON.stringify({
       systemMessage: `forge plugin: ${stale ? 'stale' : 'updated in background'}\n${lines}`,
-      additionalContext: stale
-        ? `The forge plugin providing this session's standards and skills may be out of date. ` +
-          `Findings:\n${lines}\n` +
-          `An automatic repair runs in the background but CANNOT fix this session — the plugin ` +
-          `is already loaded. Treat forge standards read this session as possibly superseded, ` +
-          `and tell the user before relying on them for a merge, branch, or review decision.`
-        : `A background repair updated the forge plugin. This session still holds the older ` +
-          `copy loaded at startup:\n${lines}`,
+      hookSpecificOutput: {
+        hookEventName: 'SessionStart',
+        additionalContext: stale
+          ? `The forge plugin providing this session's standards and skills may be out of date. ` +
+            `Findings:\n${lines}\n` +
+            `An automatic repair runs in the background but CANNOT fix this session — the plugin ` +
+            `is already loaded. Treat forge standards read this session as possibly superseded, ` +
+            `and tell the user before relying on them for a merge, branch, or review decision.`
+          : `A background repair updated the forge plugin. This session still holds the older ` +
+            `copy loaded at startup:\n${lines}`,
+      },
     })
   );
 }
