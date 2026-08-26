@@ -80,11 +80,20 @@ would be about the previous bundle. Per app, before its first item:
    to install (Play internal / `gh run download` + `adb install`) — never
    trigger a heavy build yourself (CI-spend rule: builds are human-dispatched).
 3. OTA-delivered items: confirm the update published to the production channel
-   (`eas update:list --branch production --limit 3` from `mobile/`) and
+   (`eas update:list --branch production --limit 3` from `mobile/`), then
    force-stop → relaunch → force-stop → relaunch (expo-updates applies on
-   second launch). If a fingerprint-source file changed since the installed
-   build (`mobile/app.json`, `mobile/eas.json`), the OTA is unreceivable —
-   stranded, same skip-with-reason.
+   second launch), then — **MANDATORY, not a fallback** — confirm via logcat
+   that the RUNNING bundle is that exact update group and no
+   `UpdateFailedToLoad`/`CheckError` fired (gate + commands:
+   `build-feature/references/device-loop.md` → "MANDATORY before measuring").
+   A verdict recorded without that confirmation is void — alate #596 proved
+   an entire class of binaries silently could not receive ANY OTA, and every
+   unconfirmed "verified on device" in that window measured stale JS.
+   Runtime mismatch (installed build's runtime vs the update's — both
+   platforms use `expo.version` under the appVersion policy since alate
+   v1.3.1) → **stranded**: skip with reason. Never generalize an iOS
+   delivery pass to Android or vice versa — the lanes are independent and
+   have diverged for months.
 
 **mood-layer** — start the dev server (`npx expo start` in the checkout), user
 opens in Expo Go. Confirm the loaded JS is current (Metro logs show the

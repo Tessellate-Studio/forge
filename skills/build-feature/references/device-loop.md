@@ -85,16 +85,37 @@ sleep 12                                                 # JS load + render
 "$ADB" $D shell svc power stayon false >/dev/null 2>&1   # restore the device setting
 ```
 
-Then **Read** `alate-verify.png` and measure against the acceptance criteria.
+## MANDATORY before measuring: confirm the RUNNING update is yours
 
-If the first screenshot looks unchanged, the download likely outran the 22s
-window — repeat the apply cycle with a longer first sleep, or confirm via logcat:
+**Never measure a screenshot against acceptance criteria until logcat proves
+the device is executing the update you just published.** This is not a
+fallback for when "the screenshot looks unchanged" — a stale bundle that
+renders plausibly passes silently, and that failure mode ran for WEEKS on
+alate: no CI-built Android binary before v1.3.1 could receive ANY OTA (no
+`expo-channel-name` baked in → the update server 400'd every request —
+alate issue #596), so every "verified on device" Android OTA verdict in that
+window measured old JS and reported it as a verdict on the new code.
 
 ```bash
-"$ADB" $D logcat -d 2>/dev/null | grep -i "dev.expo.updates" | grep -iE "branchName|DownloadComplete|NEW_UPDATE_LOADED" | tail -5
+"$ADB" $D logcat -d 2>/dev/null | grep -i "dev.expo.updates" | grep -iE "branchName|DownloadComplete|NEW_UPDATE_LOADED|UpdateFailedToLoad|CheckError" | tail -8
 ```
 
-Look for `"branchName":"preview"` and the **update group ID** you just published.
+- PASS gate: the **update group ID you just published** appears, and no
+  `UpdateFailedToLoad`/`CheckError` follows it.
+- `Remote update request not successful` / `CheckError` on every launch =
+  the binary cannot receive updates AT ALL (missing channel header, wrong
+  runtime, dead lane) — stop and diagnose the delivery lane; do NOT keep
+  republishing.
+- **Never generalize an iOS pass to Android or vice versa** — the two
+  delivery lanes are fully independent (different runtime policies,
+  different env injection, different build systems) and have genuinely
+  diverged for months at a time.
+
+If the group ID is absent but there is no error, the download likely outran
+the 22s window — repeat the apply cycle with a longer first sleep, then
+re-check the gate.
+
+Then **Read** `alate-verify.png` and measure against the acceptance criteria.
 
 ## Navigating the app over adb (to reach other screens)
 
