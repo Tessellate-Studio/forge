@@ -96,14 +96,21 @@ async function main() {
     totalHuman ? `, ${totalHuman} needs-human` : ''
   }${totalUnparsed ? `, ${totalUnparsed} unparseable` : ''}`;
 
+  // additionalContext MUST be nested under hookSpecificOutput with a
+  // hookEventName — a top-level additionalContext key is silently ignored
+  // ("Hook JSON output had unrecognized keys"), so the model never sees it.
+  // Verified against the debug log of a live session, 2026-08-26.
   process.stdout.write(
     JSON.stringify({
       systemMessage: `device-test queue: ${summary} — run \`dtq\` for details`,
-      additionalContext:
-        `The device-test queue (across alate, mood-layer, badige) has pending items:\n` +
-        `${lines.join('\n')}\n` +
-        `This is informational only — don't act on it unless the user asks. Run \`dtq\` ` +
-        `(or \`device-test-status\`) for the live board, or /forge:device-test to drain it.`,
+      hookSpecificOutput: {
+        hookEventName: 'SessionStart',
+        additionalContext:
+          `The device-test queue (across alate, mood-layer, badige) has pending items:\n` +
+          `${lines.join('\n')}\n` +
+          `This is informational only — don't act on it unless the user asks. Run \`dtq\` ` +
+          `(or \`device-test-status\`) for the live board, or /forge:device-test to drain it.`,
+      },
     })
   );
 }
