@@ -15,6 +15,22 @@ enqueues a test item (the enqueue rule and the fixed comment format live in
 one sitting, phone in hand, every pending item across every app, no prompting
 per item.
 
+**Just checking what's pending?** Don't spawn an agent to poll the threads —
+run `dtq` (or `device-test-status`, same tool) from anywhere with `gh`
+authenticated: `npx github:Tessellate-Studio/forge dtq`, or `dtq` directly if
+forge is installed globally (`npm install -g github:Tessellate-Studio/forge`).
+It's read-only: fetches the same issues/comments this skill drains, parses the
+fixed format below, and prints a table — open items, which need a human vs.
+are agent-runnable, failures with their filed link, and item age. `--watch`
+auto-refreshes, `--repo <name>` scopes to one app, `--json` for scripting. See
+`skills/device-test/scripts/status-board.js`.
+
+This also runs automatically: `hooks/device-test-status.mjs` (a SessionStart
+hook, registered in `hooks/hooks.json`) checks the same queues at the start of
+every session and surfaces a one-line summary when anything is open, failed,
+or malformed — silent when every queue is empty, same as this skill's own
+"quiet is a valid result" rule. Off switch: `FORGE_DEVICE_TEST_STATUS_DISABLE=1`.
+
 ## Scope table — the apps and how a change reaches each phone
 
 | App | Remote | Local checkout | Delivery today | Queue |

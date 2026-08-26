@@ -9,6 +9,12 @@
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/forge-freshness.mjs\"",
             "timeout": 30,
             "statusMessage": "Checking forge plugin freshness..."
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/device-test-status.mjs\"",
+            "timeout": 15,
+            "statusMessage": "Checking device-test queue..."
           }
         ]
       }

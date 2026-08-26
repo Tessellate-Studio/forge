@@ -6,7 +6,9 @@
   "bin": {
     "standards": "standards-cli/cli/index.js",
     "bp": "standards-cli/cli/index.js",
-    "rubric": "rubric/cli/index.js"
+    "rubric": "rubric/cli/index.js",
+    "device-test-status": "skills/device-test/scripts/status-board.js",
+    "dtq": "skills/device-test/scripts/status-board.js"
   },
   "files": [
     "index.js",
