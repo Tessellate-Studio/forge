@@ -26,6 +26,7 @@ inherits it — interchangeable, inter-usable, self-learning (via reviewed PRs).
 | `skills/new-app/` | Scaffold a new platform-wired app from a requirements brief. |
 | `skills/security-sweep/` | Dependency vulnerability sweep — triage, safe auto-fix, dismiss accepted residuals. Implements `standards/security-triage.md`. |
 | `skills/crash-monitor/` | Daily Sentry + GitHub Issues triage — noise filters, confidence-gated auto-fix, revert cooldown. |
+| `skills/device-test/` | Drains the cross-app device-test queue; ships `dtq` / `device-test-status`, a read-only terminal status board for the same queue (see below). |
 | `standards/workflows.md` | **Single home** for all working rules (branch placement, TDD, quality pass, status updates, etc.). |
 | `standards/anti-patterns.md` | The 14 app-agnostic build guardrails. |
 | `standards/authoritative-claims.md` | The core rule: cite a source or label a hypothesis. |
@@ -93,6 +94,21 @@ latch, the consecutive-failure backoff, and a hard floor on how often any worker
 may spawn for any reason. If you add a new "but we should really check now"
 condition, put it *inside* that floor — see the header of
 `hooks/forge-freshness.mjs`.
+
+## Device-test status (SessionStart)
+
+`hooks/device-test-status.mjs` checks the device-test queue (alate,
+mood-layer, badige) at the start of every session and surfaces a one-line
+summary when anything is open, failed, or malformed — quiet when every queue
+is empty. Run `dtq` (or `device-test-status`) any time for the full live
+board instead of waiting for a session start, or asking an agent to poll the
+threads for you. See `skills/device-test/SKILL.md`.
+
+**Turning it off:**
+
+```bash
+FORGE_DEVICE_TEST_STATUS_DISABLE=1
+```
 
 ## Layering rule
 
