@@ -10,6 +10,13 @@
 # Shell scripts must be LF or they break under bash/sh.
 *.sh text eol=lf
 
+# Windows batch files are the exact inverse: cmd.exe needs CRLF. Checked out as
+# LF it misparses each line — `REM` comments run as commands and `if (` blocks
+# fall apart — while still half-working, so the breakage looks like a bug in the
+# script rather than in its line endings.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
 # Binary files: never touch, never diff as text. None are tracked today, but
 # these markers stop a future image/archive from being corrupted by
 # normalization.

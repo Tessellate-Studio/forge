@@ -25,6 +25,14 @@ are agent-runnable, failures with their filed link, and item age. `--watch`
 auto-refreshes, `--repo <name>` scopes to one app, `--json` for scripting. See
 `skills/device-test/scripts/status-board.js`.
 
+**Prefer clicking to typing?** `skills/device-test/scripts/dtq-board.cmd` is a
+double-clickable launcher for the same board (Windows opens a bare `.js`
+through Windows Script Host, which cannot run it — that's the "Invalid
+character" dialog). Double-click gives the live `--watch` board; from a shell
+it passes flags through (`dtq-board.cmd --repo alate --all`). It resolves the
+script relative to itself, so a desktop shortcut to it keeps working after a
+re-clone — no PATH entry and no PowerShell execution-policy exemption needed.
+
 This also runs automatically: `hooks/device-test-status.mjs` (a SessionStart
 hook, registered in `hooks/hooks.json`) checks the same queues at the start of
 every session and surfaces a one-line summary when anything is open, failed,
