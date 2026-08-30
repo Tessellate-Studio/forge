@@ -22,6 +22,7 @@ const STATUS = {
   OPEN: 'open',
   DONE: 'done',
   FAILED: 'failed',
+  NEEDS_BUILD: 'needs_build',
   UNPARSEABLE: 'unparseable',
 };
 
@@ -91,6 +92,8 @@ function parseComment(comment) {
     state = STATUS.DONE;
   } else if (statusText.startsWith('❌')) {
     state = STATUS.FAILED;
+  } else if (statusText.startsWith('🔧')) {
+    state = STATUS.NEEDS_BUILD;
   }
 
   // The PR field can be a bare number, "none", or a markdown link

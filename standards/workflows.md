@@ -315,6 +315,23 @@ parse it — keep the bold field names exactly):
   deleting the comment. A failed test's findings go to the app's regression log
   or a new issue; the Status line links there. The queue holds tests, not
   investigations.
+- **`**Status:** 🔧 needs build — <what's needed>`** — a fourth status value,
+  distinct from bare `OPEN`: it means the drain *looked* at this item and
+  determined it
+  cannot be tested on any currently-installed build, OTA or otherwise — not
+  just "didn't get to it yet." Write this instead of leaving the item silently
+  `OPEN` whenever Needs runtime can't be satisfied by the phone's current
+  install AND no OTA can reach it either (a true native-build blocker, not a
+  publish-lag one). This is the durable log the device-test-drain skill's daily
+  and weekly automation both read: the **daily** drain skips anything already
+  marked `🔧 needs build` (no point re-checking every morning) and tests
+  everything else immediately — OTA-deliverable items are NEVER gated by a
+  build schedule; the **weekly** build cycle (see `skills/device-test/SKILL.md`
+  → "Self-scheduled automation") is the only thing that acts on this marker,
+  and only when at least one exists per app (see the CI-spend carve-out below —
+  this is the one case a build may fire without a literal human click). Once a
+  fresh build lands and the item becomes testable, flip it back to bare `OPEN`
+  (not straight to done) so the next drain picks it up normally.
 - **After marking an item `✅ done`, minimize the comment as Resolved** —
   GitHub's native hide/minimize (the same menu as Spam/Abuse/Duplicate/Outdated
   on any comment's `...` button) collapses it to a one-line "X hidden items"
@@ -382,25 +399,46 @@ column leaves the file the same length. Diff the content, not the line count.
 
 ## CI spend — heavy builds are MANUAL-DISPATCH ONLY
 
-**No build runs unless a human asked for it.** Free-tier Actions minutes are a
-shared, org-wide, monthly budget: when they run out, *every* private repo's CI
-dies at once — including the cheap PR gates that had nothing to do with the
-spend. Builds are cloud-only (never compiled on the laptop), so the cloud budget
-is the only budget there is. Protect it at the trigger, not with a spending cap.
+**No build runs unless a human asked for it, or explicitly pre-approved a
+narrow standing exception.** Free-tier Actions minutes are a shared, org-wide,
+monthly budget: when they run out, *every* private repo's CI dies at once —
+including the cheap PR gates that had nothing to do with the spend. Builds are
+cloud-only (never compiled on the laptop), so the cloud budget is the only
+budget there is. Protect it at the trigger, not with a spending cap.
 
 **Heavy** = Android APK/AAB, EAS, Gradle, Xcode, Docker image builds, emulator
 E2E — anything measured in tens of minutes. Heavy workflows carry
 `workflow_dispatch` and nothing else, unless the user explicitly asks otherwise.
 
 - **Never `on: push`** for a build (not master, not any branch).
-- **Never `schedule:`** for a build. A timer builds artefacts nobody is waiting
-  on, and a hung one bills silently until the job timeout kills it.
+- **Never `schedule:`** for a build **in the workflow YAML itself.** A timer
+  builds artefacts nobody is waiting on, and a hung one bills silently until
+  the job timeout kills it. This is about the trigger definition in the repo's
+  CI config — it does not forbid a *human-approved* Claude-side scheduled task
+  invoking `gh workflow run` (still `workflow_dispatch` under the hood, just
+  dispatched by a cron instead of a click); see the device-test carve-out
+  immediately below for the one case that does this today.
 - **Never chain heavy→heavy.** A build must not `repository_dispatch` another
   repo's emulator/E2E run automatically; the downstream repo's heavy workflow
   stays dispatch-only and gets pointed at an existing artefact by hand.
 - **Release tags (`push: tags: v*`) are the one allowed automatic build** — a
   tag *is* the explicit human request. Tag deliberately; four tags in a day is
   four full builds.
+
+**The one standing exception: the device-test weekly build cycle** (set
+2026-08-30, user-approved). `skills/device-test/SKILL.md`'s self-scheduled
+weekly task dispatches a fresh build for an app **only when that app's
+device-test queue holds at least one item marked `**Status:** 🔧 needs
+build`** (see "Device-test queue" above) — never unconditionally, so it never
+becomes "a timer building artefacts nobody is waiting on." This is the only
+place a build may fire without a literal human click; it still goes through
+`workflow_dispatch` (invoked via `gh workflow run`, never an `on: schedule:`
+key added to the workflow itself), still needs `concurrency` +
+`timeout-minutes` on the target workflow like any heavy job, and daily
+OTA-only device-test drains are completely unaffected — they never trigger a
+build, on any schedule. Any future carve-out follows the same shape: fires on
+real accumulated demand, not a bare timer, and is written down here, not
+silently added to a skill.
 
 **Cheap gates stay automatic.** Unit tests, lint, typecheck, secret/PII scan,
 deploy hooks — keep these on `pull_request`. They are the safety net and they
