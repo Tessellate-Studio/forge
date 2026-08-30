@@ -27,6 +27,7 @@ inherits it — interchangeable, inter-usable, self-learning (via reviewed PRs).
 | `skills/security-sweep/` | Dependency vulnerability sweep — triage, safe auto-fix, dismiss accepted residuals. Implements `standards/security-triage.md`. |
 | `skills/crash-monitor/` | Daily Sentry + GitHub Issues triage — noise filters, confidence-gated auto-fix, revert cooldown. |
 | `skills/device-test/` | Drains the cross-app device-test queue; ships `dtq` / `device-test-status`, a read-only terminal status board for the same queue (see below). |
+| `skills/status-check/` | Session wrap-up loop-closer — verifies and settles the PRs/branches/issues/queue items this conversation opened; manual-only bits come back as a short list. |
 | `standards/workflows.md` | **Single home** for all working rules (branch placement, TDD, quality pass, status updates, etc.). |
 | `standards/anti-patterns.md` | The 14 app-agnostic build guardrails. |
 | `standards/authoritative-claims.md` | The core rule: cite a source or label a hypothesis. |
