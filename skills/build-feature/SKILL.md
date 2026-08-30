@@ -345,16 +345,45 @@ good PRs and destroys feedback speed, so the bulk of E2E runs *post*-merge.
    an explicit user hold), and say which carve-out applies when you do. Full
    rule: `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Merge on green" /
    `${CLAUDE_PLUGIN_ROOT}/standards/anti-patterns.md` → "Merge on green by default".
-3. **Update the source doc in the SAME PR.** If this feature/fix originated
+3. **Ship it — publish the production OTA right after merge, without being
+   asked.** If the app ships JS via over-the-air update and the merged diff
+   is JS/asset-only, publishing it to the app's live channel is
+   **self-doable work**, same as running a test suite or triggering a CI
+   build — it does not need the user's go-ahead each time. Don't stop to ask
+   "should I ship this?"; ask only when one of the checks below says the
+   diff genuinely can't ship this way. (Precedent: alate, 2026-08-30 — asked
+   "can this ship?" after a fully-verified fix; the user's answer was "I
+   don't see why this needs to be an explicit instruction.")
+   a. **Confirm the diff is OTA-safe first.** An OTA carries JS + assets
+      only. If the merge touched anything native-relevant (dependency
+      versions, native config fields, build-tool env, platform native
+      directories, config plugins), that part needs a fresh binary build —
+      say so plainly and route to the app's release workflow instead of
+      publishing an OTA that silently can't carry it.
+   b. **Verify the local branch is current with the default branch BEFORE
+      publishing** — the publish tooling bundles and ships whatever is on
+      disk with no warning if the branch is stale.
+      `git log --oneline HEAD..origin/<default>`; if non-empty and
+      `git merge-base --is-ancestor HEAD origin/<default>` succeeds,
+      fast-forward (`git merge --ff-only origin/<default>`) first. A stale
+      worktree branch has shipped a stale OTA silently — no error, just the
+      wrong bundle (alate, 2026-08-30).
+   c. **Publish to the channel/runtime the CURRENTLY INSTALLED production
+      build(s) actually read** — the channel name and runtime-version policy
+      are app-specific and change between releases; check the app's own
+      `CLAUDE.md`/memory for the current values rather than assuming this
+      skill's example below still holds.
+   d. **Confirm the publish shipped the right commit** — read the publish
+      output's commit/build-id line against the actual merge SHA before
+      reporting done. A publish that "succeeds" from the wrong commit is a
+      silent miss, not an error the tooling will surface.
+4. **Update the source doc in the SAME PR.** If this feature/fix originated
    from a tracked item — a BACKLOG.md entry, a regression-log row, a RELEASE
    checklist line, a runbook TODO — update that entry before reporting done:
    status (DONE + date) + PR number, and the merged SHA once it lands. A shipped
    change whose entry still says "open" is how work gets re-done and the user
    has to re-ask. Full rule: `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` →
    "Status update on completion".
-4. If the change has reached the user via OTA, remember the
-   pre-production-verification discipline (BACKLOG P1): test on dev/preview, never
-   push UI straight to `production` as the way to find out it's wrong.
 5. **Post-merge full E2E (litmus) — advisory.** After the merge lands on
    `master`, trigger the FULL litmus suite (`gh workflow run <litmus-e2e> --ref
    master`). It does NOT block (the change already merged): on red, log a
@@ -414,8 +443,14 @@ promote into the relevant skill or standard so the next build inherits it.
 - Run app commands from `mobile/`.
 - Tests: `npx jest --no-coverage` (must stay green; ~520+ tests).
 - Types: `npx tsc --noEmit`.
-- Publish OTA (preview): `eas update --channel preview --environment preview --message "..." --non-interactive`.
+- Publish OTA for on-device verification (Step 3, preview/dev channel): `eas update --channel preview --environment preview --message "..." --non-interactive`.
 - Device loop details, adb discovery, fingerprint caveat: **`references/device-loop.md`**.
+- Ship to production (Step 6, item 3): publish an OTA to the app's LIVE
+  channel right after merge, no confirmation needed — self-doable, same as
+  triggering CI. Verify the branch is current with the default branch first
+  (stale-branch publishes ship silently with no error), and check the
+  channel/runtime against the app's own docs — it's app-specific and changes
+  between releases.
 - Theme tokens: the app's `constants/theme.ts`. Shared guardrails:
   `${CLAUDE_PLUGIN_ROOT}/standards/`. App-specific anti-patterns + design vision:
   the app's in-repo `memory/`.
