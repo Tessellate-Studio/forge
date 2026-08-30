@@ -74,7 +74,16 @@ function parseComment(comment) {
     };
   }
 
-  const statusText = statusMatch[1].trim();
+  // Some enqueued items arrive as ONE long line (fields joined with " — "
+  // instead of newline bullets). Every field capture therefore stops at the
+  // next bold **Field:** marker, not just at end-of-line — otherwise a
+  // single-line item's "title" or "Needs runtime" swallows the whole body
+  // and the board renders a word wall.
+  const NEXT_FIELD = /\s*(?:[·—–|-]+\s*)?\*\*[A-Z][^*]*:\*\*[\s\S]*$/;
+  const fieldValue = match =>
+    match ? match[1].replace(NEXT_FIELD, '').trim() : null;
+
+  const statusText = statusMatch[1].replace(NEXT_FIELD, '').trim();
   let state = STATUS.UNPARSEABLE;
   if (statusText === 'OPEN') {
     state = STATUS.OPEN;
@@ -90,21 +99,21 @@ function parseComment(comment) {
   const prFieldMatch = body.match(
     /\*\*PR:\*\*\s*([^\n]+?)(?:\s*·\s*\*\*SHA|\s*$)/m
   );
-  const prField = prFieldMatch ? prFieldMatch[1].trim() : '';
+  const prField = fieldValue(prFieldMatch) || '';
   const prNumMatch = /^none\b/i.test(prField) ? null : prField.match(/#(\d+)/);
   const pr = prNumMatch ? prNumMatch[1] : null;
   const deliveryMatch = body.match(/\*\*Delivery:\*\*\s*(.+?)\s*$/m);
   const runtimeMatch = body.match(/\*\*Needs runtime:\*\*\s*(.+?)\s*$/m);
   const stepsMatch = body.match(
-    /\*\*Steps:\*\*\s*([\s\S]+?)(?:\n- \*\*Expect|\n\n|$)/
+    /\*\*Steps:\*\*\s*([\s\S]+?)(?:\n- \*\*Expect|\n\n|\*\*Expect|$)/
   );
 
   return {
     state,
-    title: titleMatch[1].trim(),
+    title: fieldValue(titleMatch),
     pr,
-    delivery: deliveryMatch ? deliveryMatch[1].trim() : null,
-    needsRuntime: runtimeMatch ? runtimeMatch[1].trim() : null,
+    delivery: fieldValue(deliveryMatch),
+    needsRuntime: fieldValue(runtimeMatch),
     needsHuman: stepsMatch ? /HUMAN:/.test(stepsMatch[1]) : /HUMAN:/.test(body),
     statusText,
     commentUrl: comment.html_url,

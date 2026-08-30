@@ -14,6 +14,17 @@ const { Command } = require('commander');
 const chalk = require('chalk');
 const { STATUS, checkGhReady, collect, daysSince } = require('./queue-lib');
 
+// One board row per item, always. Comments are authored by many sessions and
+// drift; whatever the parser hands over gets clamped so a malformed item can
+// cost at most one truncated line, never a word wall.
+function clip(text, max) {
+  if (!text) {
+    return text;
+  }
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+}
+
 function statusIcon(item) {
   switch (item.state) {
     case STATUS.OPEN:
@@ -87,14 +98,20 @@ function renderRepo(result, opts) {
       // and show only up to the link.
       const extra =
         item.state === STATUS.FAILED
-          ? chalk.red(item.statusText.replace(/^❌\s*/, '').split(' — ')[0])
-          : [item.delivery, item.needsRuntime && `needs ${item.needsRuntime}`]
-              .filter(Boolean)
-              .join(' · ');
+          ? chalk.red(
+              clip(item.statusText.replace(/^❌\s*/, '').split(' — ')[0], 90)
+            )
+          : clip(
+              [item.delivery, item.needsRuntime && `needs ${item.needsRuntime}`]
+                .filter(Boolean)
+                .join(' · '),
+              60
+            );
       lines.push(
-        `  ${statusIcon(item)}  ${item.title}${ageStr}  ${pr}  ${chalk.dim(
-          extra
-        )}`
+        `  ${statusIcon(item)}  ${clip(
+          item.title,
+          80
+        )}${ageStr}  ${pr}  ${chalk.dim(extra)}`
       );
     });
 
