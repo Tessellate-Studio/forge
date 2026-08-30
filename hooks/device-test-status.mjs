@@ -58,6 +58,7 @@ async function main() {
   let totalOpen = 0;
   let totalFailed = 0;
   let totalHuman = 0;
+  let totalNeedsBuild = 0;
   let totalUnparsed = 0;
 
   results.forEach(r => {
@@ -66,20 +67,25 @@ async function main() {
     }
     const open = r.items.filter(i => i.state === STATUS.OPEN);
     const failed = r.items.filter(i => i.state === STATUS.FAILED);
+    const needsBuild = r.items.filter(i => i.state === STATUS.NEEDS_BUILD);
     const unparsed = r.items.filter(i => i.state === STATUS.UNPARSEABLE);
     const human = open.filter(i => i.needsHuman).length;
     totalOpen += open.length;
     totalFailed += failed.length;
     totalHuman += human;
+    totalNeedsBuild += needsBuild.length;
     totalUnparsed += unparsed.length;
 
-    if (open.length || failed.length || unparsed.length) {
+    if (open.length || failed.length || needsBuild.length || unparsed.length) {
       const parts = [];
       if (open.length) {
         parts.push(`${open.length} open${human ? ` (${human} needs-human)` : ''}`);
       }
       if (failed.length) {
         parts.push(`${failed.length} failed`);
+      }
+      if (needsBuild.length) {
+        parts.push(`${needsBuild.length} needs-build`);
       }
       if (unparsed.length) {
         parts.push(`${unparsed.length} unparseable`);
@@ -94,7 +100,9 @@ async function main() {
 
   const summary = `${totalOpen} open, ${totalFailed} failed${
     totalHuman ? `, ${totalHuman} needs-human` : ''
-  }${totalUnparsed ? `, ${totalUnparsed} unparseable` : ''}`;
+  }${totalNeedsBuild ? `, ${totalNeedsBuild} needs-build` : ''}${
+    totalUnparsed ? `, ${totalUnparsed} unparseable` : ''
+  }`;
 
   // additionalContext MUST be nested under hookSpecificOutput with a
   // hookEventName — a top-level additionalContext key is silently ignored

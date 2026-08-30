@@ -35,6 +35,8 @@ function statusIcon(item) {
       return chalk.red('✖ FAILED');
     case STATUS.DONE:
       return chalk.green('✓ DONE ');
+    case STATUS.NEEDS_BUILD:
+      return chalk.blue('🔧 BUILD ');
     default:
       return chalk.magenta('? UNPARSED');
   }
@@ -59,6 +61,7 @@ function renderRepo(result, opts) {
   const open = result.items.filter(i => i.state === STATUS.OPEN);
   const failed = result.items.filter(i => i.state === STATUS.FAILED);
   const done = result.items.filter(i => i.state === STATUS.DONE);
+  const needsBuild = result.items.filter(i => i.state === STATUS.NEEDS_BUILD);
   const unparsed = result.items.filter(i => i.state === STATUS.UNPARSEABLE);
   const needsHuman = open.filter(i => i.needsHuman).length;
 
@@ -66,6 +69,7 @@ function renderRepo(result, opts) {
     `${open.length} open`,
     `${failed.length} failed`,
     `${needsHuman} needs-human`,
+    `${needsBuild.length} needs-build`,
     `${done.length} done`,
   ].join(' · ');
   lines.push(`${header}  ${chalk.gray(counts)}  ${chalk.dim(result.issueUrl)}`);
@@ -80,8 +84,8 @@ function renderRepo(result, opts) {
   }
 
   const visible = opts.all
-    ? [...open, ...failed, ...done]
-    : [...open, ...failed];
+    ? [...open, ...failed, ...needsBuild, ...done]
+    : [...open, ...failed, ...needsBuild];
   if (visible.length === 0 && unparsed.length === 0) {
     lines.push(chalk.gray('  (queue empty)'));
   }
@@ -95,12 +99,17 @@ function renderRepo(result, opts) {
 
       // Failed items' Status line is "failed (...) → <link> — <full writeup>";
       // the writeup duplicates the linked issue, so keep the board scannable
-      // and show only up to the link.
+      // and show only up to the link. Needs-build items carry their "what's
+      // needed" text right after the emoji — surface that instead of the
+      // generic delivery/runtime pair, since that text IS the reason this
+      // item is sitting out of the daily drain.
       const extra =
         item.state === STATUS.FAILED
           ? chalk.red(
               clip(item.statusText.replace(/^❌\s*/, '').split(' — ')[0], 90)
             )
+          : item.state === STATUS.NEEDS_BUILD
+          ? chalk.blue(clip(item.statusText.replace(/^🔧\s*/, ''), 90))
           : clip(
               [item.delivery, item.needsRuntime && `needs ${item.needsRuntime}`]
                 .filter(Boolean)
@@ -139,19 +148,22 @@ function render(results, opts) {
         if (i.state === STATUS.FAILED) {
           acc.failed += 1;
         }
+        if (i.state === STATUS.NEEDS_BUILD) {
+          acc.needsBuild += 1;
+        }
         if (i.state === STATUS.OPEN && i.needsHuman) {
           acc.needsHuman += 1;
         }
       });
       return acc;
     },
-    { open: 0, failed: 0, needsHuman: 0 }
+    { open: 0, failed: 0, needsHuman: 0, needsBuild: 0 }
   );
 
   out.push(chalk.gray('─'.repeat(60)));
   out.push(
     chalk.bold(
-      `Totals: ${totals.open} open, ${totals.failed} failed, ${totals.needsHuman} needs-human across ${results.length} repos`
+      `Totals: ${totals.open} open, ${totals.failed} failed, ${totals.needsHuman} needs-human, ${totals.needsBuild} needs-build across ${results.length} repos`
     )
   );
   if (!opts.all) {

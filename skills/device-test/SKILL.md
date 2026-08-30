@@ -1,6 +1,6 @@
 ---
 name: device-test
-description: Drains the per-repo "Device test queue" GitHub issues across all Tessellate mobile apps (alate, mood-layer, badige) — AGENT-FIRST. The agent executes every adb-automatable step itself (launch, taps, text entry, screenshots, logcat) and verifies Expect from what it captures; the human is pulled in only for steps marked HUMAN: (gesture feel, camera/biometrics, real accounts, iOS). Sessions enqueue tests per forge standards/workflows.md → "Device-test queue"; this skill fetches every OPEN item, verifies the right build/OTA is on the connected device per app, runs or walks each test, and closes items by editing their Status line — filing failures instead of fixing mid-drain. Use whenever the user asks to "drain the device test queue", "run device tests", "what needs testing on my phone", "device test session", passively "anything waiting on my phone?" — or on a schedule/idle moment whenever a device is adb-connected: agent-only items need no invitation. Empty queues everywhere is a valid, quiet result. Output is a wrap-up table: passed / failed→filed / skipped-stranded / needs-human, with what unblocks each.
+description: Drains the per-repo "Device test queue" GitHub issues across all Tessellate mobile apps (alate, mood-layer, badige) — AGENT-FIRST, and always runs its actual work in a cost-controlled model:sonnet subagent regardless of the invoking session's model. The agent executes every adb-automatable step itself (launch, taps, text entry, screenshots, logcat) and verifies Expect from what it captures; the human is pulled in only for steps marked HUMAN: (gesture feel, camera/biometrics, real accounts, iOS). Sessions enqueue tests per forge standards/workflows.md → "Device-test queue"; this skill fetches every OPEN item, verifies the right build/OTA is on the connected device per app, runs or walks each test, and closes items by editing their Status line — filing failures instead of fixing mid-drain. Items that need a fresh native build (no OTA can reach them) get logged as `🔧 needs build` instead of tested — OTA-deliverable changes always test immediately, ad hoc or scheduled, never gated by a build cadence. Self-schedules a daily drain (9am local by default) that skips needs-build items, plus a separate weekly task that dispatches builds only for apps with a needs-build backlog (the one standing exception to the no-automatic-builds CI-spend rule). Use whenever the user asks to "drain the device test queue", "run device tests", "what needs testing on my phone", "device test session", passively "anything waiting on my phone?" — or on a schedule/idle moment whenever a device is adb-connected: agent-only items need no invitation. Empty queues everywhere is a valid, quiet result. Output is a wrap-up table: passed / failed→filed / needs-build→unblock / needs-human, with what unblocks each.
 ---
 
 # Device test drain
@@ -39,6 +39,61 @@ every session and surfaces a one-line summary when anything is open, failed,
 or malformed — silent when every queue is empty, same as this skill's own
 "quiet is a valid result" rule. Off switch: `FORGE_DEVICE_TEST_STATUS_DISABLE=1`.
 
+## Model — always a cost-controlled subagent
+
+Draining is high tool-call-volume, low-reasoning work: screenshots, taps,
+`adb` round-trips, Status-line edits. None of that benefits from a frontier
+model, and running it inline would silently bill whatever model the invoking
+session happens to be on for every one of those round-trips — expensive if
+that session is on a premium model, and the same waste again on every
+self-scheduled run (below) if left unpinned. **This skill's entire workflow
+(Steps 0-4) MUST execute inside a single subagent spawned via the Agent tool
+with `model: "sonnet"`** — never inline in the invoking session, regardless of
+what model that session is using. Spawn it with a self-contained prompt
+covering the full drain (this file's content is the prompt), `agentType:
+"general-purpose"` (needs Bash for `adb`/`gh`, Read for screenshots), and
+relay its final wrap-up table back verbatim as this skill's own output. The
+one exception is the **read-only** `dtq` check ("just checking what's
+pending?" above) — that's a single CLI invocation, not a drain, and doesn't
+need a subagent at all.
+
+## Self-scheduled automation — daily drain, weekly build
+
+Two standing scheduled tasks (via the scheduled-tasks MCP, registered once and
+left running — see `mcp__scheduled-tasks__list_scheduled_tasks` to check they
+still exist) keep the queue moving without a manual trigger:
+
+- **`device-test-daily-drain`**, every morning (9:00 AM local unless the user
+  picked otherwise) — runs this skill's full workflow, with one restriction:
+  **skip any item whose Status is already `🔧 needs build`** (Step 1, below) —
+  re-checking those daily is wasted API calls when only a fresh build changes
+  the answer. Every other OPEN item, including every OTA-deliverable one,
+  tests immediately — OTA items are NEVER gated by the weekly build cycle, only
+  native-build-blocked ones are. Silent when nothing was pending or nothing
+  changed, per this skill's own "quiet is correct" rule — a scheduled task
+  that pings every morning regardless of outcome is a nuisance, not a signal.
+- **`device-test-weekly-build`**, once a week — does NOT run this skill's
+  drain workflow. It only checks each app's queue for comments marked `🔧
+  needs build`; for any app with at least one, it dispatches that app's build
+  workflow (`workflow_dispatch` via `gh workflow run`, discovered per-repo with
+  `gh workflow list` rather than hardcoded — build workflow names drift), logs
+  the dispatch on the affected item(s), and for sideload-friendly apps
+  (mood-layer, badige — see the Scope table) auto-installs the finished
+  artifact on a connected device via `adb install -r`, flipping the item back
+  to plain `OPEN` so the next daily drain picks it up. For Play-Store apps
+  (alate), a fresh CI build still can't be sideloaded onto a Play-installed
+  copy (Play App Signing — see alate regression history, e.g. issue #596); the
+  weekly task notes the build is ready and needs Play Console promotion, a
+  step that stays the user's per the manual-runbook rule. **This task never
+  fires when no app has a `🔧 needs build` item** — see `standards/workflows.md`
+  → "CI spend" for why this is the one standing exception to "no build without
+  a human click," and the guardrails that keep it from becoming an
+  unconditional timer.
+
+Both tasks' prompts just need to say "run the forge:device-test skill" (daily)
+or describe the narrower weekly check above — the actual logic lives here, in
+one place, not duplicated into the scheduled-task prompts themselves.
+
 ## Scope table — the apps and how a change reaches each phone
 
 | App | Remote | Local checkout | Delivery today | Queue |
@@ -74,21 +129,30 @@ enqueued needs rewriting when the delivery path changes.
 3. **All queues empty → say so and stop.** Quiet is a correct result — don't
    invent work.
 
-### Step 1 — Split the work: agent items vs human items
+### Step 1 — Split the work: agent items, human items, and build-blocked items
 
-Classify every OPEN item by its Steps: **agent-runnable** (no `HUMAN:` prefix
-anywhere — every step is adb-executable) vs **needs-human** (at least one
-`HUMAN:` step). Then:
+Classify every item by Status first, then (for OPEN ones) by Steps:
 
-- **Agent-runnable items: just run them (Step 2 → 3), no question asked.**
-  This is the self-maintenance path — the user should not be consulted about
-  tests an agent can execute and judge from a screenshot/logcat.
-- **Needs-human items:** present one short table — app · item · the specific
-  `HUMAN:` steps · Needs runtime · testable-now verdict — and walk them with
-  the user if they're present. If the user isn't in the loop right now, leave
-  those items OPEN, report them in the wrap-up, and still run all their
-  non-HUMAN steps as a smoke pass (a crash on launch shouldn't wait for a
-  human sitting to be discovered).
+- **Already `🔧 needs build`** — a previous drain already determined this item
+  can't be reached by any OTA and the installed build predates it. On a
+  **daily** run, skip these entirely (see "Self-scheduled automation" above —
+  that's the whole point of the marker). On an **ad hoc** run (the user
+  explicitly asked right now), it's fine to give Step 2's version check one
+  more cheap look in case a human already installed a newer build since the
+  marker was written — if it's now satisfiable, drop back to OPEN and treat it
+  like any other item this run; if still blocked, leave it exactly as-is
+  (don't rewrite a comment that's still accurate).
+- **OPEN, agent-runnable** (no `HUMAN:` prefix anywhere — every step is
+  adb-executable): **just run them (Step 2 → 3), no question asked.** This is
+  the self-maintenance path — the user should not be consulted about tests an
+  agent can execute and judge from a screenshot/logcat.
+- **OPEN, needs-human** (at least one `HUMAN:` step): present one short table —
+  app · item · the specific `HUMAN:` steps · Needs runtime · testable-now
+  verdict — and walk them with the user if they're present. If the user isn't
+  in the loop right now (including every automated daily/weekly run — there is
+  never a human present for those), leave those items OPEN, report them in the
+  wrap-up, and still run all their non-HUMAN steps as a smoke pass (a crash on
+  launch shouldn't wait for a human sitting to be discovered).
 
 Order apps alate → mood-layer → badige.
 
@@ -100,9 +164,12 @@ would be about the previous bundle. Per app, before its first item:
 **alate**
 1. Installed build: `adb shell dumpsys package com.tessellate.alate | grep -E "versionCode|versionName"`.
 2. Compare against each item's **Needs runtime**. Item needs a newer tag build
-   than installed → **stranded**: skip with reason, tell the user which build
-   to install (Play internal / `gh run download` + `adb install`) — never
-   trigger a heavy build yourself (CI-spend rule: builds are human-dispatched).
+   than installed AND isn't reachable by any OTA → **needs build** (Step 3
+   case 4, below): write `🔧 needs build` on the item now, don't wait until
+   Step 3 to decide — tell the user which build would unblock it (Play
+   internal / `gh run download` + `adb install`) in the wrap-up. Never trigger
+   a heavy build yourself from inside a drain — that's the separate weekly
+   scheduled task's job (see "Self-scheduled automation"), not this loop's.
 3. OTA-delivered items: confirm the update published to the production channel
    (`eas update:list --branch production --limit 3` from `mobile/`), then
    force-stop → relaunch → force-stop → relaunch (expo-updates applies on
@@ -115,18 +182,24 @@ would be about the previous bundle. Per app, before its first item:
    unconfirmed "verified on device" in that window measured stale JS.
    Runtime mismatch (installed build's runtime vs the update's — both
    platforms use `expo.version` under the appVersion policy since alate
-   v1.3.1) → **stranded**: skip with reason. Never generalize an iOS
-   delivery pass to Android or vice versa — the lanes are independent and
-   have diverged for months.
+   v1.3.1) → **needs build** — under this policy the OTA existing doesn't
+   help; only a new binary bumps `expo.version`. Write `🔧 needs build` same
+   as case 2. Never generalize an iOS delivery pass to Android or vice versa —
+   the lanes are independent and have diverged for months.
 
 **mood-layer** — start the dev server (`npx expo start` in the checkout), user
 opens in Expo Go. Confirm the loaded JS is current (Metro logs show the
-connection) before the first item.
+connection) before the first item. There's no native-build gate here (no store
+presence) — a `needs build` item on this app means the dev server itself is
+stale against the item's SHA, not a heavy CI build.
 
 **badige** — check the installed package (`adb shell dumpsys package | grep -i
-badige` or its known package id); if the item's SHA is newer than the installed
-APK, ask the user to dispatch the APK workflow (or locate an existing artifact
-with `gh run list`), then `adb install -r` the downloaded artifact.
+badige` or its known package id); if the item's SHA is newer than the
+installed APK → **needs build**: write `🔧 needs build — <SHA/workflow that'd
+unblock it>` now, same as alate case 2/3. Don't dispatch the APK workflow
+yourself from inside a drain (see Step 2's alate note); the weekly scheduled
+task handles it, or the user can locate an existing artifact with `gh run
+list` and `adb install -r` it themselves before the next daily drain.
 
 ### Step 3 — Execute the items, agent-first
 
@@ -161,26 +234,38 @@ For each OPEN item on the current app:
    where it's tracked now; hiding it under "Resolved" reads as handled and
    risks it getting forgotten. It stays fully visible in the queue until
    someone actually fixes it and a later drain flips it to ✅ done.
-4. **Stranded** (Step 2 verdict) → leave `**Status:** OPEN`, report it in the
-   wrap-up with the exact unblock ("install the v1.2.2 internal-track build").
-   Stays un-minimized too — it's still open work, not a closed queue item.
+4. **Needs build** (Step 2 verdict — no OTA can reach it and the installed
+   build predates it) → set `**Status:** 🔧 needs build — <what's needed>`
+   (e.g. "next tag ≥ v1.3.2", "next EAS/APK build off master") — this is the
+   durable log the weekly build task reads (see "Self-scheduled automation"
+   and `standards/workflows.md` → "Device-test queue"). Report the exact
+   unblock in the wrap-up too ("install the v1.2.2 internal-track build") for
+   whoever's reading right now, but the Status line is what makes it survive
+   past this session. Stays un-minimized — it's open work, not a closed item.
 
 ### Step 4 — Wrap up
 
 One table: item · app · verdict (✅ agent-verified, with screenshot / ✅ human-
-confirmed / ❌ → filed link / ⏸ stranded → unblock / 🙋 needs-human → the
-specific `HUMAN:` steps waiting).
+confirmed / ❌ → filed link / 🔧 needs build → what would unblock it / 🙋
+needs-human → the specific `HUMAN:` steps waiting).
 Then, per the user's communication style: what they need to do (installs,
 promotions), what got filed for follow-up sessions. If any repo's queue issue
 had drifted from the format (unparseable comments), say which comment — don't
-silently skip it.
+silently skip it. **A daily automated run only speaks up if this table has at
+least one non-empty row** (something tested, failed, or newly logged as
+needs-build) — an empty drain stays silent per the "quiet is correct" rule,
+same as the SessionStart hook.
 
 ## What this skill does NOT do
 
 - **No store-console actions** — promoting Play tracks, TestFlight review,
   anything in a vendor console is the user's (per the manual-runbook rule).
-- **No heavy builds** — if an item needs a fresh APK/AAB, it names the dispatch
-  and waits for a human; `workflow_dispatch` builds are user-triggered.
+- **No heavy builds from inside a drain** — a drain session (daily or ad hoc)
+  never dispatches a build itself; a `needs build` item just gets logged
+  (Step 3 case 4) and named in the wrap-up. The one place a build fires
+  without a human click is the separate `device-test-weekly-build` scheduled
+  task (see "Self-scheduled automation") — narrower logic, its own task, not
+  this skill's per-item loop.
 - **No mid-drain fixes** — failures get filed and linked, not debugged live.
 - **No enqueueing** — writing queue items is the shipping session's job at
   ship time, when Steps and Expect are still warm (see the standard).
