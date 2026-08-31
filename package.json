@@ -8,7 +8,8 @@
     "bp": "standards-cli/cli/index.js",
     "rubric": "rubric/cli/index.js",
     "device-test-status": "skills/device-test/scripts/status-board.js",
-    "dtq": "skills/device-test/scripts/status-board.js"
+    "dtq": "skills/device-test/scripts/status-board.js",
+    "brief": "tools/brief/cli/index.js"
   },
   "files": [
     "index.js",
@@ -20,6 +21,8 @@
     "rubric/cli/",
     "rubric/templates/",
     "rubric/docs/",
+    "tools/brief/lib/",
+    "tools/brief/cli/",
     "standards/",
     "skills/",
     "references/",
@@ -35,14 +38,15 @@
     "./integrations": "./standards-cli/lib/integrations/index.js"
   },
   "scripts": {
-    "test": "npm run test:standards && npm run test:rubric && npm run test:workflows && npm run test:hooks",
+    "test": "npm run test:standards && npm run test:rubric && npm run test:workflows && npm run test:hooks && npm run test:brief",
     "test:standards": "jest --config standards-cli/jest.config.js",
     "test:rubric": "jest --config rubric/jest.config.js",
     "test:workflows": "jest --config references/jest.config.js",
     "test:hooks": "jest --config hooks/jest.config.js",
+    "test:brief": "jest --config tools/brief/jest.config.js",
     "test:coverage": "jest --config standards-cli/jest.config.js --coverage && jest --config rubric/jest.config.js --coverage",
-    "lint": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ --fix",
-    "lint:check": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/",
+    "lint": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/brief/lib/ tools/brief/cli/ --fix",
+    "lint:check": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/brief/lib/ tools/brief/cli/",
     "audit": "npm audit --audit-level=high",
     "validate": "node standards-cli/cli/bp-validate.js",
     "init": "node standards-cli/cli/bp-init.js",
