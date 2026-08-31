@@ -161,6 +161,33 @@ timeout-flake):
 Escape hatches stay: a hook may offer a full-suite mode behind an explicit
 env var for whoever wants belt-and-braces locally. The default is light.
 
+## Large command output — wrap it in `brief`, don't dump it raw
+
+Any command that can produce a big, unpredictable amount of output (`git
+diff`/`git log`, `npm install`, `find`, full test runs, build logs — not
+just git) burns context tokens for no benefit once the output exceeds what
+actually gets read. Run it through `brief` instead of calling it raw:
+
+```
+brief git diff
+brief npm test
+brief find . -name '*.snap'
+```
+
+`brief` (`tools/brief/`, installed as the `brief` bin) runs the command and:
+
+- prints output as-is when it's already small — no overhead;
+- on a non-zero exit, always prints the FULL output — a failure is exactly
+  the moment you can't afford to lose information, so nothing is
+  summarized;
+- on success with large output, keeps the head and tail and collapses the
+  middle to a count, and always saves the untouched original to disk,
+  printing its path so it can be read back if the summary wasn't enough.
+
+`brief --full <command>` skips summarization outright. This is a default
+habit, not a mandate — reach for the plain command when you already know
+the output will be short or you need to pipe it into something else.
+
 ## Orphan-branch fixes — port AUTOMATICALLY, do not ask
 
 If a regression-log/BACKLOG entry or an audit reveals a needed fix already

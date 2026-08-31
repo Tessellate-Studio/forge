@@ -7,8 +7,9 @@
 One repo = the whole build platform. The Claude Code plugin every Tessellate
 app installs (shared build **skills**, platform **standards**, a CLAUDE.md
 **template**, the `/new-app` scaffolder) plus the platform **CLIs**
-(`standards`/`bp` for scaffolding + inspection, `rubric` for task scoring) and
-the reusable **CI workflows**. Build know-how lives once and every app
+(`standards`/`bp` for scaffolding + inspection, `rubric` for task scoring,
+`brief` for token-cheap command output) and the reusable **CI workflows**.
+Build know-how lives once and every app
 inherits it — interchangeable, inter-usable, self-learning (via reviewed PRs).
 
 > Absorbed the former `code-standards` and `rubric-sdk` repos on 2026-07-17
@@ -37,6 +38,7 @@ inherits it — interchangeable, inter-usable, self-learning (via reviewed PRs).
 | `references/CLAUDE.base.md` | One-page CLAUDE.md template for new apps (used by `/new-app`). |
 | `standards-cli/` | The code-standards SDK: `standards`/`bp` CLI, validators, scaffolding templates. |
 | `rubric/` | The rubric SDK: `rubric` CLI + `evaluateFromContext` scoring API (root export). |
+| `tools/brief/` | The `brief` CLI: run any command, print a token-cheap summary of its output instead of the raw dump. See `standards/workflows.md`. |
 | `.github/workflows/code-inspection.yml` | **Reusable** advisory inspection gate apps call from their CI. |
 
 ## Install
@@ -56,7 +58,7 @@ version pins or bumps (platform decision 2026-07-16).
 **CLIs (machine-global, from GitHub — nothing is on the npm registry):**
 
 ```bash
-npm install -g github:Tessellate-Studio/forge   # standards, bp, rubric
+npm install -g github:Tessellate-Studio/forge   # standards, bp, rubric, brief
 ```
 
 **CI gate (per app):**
