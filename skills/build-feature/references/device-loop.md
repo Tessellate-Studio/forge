@@ -6,16 +6,25 @@ device to verify a change. Read this when you reach Step 3 of SKILL.md.
 ## Mental model (read once)
 
 - alate uses **EAS Update**. `updates.url` → `u.expo.dev`; `runtimeVersion`
-  policy is **`fingerprint`** (`app.json`).
-- The test device runs a **preview** build (internal APK, EAS profile `preview`,
-  channel **`preview`**) — NOT a Play Store/production build, and NOT a dev
-  client. So: no Metro, no fast-refresh. JS only arrives via an OTA on the
-  `preview` channel.
-- An OTA only applies to a build whose **native fingerprint matches** the
-  published update's runtime version. JS/asset-only changes keep the fingerprint,
-  so OTA works. If any *native* dep/config changed since the installed build was
-  cut, the update is silently ignored and a fresh build is required — verify the
-  build's runtime version with `eas build:list` if an update never shows.
+  policy is **`appVersion`** on BOTH platforms since v1.3.1 (PR #605) —
+  an OTA reaches every install whose `expo.version` matches, and ONLY an
+  `expo.version` bump strands older builds. The old `fingerprint` policy is
+  GONE; do not reason from fingerprint-drift folklore in anything dated
+  before 2026-08-26.
+- **The preview lane is retired** (user decision, 2026-08-13). The test
+  device runs a **production** build (Play internal-testing track APK, or
+  a TestFlight build on iOS) — NOT a dev client. So: no Metro, no
+  fast-refresh. JS only arrives via an OTA on the **`production`** channel,
+  same as real users get. (The preview APK workflow input still exists for
+  one-off debugging, but no preview OTAs are published anymore — don't
+  reach for it here.)
+- Because `appVersion` does NOT change when the native surface does, the
+  old fingerprint mismatch can no longer silently protect you from
+  publishing a JS update that calls a native module the installed binary
+  lacks — that job now belongs to the Native-drift gate step in
+  `eas-update.yml`, which refuses to publish if native-relevant files
+  (`package.json`/`app.json`/`eas.json`) changed since the last release tag
+  with no `expo.version` bump.
 - expo-updates with `fallbackToCacheTimeout: 0` loads the cached bundle
   immediately and downloads the new one in the background; it swaps in on the
   **next** launch. Hence the **double-relaunch**.
@@ -24,10 +33,12 @@ device to verify a change. Read this when you reach Step 3 of SKILL.md.
 
 The wifi-debug IP:port changes per session — ask the user for it if unknown
 ("what's your wifi debugging IP:port?"), or use a USB device. adb usually lives
-under the Android SDK, not on PATH:
+under the Android SDK, not on PATH — don't hardcode a username in the path,
+it varies per machine (a stale hardcoded profile path is exactly the kind of
+folklore this doc warns about elsewhere):
 
 ```bash
-ADB="/c/Users/mailt/AppData/Local/Android/Sdk/platform-tools/adb.exe"   # adjust if missing
+ADB="$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe"   # adjust if missing
 "$ADB" connect <DEVICE_IP:PORT>          # e.g. 192.168.68.101:42325 (wifi debugging)
 "$ADB" devices -l                        # confirm one device shows "device"
 ```
@@ -37,32 +48,43 @@ EAS auth: `eas whoami` should print an account. If not, the user must
 
 Package: `com.tessellate.alate`.
 
-## Publish the OTA (preview channel)
+## Publish the OTA (production channel)
+
+The preview lane is retired, so this ships on the same `production` channel
+real users are on. From the alate checkout's `mobile/` directory (path is
+per-session — check this session's known checkout location, don't assume a
+username):
 
 ```bash
-cd /c/Users/mailt/Documents/alate/mobile
-npx tsc --noEmit && npx jest --no-coverage     # gate — never publish a red build
-APP_VARIANT=preview eas update --channel preview --environment preview \
-  --message "<what changed>" --non-interactive
+npm run ota:production -- --message "<what changed>"
 ```
 
-**`APP_VARIANT=preview` is MANDATORY when the device runs the "Alate Preview"
-variant APK** (package `com.tessellate.alate.preview`). app.config.js derives
-native config from that env var, and the runtime fingerprint hashes it — an
-update published WITHOUT it computes the production fingerprint, the device
-silently ignores it, and the fixes "don't arrive" with zero errors anywhere.
-Incident: 2026-07-03, three UI fixes published fingerprint-mismatched; verified
-by running `npx expo-updates fingerprint:generate --platform android` with and
-without the var (`8f3b…` vs `767e…`).
+This dispatches `eas-update.yml` on CI by default (issue #629 / PR #637):
+typecheck + the full jest suite run as a preflight, bundling happens on a
+clean runner, and the Native-drift gate blocks the publish if native-relevant
+files changed since the last release tag with no `expo.version` bump. Watch
+it with `gh run list --workflow=eas-update.yml --limit 1` — **production
+routes through a GitHub `production` Environment that may be waiting on a
+human reviewer's approval click before it actually publishes**, so don't
+assume "dispatched" means "live" until that run completes.
 
-Note the printed **Android Runtime version** + **Update group ID** — they let you
-confirm on-device that the running bundle is the one you just shipped. (The
-`--environment` flag is required in `--non-interactive` mode.)
+Add `--local` only when CI is unavailable — it bundles on this machine
+instead, which is the fragile path (a two-platform Metro export is the
+heaviest thing this repo asks of a dev machine; it has died natively under
+load, `0xC0000409` at 99%, 2026-08-31):
+
+```bash
+npm run ota:production -- --message "<what changed>" --local
+```
+
+Either way, note the printed **Android Runtime version** + **Update group
+ID** — they let you confirm on-device that the running bundle is the one you
+just shipped.
 
 ## Apply on the device + screenshot
 
 ```bash
-ADB="/c/Users/mailt/AppData/Local/Android/Sdk/platform-tools/adb.exe"
+ADB="$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe"
 D="-s <DEVICE_IP:PORT>"
 PKG="com.tessellate.alate"
 
@@ -81,7 +103,7 @@ sleep 22                                                 # download window — b
 sleep 12                                                 # JS load + render
 
 "$ADB" $D shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1
-"$ADB" $D exec-out screencap -p > /c/Users/mailt/AppData/Local/Temp/alate-verify.png
+"$ADB" $D exec-out screencap -p > "$LOCALAPPDATA/Temp/alate-verify.png"
 "$ADB" $D shell svc power stayon false >/dev/null 2>&1   # restore the device setting
 ```
 
@@ -138,6 +160,10 @@ Then **Read** `alate-verify.png` and measure against the acceptance criteria.
 - **Empty vs populated state is data-dependent.** Some screens render differently
   with/without fit history. Don't clear the user's history to force a state
   without asking — note the limitation instead.
-- **Don't push to `production`** to test — that updates real users. Preview only,
-  until verified and approved.
+- **Publishing here IS publishing to production** — the preview lane is
+  retired, so there is no longer a safe channel to rehearse on. The
+  `production` GitHub Environment's reviewer-approval gate (required on
+  `eas-update.yml`) is the actual safety net now; don't dispatch the OTA
+  workflow speculatively, and don't `--skip-native-drift-gate` without a
+  human having verified the change is JS-safe.
 </content>
