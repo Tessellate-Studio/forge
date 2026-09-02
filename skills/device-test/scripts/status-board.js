@@ -12,7 +12,13 @@
 
 const { Command } = require('commander');
 const chalk = require('chalk');
-const { STATUS, checkGhReady, collect, daysSince } = require('./queue-lib');
+const {
+  STATUS,
+  checkGhReady,
+  collect,
+  daysSince,
+  describeClaim,
+} = require('./queue-lib');
 
 // One board row per item, always. Comments are authored by many sessions and
 // drift; whatever the parser hands over gets clamped so a malformed item can
@@ -73,6 +79,13 @@ function renderRepo(result, opts) {
     `${done.length} done`,
   ].join(' · ');
   lines.push(`${header}  ${chalk.gray(counts)}  ${chalk.dim(result.issueUrl)}`);
+
+  // Who holds the phone, if anyone. This is the question the board could not
+  // answer before — "what is pending" never told a second session that a
+  // first one was already driving the device.
+  if (result.claim) {
+    lines.push(chalk.yellow(`  ${describeClaim(result.claim)}`));
+  }
 
   if (unparsed.length > 0) {
     lines.push(
