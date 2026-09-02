@@ -130,7 +130,28 @@ enqueued needs rewriting when the delivery path changes.
    An item is pending iff its body contains `**Status:** OPEN`. No queue issue
    in a repo → that repo simply has nothing pending (the *enqueue* side is
    responsible for creating it); note it and move on.
-3. **Claim the device before touching it.** The queue issue carries the lock —
+3. **Repair format drift — do not just report it.** Anything the parser marks
+   UNPARSEABLE is a comment that *looks* like an item but cannot be read as
+   one. **Fix it in place; never hand the user a list to tidy by hand.** For
+   each one, open it and decide:
+   - **A real test missing its Status line** → append `- **Status:** OPEN` so
+     it enters the queue, then drain it this sitting like any other item. This
+     is the common case: an item enqueued before the format settled.
+   - **A note, or commentary on another item** → leave it alone. The parser
+     ignores anything with neither a title nor a Status, and skips bot notices
+     (`### 📦`, `### 🔒`, `### 🤖`) outright.
+   - **Genuinely ambiguous** → leave it and say so in the wrap-up, with the
+     comment URL and what is missing. That is the only case that reaches a
+     human, and it should be rare.
+
+   Say what was repaired in the wrap-up. A drain that reports "N comments
+   don't match the format" without having fixed them has not done its job —
+   the whole point of the queue is that nobody maintains it by hand.
+
+   Why this matters more than tidiness: a malformed item is an **invisible**
+   item. On alate#562 nine comments were flagged, and two of them were real
+   OPEN tests that had silently dropped off the board — one for over a week.
+4. **Claim the device before touching it.** The queue issue carries the lock —
    format and semantics in
    [`standards/workflows.md` → "Claiming the device"](../../standards/workflows.md).
    Read the claims first:
@@ -145,7 +166,7 @@ enqueued needs rewriting when the delivery path changes.
    2026-09-01 and the collision could only be reconstructed afterwards by one
    session messaging the other. Every session commits under the same GitHub
    account, so the byline never reveals who is on the phone.
-4. **All queues empty → say so and stop.** Quiet is a correct result — don't
+5. **All queues empty → say so and stop.** Quiet is a correct result — don't
    invent work. Release your claim before stopping (Step 4).
 
 ### Step 1 — Split the work: agent items, human items, and build-blocked items
@@ -275,8 +296,10 @@ confirmed / ❌ → filed link / 🔧 needs build → what would unblock it / �
 needs-human → the specific `HUMAN:` steps waiting).
 Then, per the user's communication style: what they need to do (installs,
 promotions), what got filed for follow-up sessions. If any repo's queue issue
-had drifted from the format (unparseable comments), say which comment — don't
-silently skip it. **A daily automated run only speaks up if this table has at
+had drifted from the format, say what you REPAIRED (Step 0.3) — and list only
+the ones you genuinely could not classify, with their URL and what's missing.
+"N comments don't match the format" with nothing done about them is not an
+acceptable wrap-up line. **A daily automated run only speaks up if this table has at
 least one non-empty row** (something tested, failed, or newly logged as
 needs-build) — an empty drain stays silent per the "quiet is correct" rule,
 same as the SessionStart hook.

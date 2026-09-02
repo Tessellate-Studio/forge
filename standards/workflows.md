@@ -386,6 +386,34 @@ parse it — keep the bold field names exactly):
   while the context is warm has real Steps and a real Expect; one written later
   from the diff has neither.
 
+### Format drift is the drain's job to fix, not yours
+
+A comment that *looks* like an item but cannot be parsed is an **invisible**
+item — it is not on the board, so nobody tests it and nobody knows. On
+alate#562 nine comments were flagged at once and two were real OPEN tests that
+had silently dropped off, one for over a week.
+
+So the drain REPAIRS drift rather than reporting it (`skills/device-test/SKILL.md`
+→ Step 0.3). A real test missing its Status line gets `- **Status:** OPEN`
+appended and is drained that sitting; notes and bot notices are left alone;
+only a genuinely ambiguous comment reaches a human. Nobody maintains this
+queue by hand.
+
+The parser is deliberately forgiving, because every rigid rule here has cost
+an item:
+
+- **`**Status:** OPEN — <note>` is OPEN.** Prefix match, not equality. An
+  equality check made "OPEN — routed to another agent" unparseable, dropping a
+  live item off the board entirely.
+- **A title is `### Foo` OR a `**Foo**` opening the first non-empty line.**
+  The bold form predates the heading convention. First line only — a bold run
+  mid-body is ordinary prose (`**Why:** …`), and matching those turned
+  explanatory drain notes into phantom malformed items.
+- **Bot notices are not items.** `### 📦` (OTA published), `### 🔒` (device
+  claim) and `### 🤖` are skipped outright. They carry a heading and no Status,
+  so without this they pile up as "malformed" forever — six of those nine.
+
+
 ### Claiming the device — the queue carries the lock
 
 `dtq` is read-only. It answers *what is pending*; it never answered **is

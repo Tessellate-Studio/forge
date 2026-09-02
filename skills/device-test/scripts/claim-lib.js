@@ -25,6 +25,16 @@ const CLAIM_TTL_MINUTES = 45;
 
 const CLAIM_MARKER = /^###\s*🔒\s*Device claim\b/m;
 
+/**
+ * Automated notices that post to the queue issue but are NOT tests — the
+ * OTA-publish record written by eas-update.yml, plus the claim above. They
+ * carry a heading and no Status line, so the item parser files them as
+ * malformed items and the board nags forever about drift no human caused.
+ * Six of the nine "unparseable" comments on alate#562 were exactly this.
+ * Add a pattern here when a new bot starts posting to the queue.
+ */
+const NOTICE_MARKER = /^###\s*(?:📦|🔒|🤖)/m;
+
 function claimField(body, name) {
   const pattern = new RegExp(`\\*\\*${name}:\\*\\*\\s*(.+?)\\s*$`, 'm');
   const match = body.match(pattern);
@@ -132,6 +142,7 @@ function describeClaim(claim) {
 module.exports = {
   CLAIM_TTL_MINUTES,
   CLAIM_MARKER,
+  NOTICE_MARKER,
   parseClaim,
   activeClaim,
   claimBody,
