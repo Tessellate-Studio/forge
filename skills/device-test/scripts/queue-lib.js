@@ -84,8 +84,20 @@ function parseComment(comment) {
   // is ordinary prose (`**Why:** …`, `**Pre-req:** …`), and matching those
   // turned explanatory drain notes into phantom malformed items.
   const firstLine = body.split('\n').find(l => l.trim() !== '') || '';
-  const titleMatch =
-    body.match(/^###\s*(.+)$/m) || firstLine.match(/^\s*\*\*(.+?)\*\*/);
+  const headingMatch = body.match(/^###\s*(.+)$/m);
+
+  // A bold opener only counts as a TITLE when the body also carries the
+  // shape of a test — Steps or Expect. Plenty of legitimate commentary
+  // opens bold ("**Correction to the two comments above**") and quotes
+  // **PR:** / **Delivery:** while discussing someone else's item; treating
+  // those as malformed items is the nagging this whole pass exists to stop.
+  const looksLikeTest = /\*\*Steps:\*\*|\*\*Expect/.test(body);
+  const boldTitleMatch =
+    !headingMatch && looksLikeTest
+      ? firstLine.match(/^\s*\*\*(.+?)\*\*/)
+      : null;
+
+  const titleMatch = headingMatch || boldTitleMatch;
   const statusMatch = body.match(/\*\*Status:\*\*\s*(.+?)\s*$/m);
 
   // Neither a title nor a Status field — this is plain commentary (a drain
