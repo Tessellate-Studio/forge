@@ -386,6 +386,45 @@ parse it — keep the bold field names exactly):
   while the context is warm has real Steps and a real Expect; one written later
   from the diff has neither.
 
+### Claiming the device — the queue carries the lock
+
+`dtq` is read-only. It answers *what is pending*; it never answered **is
+anyone on the device right now**. Nothing did. On 2026-09-01 two sessions
+reached for the same handset within the hour — one ran a 15-cycle relaunch
+investigation and a full drain, the other had enqueued a device item without
+claiming the device. Neither announced, and because every session commits
+under the same GitHub account the byline reveals nothing, so the collision had
+to be reconstructed afterwards by one session messaging the other.
+
+**The lock is a comment on the same queue issue.** No new service, no local
+state file a second machine cannot read — any session, on any machine, and any
+human sees it with the tools they already use.
+
+```markdown
+### 🔒 Device claim
+- **Claimed by:** <session name>
+- **Device:** <adb serial, or "any">
+- **Claimed at:** <ISO 8601 UTC>
+- **Claim:** HELD
+```
+
+- **Release by editing that comment** so `**Claim:**` reads `RELEASED` — same
+  edit-don't-delete rule as an item's Status line. Posting a fresh RELEASED
+  comment also works: the resolver takes the latest record per holder, so
+  both styles converge.
+- **A claim older than 45 minutes is stale and ignored.** A session that
+  crashes mid-drain must not wedge the phone. The TTL is a backstop, not the
+  exit path — release explicitly in the wrap-up step, including when the drain
+  failed or found nothing.
+- **Before driving the device:** read the claims. Held by someone else and not
+  stale → don't touch it; report who holds it and since when. Free, released,
+  or stale → post your own claim, then proceed.
+- **It is advisory.** Nothing can stop a raw `adb` command, and it is not
+  trying to. It removes the ambiguity, which is the part that actually failed.
+- Claim comments are **not** queue items — the parser skips them, so they
+  don't land in the item counts or the unparseable bucket.
+
+
 ## Docs stay lean — shipped items collapse to a one-line tombstone
 
 The PR is the permanent home of implementation detail (diff, decisions,

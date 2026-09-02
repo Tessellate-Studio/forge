@@ -118,16 +118,35 @@ enqueued needs rewriting when the delivery path changes.
    proceed (TestFlight, no adb) — flag that screenshots will be the user's job.
 2. **Fetch every queue.** Per repo in the scope table:
    ```bash
-   gh issue list --repo Tessellate-Studio/<repo> --label device-test-queue \
-     --state open --json number --jq '.[0].number'
+   gh api "repos/Tessellate-Studio/<repo>/issues?labels=device-test-queue&state=open" \
+     --jq '.[] | select(.pull_request | not) | .number'
    gh api repos/Tessellate-Studio/<repo>/issues/<n>/comments \
      --jq '.[] | {id: .id, body: .body}'
    ```
+   Use `gh api`, NOT `gh issue list --json` — the latter fails outright on
+   gh 2.98.0 ("invalid character '{' after object key") for every field
+   combination, which silently takes the whole fetch down.
+
    An item is pending iff its body contains `**Status:** OPEN`. No queue issue
    in a repo → that repo simply has nothing pending (the *enqueue* side is
    responsible for creating it); note it and move on.
-3. **All queues empty → say so and stop.** Quiet is a correct result — don't
-   invent work.
+3. **Claim the device before touching it.** The queue issue carries the lock —
+   format and semantics in
+   [`standards/workflows.md` → "Claiming the device"](../../standards/workflows.md).
+   Read the claims first:
+   - **Held by another session, not stale** → do NOT drive the device. Say who
+     holds it and since when, and stop. Fetching, reading and reporting are
+     still fine; `adb` is not.
+   - **Free, released, or stale (>45 min)** → post your own claim comment
+     naming your session and the `adb` serial, then proceed.
+
+   One claim per device, and it is advisory — nothing stops a raw `adb`
+   command. It exists because two sessions drove the same handset on
+   2026-09-01 and the collision could only be reconstructed afterwards by one
+   session messaging the other. Every session commits under the same GitHub
+   account, so the byline never reveals who is on the phone.
+4. **All queues empty → say so and stop.** Quiet is a correct result — don't
+   invent work. Release your claim before stopping (Step 4).
 
 ### Step 1 — Split the work: agent items, human items, and build-blocked items
 
@@ -244,6 +263,12 @@ For each OPEN item on the current app:
    past this session. Stays un-minimized — it's open work, not a closed item.
 
 ### Step 4 — Wrap up
+
+**Release the device claim FIRST**, before writing anything up — edit the
+claim comment you posted in Step 0 so `**Claim:**` reads `RELEASED`. Do this
+even when the drain failed, stopped early, or found nothing: an unreleased
+claim blocks the next session for the full 45-minute stale window. The TTL is
+a backstop for a crashed session, not the normal exit.
 
 One table: item · app · verdict (✅ agent-verified, with screenshot / ✅ human-
 confirmed / ❌ → filed link / 🔧 needs build → what would unblock it / 🙋

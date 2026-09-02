@@ -9,6 +9,8 @@
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 
+const { CLAIM_MARKER, parseClaim, activeClaim } = require('./claim-lib');
+
 const execFileAsync = promisify(execFile);
 
 // Scope table — keep in sync with skills/device-test/SKILL.md.
@@ -55,6 +57,12 @@ async function checkGhReady() {
 
 function parseComment(comment) {
   const body = comment.body || '';
+
+  // Device claims live on the same issue but are not tests. Without this
+  // they land in the UNPARSEABLE bucket and read as malformed items.
+  if (CLAIM_MARKER.test(body)) {
+    return null;
+  }
   const titleMatch = body.match(/^###\s*(.+)$/m);
   const statusMatch = body.match(/\*\*Status:\*\*\s*(.+?)\s*$/m);
 
@@ -129,19 +137,20 @@ async function fetchRepoQueue(repoDef) {
   let issueNumber = null;
   let issueUrl = null;
   try {
+    // `gh api`, not `gh issue list --json`. The latter fails outright on
+    // gh 2.98.0 ("invalid character '{' after object key") for every field
+    // combination, which took the whole board down — the tool that is
+    // supposed to answer "what is pending" printed only an error. The REST
+    // endpoint returns the same data and is unaffected.
     const out = await gh([
-      'issue',
-      'list',
-      '--repo',
-      repo,
-      '--label',
-      'device-test-queue',
-      '--state',
-      'open',
-      '--json',
-      'number,url',
+      'api',
+      `repos/${repo}/issues?labels=device-test-queue&state=open`,
     ]);
-    const issues = JSON.parse(out || '[]');
+
+    // /issues also returns pull requests; they carry a `pull_request` key.
+    const issues = JSON.parse(out || '[]')
+      .filter(i => !i.pull_request)
+      .map(i => ({ number: i.number, url: i.html_url }));
     if (issues.length === 0) {
       return { ...repoDef, issueNumber: null, issueUrl: null, items: [] };
     }
@@ -159,7 +168,16 @@ async function fetchRepoQueue(repoDef) {
     ]);
     const comments = JSON.parse(out || '[]');
     const items = comments.map(parseComment).filter(Boolean);
-    return { ...repoDef, issueNumber, issueUrl, items };
+    const claims = comments.map(parseClaim).filter(Boolean);
+    return {
+      ...repoDef,
+      issueNumber,
+      issueUrl,
+      items,
+
+      // null when the device is free (never claimed, released, or stale).
+      claim: activeClaim(claims),
+    };
   } catch (error) {
     return {
       ...repoDef,
@@ -193,6 +211,9 @@ function daysSince(iso) {
 module.exports = {
   REPOS,
   STATUS,
+
+  // Re-exported so callers get the whole queue surface from one require.
+  ...require('./claim-lib'),
   checkGhReady,
   parseComment,
   fetchRepoQueue,
