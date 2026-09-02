@@ -9,7 +9,12 @@
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 
-const { CLAIM_MARKER, parseClaim, activeClaim } = require('./claim-lib');
+const {
+  CLAIM_MARKER,
+  NOTICE_MARKER,
+  parseClaim,
+  activeClaim,
+} = require('./claim-lib');
 
 const execFileAsync = promisify(execFile);
 
@@ -63,7 +68,24 @@ function parseComment(comment) {
   if (CLAIM_MARKER.test(body)) {
     return null;
   }
-  const titleMatch = body.match(/^###\s*(.+)$/m);
+
+  // Bot notices post to this issue too — the OTA-publish record written by
+  // eas-update.yml is the common one. They carry a `###` heading and no
+  // Status, so without this they pile into the UNPARSEABLE bucket and the
+  // board nags about "malformed items" that were never items. Six of nine
+  // flagged comments on alate#562 were exactly this.
+  if (NOTICE_MARKER.test(body)) {
+    return null;
+  }
+
+  // A title is `### Foo`, or a `**Foo**` opening the FIRST non-empty line —
+  // the bold form predates the heading convention and some enqueues still
+  // use it. First line only, deliberately: a bold run anywhere in the body
+  // is ordinary prose (`**Why:** …`, `**Pre-req:** …`), and matching those
+  // turned explanatory drain notes into phantom malformed items.
+  const firstLine = body.split('\n').find(l => l.trim() !== '') || '';
+  const titleMatch =
+    body.match(/^###\s*(.+)$/m) || firstLine.match(/^\s*\*\*(.+?)\*\*/);
   const statusMatch = body.match(/\*\*Status:\*\*\s*(.+?)\s*$/m);
 
   // Neither a title nor a Status field — this is plain commentary (a drain
@@ -94,7 +116,13 @@ function parseComment(comment) {
 
   const statusText = statusMatch[1].replace(NEXT_FIELD, '').trim();
   let state = STATUS.UNPARSEABLE;
-  if (statusText === 'OPEN') {
+
+  // Prefix match, NOT equality. `**Status:** OPEN — routed to another agent`
+  // is a perfectly ordinary thing for a session to write, and an equality
+  // check turned it into UNPARSEABLE — so a still-open item vanished from the
+  // board entirely rather than showing as open. Silently losing work is the
+  // worst failure this parser can have; a trailing note must not cause it.
+  if (/^OPEN\b/.test(statusText)) {
     state = STATUS.OPEN;
   } else if (statusText.startsWith('✅')) {
     state = STATUS.DONE;
