@@ -180,6 +180,31 @@ If a change genuinely shouldn't be measured on a surface, pass
 `rendersUI: false` — don't pass `true` with a made-up `publish` to get past the
 check.
 
+**Skipping this step is a decision you must STATE, not one you may take
+silently.** Building a Pitch/RFD-tier change single-handed is sometimes right
+(the pipeline is unproven on some paths, the script may be unreachable, the
+user may have asked for speed) — but the reason goes in your response to the
+user, in the words "I built this single-handed instead of via researched-build,
+because …". Say it before you report the build done, not after they ask.
+
+**What this step buys, so the cost of skipping is legible:** `researched-build`
+has a **tester write the failing tests without ever seeing implementation
+code**. Nothing else in this skill separates the test's author from the code's
+author. When one pass writes the rule, the code, and the test that checks the
+rule, the test inherits whatever the author misread — and then certifies it.
+Worked example: alate's pitch-004 introduced a rule banning firmness words from
+UI copy, shipped a string containing one, and passed its own guard, because the
+guard was `/\bsoft\b/` and the string was "softness" — `\b` cannot match between
+`t` and `n`. Green test, shipped defect, same author throughout
+(Tessellate-Studio/alate#662 → #664).
+
+**Detectable, therefore checkable.** The planning gate writes the tier into a
+filename (`memory/decisions/pitch-NNN-*.md`, `rfd-NNN-*.md`), so a repo can
+enforce this from a hook rather than trusting prose — a branch that adds one of
+those AND stages code is a Pitch/RFD build by definition. alate does exactly
+that in `.husky/pre-commit` (Tessellate-Studio/alate#668); copy the block when
+wiring a new repo.
+
 The workflow runs researcher → tester (failing tests) → implementer (worktree) →
 reviewer (adversarial; a multi-lens panel + skeptic verification for RFD) with a
 fix loop → verifier (on-device, UI only) with a fix loop. It returns the diff,
@@ -454,6 +479,16 @@ promote into the relevant skill or standard so the next build inherits it.
 - Theme tokens: the app's `constants/theme.ts`. Shared guardrails:
   `${CLAUDE_PLUGIN_ROOT}/standards/`. App-specific anti-patterns + design vision:
   the app's in-repo `memory/`.
+- **researched-build workflow** — Step 1.5, BEFORE building, whenever the
+  planning gate sized the change as **Pitch or RFD tier** (i.e. you just wrote a
+  `memory/decisions/pitch-*.md` or `rfd-*.md`): Workflow tool, `scriptPath:
+  "${CLAUDE_PLUGIN_ROOT}/references/workflows/researched-build.js"`, `args` a
+  JSON **object** `{ tier, criteria, rendersUI, task, context, reviewScriptPath }`.
+  It is the ONLY step that makes the test's author independent of the code's
+  author (the tester writes failing tests without seeing implementation code).
+  ADR/tactical/trivial stays single-agent by design. Skipping it on a Pitch/RFD
+  change is allowed but must be SAID OUT LOUD, with the reason, before you
+  report the build done.
 - `/design-system` — after the screen renders (Step 2): catch hardcoded
   values / naming drift before an OTA cycle.
 - `/code-review` — before commit (Step 5.5): correctness bugs + cleanups in the
