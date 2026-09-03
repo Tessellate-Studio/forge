@@ -456,7 +456,19 @@ promote into the relevant skill or standard so the next build inherits it.
   the app's in-repo `memory/`.
 - `/design-system` — after the screen renders (Step 2): catch hardcoded
   values / naming drift before an OTA cycle.
-- `/code-review` — before commit (Step 5.5): correctness bugs + cleanups in the diff.
+- `/code-review` — before commit (Step 5.5): correctness bugs + cleanups in the
+  diff. **Under ~50 lines.** Above that a single-agent build goes to the
+  adversarial-review workflow instead (next line). This entry used to name
+  `/code-review` at every size, and a session reading only the quick reference
+  substituted it on a 753-line diff — shipping a defect the workflow then
+  caught as its top finding (alate #662 → #664).
+- **adversarial-review workflow** — before commit (Step 5.5), for a >~50-line
+  diff from a SINGLE-AGENT build: Workflow tool, `scriptPath:
+  "${CLAUDE_PLUGIN_ROOT}/references/workflows/adversarial-review.js"`, `args` a
+  JSON **object** `{ diffPath, files, criteria, crossRepo }` — never a JSON
+  string. Skip when the build already went through `researched-build` (it
+  reviews internally). If the script is unreachable, `/code-review` is the
+  documented fallback — say so rather than substituting it silently.
 - `/simplify` — before commit (Step 5.5): apply reuse/efficiency/altitude cleanups.
   Step 5.5 applies to ANY non-trivial diff, not just UI.
 - `/design-critique` — before commit (Step 5.5, UI diffs): critique the final
