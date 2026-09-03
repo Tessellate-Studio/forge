@@ -28,6 +28,8 @@
     "references/",
     "!references/__tests__/",
     "!references/jest.config.js",
+    "!skills/device-test/__tests__/",
+    "!skills/device-test/jest.config.js",
     ".claude-plugin/"
   ],
   "exports": {
@@ -38,12 +40,13 @@
     "./integrations": "./standards-cli/lib/integrations/index.js"
   },
   "scripts": {
-    "test": "npm run test:standards && npm run test:rubric && npm run test:workflows && npm run test:hooks && npm run test:brief",
+    "test": "npm run test:standards && npm run test:rubric && npm run test:workflows && npm run test:hooks && npm run test:brief && npm run test:device-test",
     "test:standards": "jest --config standards-cli/jest.config.js",
     "test:rubric": "jest --config rubric/jest.config.js",
     "test:workflows": "jest --config references/jest.config.js",
     "test:hooks": "jest --config hooks/jest.config.js",
     "test:brief": "jest --config tools/brief/jest.config.js",
+    "test:device-test": "jest --config skills/device-test/jest.config.js",
     "test:coverage": "jest --config standards-cli/jest.config.js --coverage && jest --config rubric/jest.config.js --coverage",
     "lint": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/brief/lib/ tools/brief/cli/ --fix",
     "lint:check": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/brief/lib/ tools/brief/cli/",

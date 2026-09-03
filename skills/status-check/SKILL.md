@@ -110,7 +110,11 @@ when not.
 - **Auto-act:** PR unmerged → route it through (b)/(a) first, then edit the
   comment's `**SHA:**` field from "unmerged — branch <x>" to the merged SHA.
   Field edits only — never rewrite or delete queue items; Status-line
-  semantics belong to the device-test skill.
+  semantics belong to the device-test skill. If the correction needs
+  explaining, append it as a note on that same comment under a `---` rule
+  (standard → "Notes go on the item, under a rule") — never as a free-floating
+  "correction to the comments above", which stops making sense the moment
+  another item is enqueued between them.
 - **Escalate when:** Delivery needs an OTA publish or a tag build — heavy
   builds are manual-dispatch only (`${CLAUDE_PLUGIN_ROOT}/standards/workflows.md`
   → "CI spend"). Manual row: "dispatch <workflow> / publish OTA, then the
