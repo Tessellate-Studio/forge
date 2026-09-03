@@ -139,10 +139,19 @@ enqueued needs rewriting when the delivery path changes.
      is the common case: an item enqueued before the format settled.
    - **A note, or commentary on another item** → leave it alone. The parser
      ignores anything with neither a title nor a Status, and skips bot notices
-     (`### 📦`, `### 🔒`, `### 🤖`) outright.
+     (`### 📦`, `### 🔒`) outright.
    - **Genuinely ambiguous** → leave it and say so in the wrap-up, with the
      comment URL and what is missing. That is the only case that reaches a
      human, and it should be rare.
+
+   **Restamp drifted headings in the same pass.** `dtq` counts headings that
+   don't match their Status line (missing glyph, missing ID, or a glyph that
+   contradicts the Status). Rewrite each to `### <glyph> <comment id> —
+   <intent>` per the glyph table in the standard. It's one PATCH per comment,
+   no device involved, and it's the whole reason the issue page can be read
+   without expanding anything. Two rules: **the `**Status:**` line decides the
+   glyph, never the reverse** — a heading is never evidence about a test — and
+   the intent text stays exactly as its author wrote it.
 
    Say what was repaired in the wrap-up. A drain that reports "N comments
    don't match the format" without having fixed them has not done its job —
@@ -155,11 +164,23 @@ enqueued needs rewriting when the delivery path changes.
    format and semantics in
    [`standards/workflows.md` → "Claiming the device"](../../standards/workflows.md).
    Read the claims first:
-   - **Held by another session, not stale** → do NOT drive the device. Say who
-     holds it and since when, and stop. Fetching, reading and reporting are
-     still fine; `adb` is not.
-   - **Free, released, or stale (>45 min)** → post your own claim comment
-     naming your session and the `adb` serial, then proceed.
+   - **Held by another session and still alive** → do NOT drive the device.
+     Say who holds it, when it last touched the phone, and what it's waiting
+     on; then stop. Fetching, reading and reporting are still fine; `adb` is
+     not. A claim is alive whenever it was touched inside the last 30 minutes,
+     **however long ago it was taken** — a three-hour job that is still
+     working holds the phone — and a claim marked `**Waiting on:** human`
+     is alive indefinitely.
+   - **Free, released, or silent past the window** → post your own claim
+     comment naming your session and the `adb` serial, then proceed. If you
+     took over a silent claim, say so in yours.
+
+   **Then keep the heartbeat up.** Rewrite `**Last touch:**` on your claim
+   every time you drive the device — piggyback it on the PATCHes you're
+   already making per item, not as a separate timer. Before handing the phone
+   to a human, set `**Waiting on:** human — <what you asked for>`, and clear
+   it back to `—` when you resume. Silence is the only thing that releases a
+   claim you didn't close yourself.
 
    One claim per device, and it is advisory — nothing stops a raw `adb`
    command. It exists because two sessions drove the same handset on
@@ -167,7 +188,7 @@ enqueued needs rewriting when the delivery path changes.
    session messaging the other. Every session commits under the same GitHub
    account, so the byline never reveals who is on the phone.
 5. **All queues empty → say so and stop.** Quiet is a correct result — don't
-   invent work. Release your claim before stopping (Step 4).
+   invent work. Close your claim before stopping (Step 4).
 
 ### Step 1 — Split the work: agent items, human items, and build-blocked items
 
@@ -256,15 +277,27 @@ For each OPEN item on the current app:
    attempts, downgrade the item to needs-human with a note — never close on
    a guessed tap.
    For `HUMAN:` steps (and only those), hand the phone to the user with the
-   step + Expect verbatim; you keep watching logcat/screenshots around their
-   action.
-2. **Pass** → edit the comment's Status line (never delete, never new comment),
-   then minimize it as Resolved so the queue doesn't grow unscrollable — see
-   `standards/workflows.md` → "Device-test queue" for the GraphQL call (REST
-   has no minimize endpoint):
+   step + Expect verbatim (set `**Waiting on:** human — <what>` on your claim
+   first); you keep watching logcat/screenshots around their action.
+
+   **Every status edit moves two lines: the `**Status:**` line and the heading
+   glyph** (⚪ passed, 🔴 failed, 🔧 needs build — table in the standard). One
+   PATCH, both lines. A ⚪ heading over an OPEN item is worse than no glyph at
+   all, because someone scrolling the issue reads it as finished.
+
+   **Anything you observed that the Status line can't carry goes in a note on
+   that same comment**, under a `---` rule — why it couldn't run, a pre-req
+   that's still missing, a PR/SHA correction. Not a new comment: notes live
+   with the test they belong to (standard → "Notes go on the item, under a
+   rule").
+2. **Pass** → edit the Status line and the heading (never delete, never new
+   comment), then minimize the comment as Resolved so the queue doesn't grow
+   unscrollable — see `standards/workflows.md` → "Device-test queue" for the
+   GraphQL call (REST has no minimize endpoint):
    ```bash
    gh api repos/Tessellate-Studio/<repo>/issues/comments/<comment-id> \
-     -X PATCH -f body="<original body with Status: OPEN → ✅ done <date>>"
+     -X PATCH -f body="<body with 🤖/🙋 → ⚪ in the heading and
+                        Status: OPEN → ✅ done <date>>"
    ```
 3. **Fail** → capture what the user saw (their words + screenshot/logcat),
    file it where the app's rules say — regression-log row via PR, or a GitHub
@@ -285,15 +318,23 @@ For each OPEN item on the current app:
 
 ### Step 4 — Wrap up
 
-**Release the device claim FIRST**, before writing anything up — edit the
-claim comment you posted in Step 0 so `**Claim:**` reads `RELEASED`. Do this
-even when the drain failed, stopped early, or found nothing: an unreleased
-claim blocks the next session for the full 45-minute stale window. The TTL is
-a backstop for a crashed session, not the normal exit.
+**Close the device claim FIRST**, before writing anything up — two actions on
+the claim comment you posted in Step 0:
+
+1. edit it so `**Claim:**` reads `RELEASED`;
+2. **minimize it as Resolved** (the same GraphQL `minimizeComment` call used
+   for a passed item), so it collapses out of the thread instead of sitting
+   there looking live.
+
+Do this even when the drain failed, stopped early, or found nothing. Closing
+the claim is the signal that the phone is free — nothing else is. The
+no-touch window only covers a session that *crashed*; a session that finished
+and left its claim standing has told everyone else the device is busy.
 
 One table: item · app · verdict (✅ agent-verified, with screenshot / ✅ human-
 confirmed / ❌ → filed link / 🔧 needs build → what would unblock it / 🙋
-needs-human → the specific `HUMAN:` steps waiting).
+needs-human → the specific `HUMAN:` steps waiting). Identify each item by its
+test ID (the comment id) so the user can jump straight to it.
 Then, per the user's communication style: what they need to do (installs,
 promotions), what got filed for follow-up sessions. If any repo's queue issue
 had drifted from the format, say what you REPAIRED (Step 0.3) — and list only

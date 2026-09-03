@@ -314,7 +314,7 @@ gh issue pin <n> --repo Tessellate-Studio/<repo>
 parse it — keep the bold field names exactly):
 
 ```markdown
-### <one line: what changed, user-visible phrasing>
+### 🤖 <test id> — <what this test intends to prove>
 - **PR:** #<n> · **SHA:** <merged sha, or "unmerged — branch <name>">
 - **Delivery:** <how it reaches the phone: production OTA (published/pending) |
   needs tag build v<x.y.z> | Expo Go | dev build | APK sideload>
@@ -337,10 +337,11 @@ parse it — keep the bold field names exactly):
   runtime-fingerprint drift is untestable until a new store build is installed.
   Record what the phone must run, so the drain session skips-with-reason
   ("needs the v1.2.2 tag build — install first") instead of chasing a stale OTA.
-- Items are closed by **editing the comment's Status line**
-  (`**Status:** ✅ done <date>` or `**Status:** ❌ failed → <link>`) — never by
-  deleting the comment. A failed test's findings go to the app's regression log
-  or a new issue; the Status line links there. The queue holds tests, not
+- Items are closed by **editing the comment's Status line and its heading
+  glyph together** (`**Status:** ✅ done <date>` under a `⚪` heading, or
+  `**Status:** ❌ failed → <link>` under a `🔴` one) — never by deleting the
+  comment. A failed test's findings go to the app's regression log or a new
+  issue; the Status line links there. The queue holds tests, not
   investigations.
 - **`**Status:** 🔧 needs build — <what's needed>`** — a fourth status value,
   distinct from bare `OPEN`: it means the drain *looked* at this item and
@@ -386,6 +387,72 @@ parse it — keep the bold field names exactly):
   while the context is warm has real Steps and a real Expect; one written later
   from the diff has neither.
 
+### The heading carries status, ID and intent
+
+The board (`dtq`) always knew which items were open and who was needed. The
+**issue page** did not — thirty comments each headed by a sentence, and the only
+way to tell a passed test from a blocked one was to expand it and read to the
+bottom. So the heading leads with the three things anyone scrolling the thread
+is actually looking for: **where it stands · which test it is · what it is for.**
+
+| Heading | `**Status:**` line | What it means |
+|---|---|---|
+| 🤖 | `OPEN` (no `HUMAN:` step) | Open — an agent can run this unattended |
+| 🙋 | `OPEN` (has a `HUMAN:` step) | Open — needs a person with the phone |
+| 🔧 | `🔧 needs build — <what>` | Open, but no installable build can reach it yet |
+| ⚪ | `✅ done <date>` | Closed — passed |
+| 🔴 | `❌ failed → <link>` | Closed as a test; still open as a bug |
+
+**The `**Status:**` line stays the source of truth.** Every tool parses it; the
+heading glyph is its mirror, for human eyes. Edit the two in the same PATCH,
+never one without the other. A drain that finds them disagreeing restamps the
+heading (`skills/device-test/SKILL.md` → Step 0.3), and `dtq` counts the
+mismatches so drift cannot accumulate unseen.
+
+**The test ID is the comment's own GitHub id.** It is unique across every
+session and machine without anything having to allocate it, and it is already
+the anchor in the comment's URL (`…#issuecomment-<id>`) — quote the ID and
+anyone can jump straight to the test. The cost is that it doesn't exist until
+the comment does, so enqueue is two calls: post, then stamp. Write the body
+with a literal `<id>` in the heading and let the second call substitute it.
+
+```bash
+# 1. post the item — its heading still reads: ### 🤖 <id> — …
+id=$(gh api repos/Tessellate-Studio/<repo>/issues/<queue-issue>/comments \
+      -f body="$(cat item.md)" --jq '.id')
+
+# 2. stamp the comment's own id into its heading
+gh api repos/Tessellate-Studio/<repo>/issues/comments/"$id" -X PATCH \
+  -f body="$(sed "s/<id>/$id/" item.md)"
+```
+
+### Notes go on the item, under a rule
+
+Observations that belong to a test — a drain that could not run it and why, a
+correction to the PR/SHA, a pre-req that cleared — are **appended to that
+item's own comment**, each under a `---` rule:
+
+```markdown
+- **Status:** OPEN
+
+---
+
+**Note — <date> · <session or person>:** <what was observed, and what it means
+for this test.>
+```
+
+One comment per test, its whole history in reading order. The rule is what
+keeps two notes from reading as one paragraph, and it is also the parser's
+boundary: **fields above it, notes below.** That boundary is what lets a note
+quote the item it discusses ("Expect is that the button does *not* appear")
+without the quoted `**Status:**` silently reopening a closed test.
+
+The habit this replaces — a separate `_Drain note … for the item above_`
+comment — stops making sense the moment another item is enqueued between them,
+and it splits one test's history across the thread. Notes never carry a
+`**Status:**` line of their own; a note that changes where a test stands edits
+the item's Status and heading instead, then explains itself underneath.
+
 ### Format drift is the drain's job to fix, not yours
 
 A comment that *looks* like an item but cannot be parsed is an **invisible**
@@ -395,9 +462,10 @@ had silently dropped off, one for over a week.
 
 So the drain REPAIRS drift rather than reporting it (`skills/device-test/SKILL.md`
 → Step 0.3). A real test missing its Status line gets `- **Status:** OPEN`
-appended and is drained that sitting; notes and bot notices are left alone;
-only a genuinely ambiguous comment reaches a human. Nobody maintains this
-queue by hand.
+appended and is drained that sitting; a heading missing its glyph or ID, or
+carrying one that contradicts the Status line, gets restamped; notes and bot
+notices are left alone; only a genuinely ambiguous comment reaches a human.
+Nobody maintains this queue by hand.
 
 The parser is deliberately forgiving, because every rigid rule here has cost
 an item:
@@ -409,9 +477,17 @@ an item:
   The bold form predates the heading convention. First line only — a bold run
   mid-body is ordinary prose (`**Why:** …`), and matching those turned
   explanatory drain notes into phantom malformed items.
-- **Bot notices are not items.** `### 📦` (OTA published), `### 🔒` (device
-  claim) and `### 🤖` are skipped outright. They carry a heading and no Status,
-  so without this they pile up as "malformed" forever — six of those nine.
+- **Bot notices are not items.** `### 📦` (OTA published) and `### 🔒` (device
+  claim) are skipped outright. They carry a heading and no Status, so without
+  this they pile up as "malformed" forever — six of those nine. A new bot
+  posting here must pick a heading glyph **outside** the item set
+  (🤖 🙋 🔧 ⚪ 🔴) and be added to that list; 🤖 used to be on it, and now that
+  it means "open, agent-runnable" a notice wearing it would make every
+  agent-runnable item invisible.
+- **A missing glyph or ID is drift, never a dropped item.** Everything in the
+  heading is optional to the parser: the hundreds of items enqueued before
+  this template still read correctly, and what's missing surfaces as a
+  restamp, not a disappearance.
 
 
 ### Claiming the device — the queue carries the lock
@@ -433,24 +509,42 @@ human sees it with the tools they already use.
 - **Claimed by:** <session name>
 - **Device:** <adb serial, or "any">
 - **Claimed at:** <ISO 8601 UTC>
+- **Last touch:** <ISO 8601 UTC — rewritten on every device action>
+- **Waiting on:** — <or: human — what you handed them>
 - **Claim:** HELD
 ```
 
-- **Release by editing that comment** so `**Claim:**` reads `RELEASED` — same
-  edit-don't-delete rule as an item's Status line. Posting a fresh RELEASED
-  comment also works: the resolver takes the latest record per holder, so
-  both styles converge.
-- **A claim older than 45 minutes is stale and ignored.** A session that
-  crashes mid-drain must not wedge the phone. The TTL is a backstop, not the
-  exit path — release explicitly in the wrap-up step, including when the drain
-  failed or found nothing.
-- **Before driving the device:** read the claims. Held by someone else and not
-  stale → don't touch it; report who holds it and since when. Free, released,
-  or stale → post your own claim, then proceed.
+**A claim ends when its holder closes it, not when a timer expires.** The
+first version of this lock expired 45 minutes after it was taken, which
+measured the wrong thing: plenty of fixes run longer than that, and a session
+still working the phone had its claim quietly ignored out from under it. How
+long a job takes is not evidence that it stopped.
+
+- **Close it when the work is done** — edit the comment so `**Claim:**` reads
+  `RELEASED`, then **minimize it as Resolved** (same GraphQL call as a done
+  item, above). A released claim collapses out of the thread; a live one is
+  the only 🔒 anyone has to scroll past. Do this even when the drain failed,
+  stopped early, or found nothing.
+- **Signal liveness, not duration.** Rewrite `**Last touch:**` each time you
+  drive the device — one PATCH, alongside edits the drain is already making.
+  A claim is treated as abandoned only after **30 minutes with no touch at
+  all**; there is no cap on how long it may be held. Silence is the
+  abandonment signal, and it is the only one.
+- **Parked on a human never expires.** Set `**Waiting on:** human — <what>`
+  before handing the phone over. A human step legitimately takes hours, and
+  stealing the device mid-step is the exact collision this lock exists to
+  prevent. Clear it back to `—` when you resume.
+- **Before driving the device:** read the claims. Held by someone else and
+  still alive → don't touch it; report who holds it, what it last touched, and
+  what it's waiting on. Free, released, or silent past the window → post your
+  own claim, and say in it that you took over a silent one.
 - **It is advisory.** Nothing can stop a raw `adb` command, and it is not
   trying to. It removes the ambiguity, which is the part that actually failed.
 - Claim comments are **not** queue items — the parser skips them, so they
   don't land in the item counts or the unparseable bucket.
+- Claims written before the heartbeat existed carry only `**Claimed at:**`;
+  they're read against that instead, so nothing already on an issue has to be
+  rewritten.
 
 
 ## Docs stay lean — shipped items collapse to a one-line tombstone

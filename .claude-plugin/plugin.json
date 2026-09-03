@@ -1,6 +1,6 @@
 {
   "name": "forge",
-  "version": "0.11.2",
+  "version": "0.11.3",
   "description": "Tessellate build platform: shared skills (build-feature, plan, roadmap-pulse, new-app, security-sweep, crash-monitor, device-test, status-check) + standards installed per app, the standards/bp + rubric CLIs, RICE-based scoring, and multi-agent build workflows (researched-build, adversarial-review).",
   "author": {
     "name": "Tessellate Studio"

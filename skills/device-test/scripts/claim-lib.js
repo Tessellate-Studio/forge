@@ -17,11 +17,24 @@
 //
 // It is advisory, not enforced — nothing can stop a raw `adb` command. It
 // removes the ambiguity, which is what actually went wrong.
+//
+// HOW A CLAIM ENDS (changed 2026-09-03). It used to expire 45 minutes after
+// it was taken. That measured the wrong thing: plenty of fixes run longer
+// than 45 minutes, and the session still holding the phone had its claim
+// quietly ignored mid-job. A claim now ends when its holder CLOSES it — edit
+// `**Claim:**` to RELEASED and minimize the comment. The only automatic
+// escape hatch is SILENCE, not duration: the holder rewrites `**Last touch:**`
+// every time it drives the device, and a claim reads as abandoned only after
+// HEARTBEAT_STALE_MINUTES with no touch at all. A claim parked on a human
+// step (`**Waiting on:** human — …`) never expires, because a human step
+// legitimately takes hours and stealing the device out from under one is the
+// exact collision this lock exists to prevent.
 
-/** A claim older than this is ignored, so a crashed session cannot wedge
- *  the device forever. Chosen to comfortably outlast a normal drain
- *  (minutes) while still clearing within one sitting. */
-const CLAIM_TTL_MINUTES = 45;
+/** No touch for this long and the holder is presumed gone — the backstop for
+ *  a crashed session, NOT a cap on how long a job may hold the phone. Long
+ *  enough to cover an OTA double-relaunch, a cloud-build download, or a human
+ *  reading a step; short enough to clear within one sitting. */
+const HEARTBEAT_STALE_MINUTES = 30;
 
 const CLAIM_MARKER = /^###\s*🔒\s*Device claim\b/m;
 
@@ -31,14 +44,29 @@ const CLAIM_MARKER = /^###\s*🔒\s*Device claim\b/m;
  * carry a heading and no Status line, so the item parser files them as
  * malformed items and the board nags forever about drift no human caused.
  * Six of the nine "unparseable" comments on alate#562 were exactly this.
- * Add a pattern here when a new bot starts posting to the queue.
+ *
+ * 🤖 is deliberately NOT here: since the heading template landed it is an
+ * ITEM glyph ("open, agent-runnable"), and matching it as a notice would make
+ * every agent-runnable item invisible — the worst failure this parser has.
+ * A new bot posting here must pick a heading glyph outside the item set
+ * (🤖 🙋 🔧 ⚪ 🔴) and be added to this pattern.
  */
-const NOTICE_MARKER = /^###\s*(?:📦|🔒|🤖)/m;
+const NOTICE_MARKER = /^###\s*(?:📦|🔒)/m;
+
+/** Placeholders in **Waiting on:** that mean "parked on nothing". */
+const NOT_WAITING = /^(?:—|–|-|none|nothing|n\/a)$/i;
 
 function claimField(body, name) {
   const pattern = new RegExp(`\\*\\*${name}:\\*\\*\\s*(.+?)\\s*$`, 'm');
   const match = body.match(pattern);
   return match ? match[1].trim() : null;
+}
+
+function minutesSince(iso) {
+  const parsed = iso ? Date.parse(iso) : NaN;
+  return Number.isNaN(parsed)
+    ? null
+    : Math.max(0, Math.floor((Date.now() - parsed) / 60000));
 }
 
 /**
@@ -51,20 +79,33 @@ function parseClaim(comment) {
     return null;
   }
   const at = claimField(body, 'Claimed at');
-  const parsedAt = at ? Date.parse(at) : NaN;
-  const ageMinutes = Number.isNaN(parsedAt)
-    ? null
-    : Math.max(0, Math.floor((Date.now() - parsedAt) / 60000));
+
+  // Claims posted before the heartbeat existed carry only "Claimed at".
+  // Falling back to it keeps those readable, instead of making every one of
+  // them read as abandoned the moment this shipped.
+  const lastTouch = claimField(body, 'Last touch') || at;
+  const waitingOn = claimField(body, 'Waiting on');
+  const waitingOnHuman = Boolean(waitingOn && !NOT_WAITING.test(waitingOn));
+  const idleMinutes = minutesSince(lastTouch);
+
   return {
     heldBy: claimField(body, 'Claimed by'),
     device: claimField(body, 'Device'),
     at,
-    ageMinutes,
+    lastTouch,
+    ageMinutes: minutesSince(at),
+    idleMinutes,
+    waitingOn: waitingOnHuman ? waitingOn : null,
+    waitingOnHuman,
     released: (claimField(body, 'Claim') || '').toUpperCase() === 'RELEASED',
 
-    // An unparseable timestamp counts as stale rather than as an indefinite
-    // hold — failing open beats wedging the device on a typo.
-    stale: ageMinutes === null || ageMinutes > CLAIM_TTL_MINUTES,
+    // Silence, not elapsed time, is the abandonment signal — and a claim
+    // parked on a human is never silent by accident, so it never expires.
+    // An unreadable timestamp counts as stale rather than as an indefinite
+    // hold: failing open beats wedging the device on a typo.
+    stale: waitingOnHuman
+      ? false
+      : idleMinutes === null || idleMinutes > HEARTBEAT_STALE_MINUTES,
     commentId: comment.id,
     commentUrl: comment.html_url,
   };
@@ -114,17 +155,23 @@ function claimBody(opts) {
   const heldBy = opts.heldBy;
   const device = opts.device || 'any';
   const at = opts.at;
+  const lastTouch = opts.lastTouch || at;
+  const waitingOn = opts.waitingOn || '—';
   const held = opts.held !== false;
   return [
     '### 🔒 Device claim',
     `- **Claimed by:** ${heldBy}`,
     `- **Device:** ${device}`,
     `- **Claimed at:** ${at}`,
+    `- **Last touch:** ${lastTouch}`,
+    `- **Waiting on:** ${waitingOn}`,
     `- **Claim:** ${held ? 'HELD' : 'RELEASED'}`,
     '',
-    '_Written by /forge:device-test. Release by editing **Claim:** to',
-    `RELEASED. A claim older than ${CLAIM_TTL_MINUTES} min is treated as`,
-    'stale and ignored, so a crashed session cannot wedge the device._',
+    '_Written by /forge:device-test. The claim ends when its holder closes it:',
+    'edit **Claim:** to RELEASED and minimize this comment. There is no cap on',
+    'how long a job may hold the phone — refresh **Last touch:** on every',
+    `device action, and only ${HEARTBEAT_STALE_MINUTES} min of total silence`,
+    'reads as abandoned. A claim **Waiting on:** a human never expires._',
   ].join('\n');
 }
 
@@ -133,14 +180,15 @@ function describeClaim(claim) {
   if (!claim) {
     return '';
   }
-  const age = claim.ageMinutes === null ? '?' : claim.ageMinutes;
+  const idle = claim.idleMinutes === null ? '?' : claim.idleMinutes;
   const device =
     claim.device && claim.device !== 'any' ? ` ${claim.device}` : '';
-  return `🔒 device${device} claimed by ${claim.heldBy} (${age} min ago)`;
+  const parked = claim.waitingOnHuman ? `, waiting on ${claim.waitingOn}` : '';
+  return `🔒 device${device} claimed by ${claim.heldBy} (last touch ${idle} min ago${parked})`;
 }
 
 module.exports = {
-  CLAIM_TTL_MINUTES,
+  HEARTBEAT_STALE_MINUTES,
   CLAIM_MARKER,
   NOTICE_MARKER,
   parseClaim,

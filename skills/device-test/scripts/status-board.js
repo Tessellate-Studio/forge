@@ -96,6 +96,20 @@ function renderRepo(result, opts) {
     unparsed.forEach(i => lines.push(`    ${chalk.dim(i.commentUrl)}`));
   }
 
+  // Drift is cosmetic on the board (the Status line still decides state) but
+  // not on the issue page, where the heading glyph is the only thing a human
+  // scrolling past actually reads. Report the count; the drain restamps them.
+  const drifted = result.items.filter(
+    i => i.state !== STATUS.UNPARSEABLE && i.headingDrift
+  );
+  if (drifted.length > 0) {
+    lines.push(
+      chalk.dim(
+        `  ${drifted.length} heading(s) not stamped to match their Status — /forge:device-test restamps them`
+      )
+    );
+  }
+
   const visible = opts.all
     ? [...open, ...failed, ...needsBuild, ...done]
     : [...open, ...failed, ...needsBuild];
@@ -129,11 +143,22 @@ function renderRepo(result, opts) {
                 .join(' · '),
               60
             );
+
+      // The test id is the comment id — the thing you quote back ("re-run
+      // 5462960191") and the thing that anchors the comment URL, so the board
+      // and the issue name the same test the same way.
+      const id = item.testId
+        ? chalk.dim(`${item.testId}`)
+        : chalk.magenta('unstamped');
+      const noteCount = item.notes && item.notes.length;
+      const notes = noteCount
+        ? chalk.dim(` +${noteCount} note${noteCount > 1 ? 's' : ''}`)
+        : '';
       lines.push(
-        `  ${statusIcon(item)}  ${clip(
+        `  ${statusIcon(item)}  ${id}  ${clip(
           item.title,
-          80
-        )}${ageStr}  ${pr}  ${chalk.dim(extra)}`
+          72
+        )}${ageStr}${notes}  ${pr}  ${chalk.dim(extra)}`
       );
     });
 
