@@ -92,10 +92,9 @@ git log --grep="Revert" --since=24h --oneline
 For each revert of a crash-monitor PR:
 
 - File an issue in `Tessellate-Studio/litmus` titled `[crash-monitor] Auto-fix reverted: <original PR title>`, describing what was reverted and why it needs investigation
-- Record the file/module path in the auto-ship log with a `COOLDOWN_UNTIL: <date +14 days>` marker
 - Push-notify: `"Auto-fix reverted — <repo>: <short description>. Cooldown active for 2 weeks on <module>."`
 
-During Step 4, check the auto-ship log for active cooldowns. **Any fix touching a cooled-down file or module routes to 4b regardless of confidence.** A revert is evidence the confidence heuristic was wrong about that code; the cooldown is what stops a fix/revert/fix loop.
+**You do not record the cooldown anywhere.** The confidence command derives it at merge time from the repo's own commit history — any revert touching the changed paths in the last 14 days refuses the merge. This replaces the old `COOLDOWN_UNTIL` marker in the auto-ship log, which was never actually writable: that table has no column for a module path, so no cooldown was ever recorded and the condition silently passed on every run from the skill's creation until 2026-09-04. A revert is evidence the gate was wrong about that code once; deriving it from git is what makes the loop-breaker real, because a revert cannot forget to record itself.
 
 ## Step 2: Investigate each surviving issue
 
@@ -121,31 +120,47 @@ Skip if a matching open OR merged PR, or an open issue, already exists. For GitH
 
 ## Step 4: Take action
 
-### Confidence heuristic — determines 4a vs 4b
+### Confidence gate — determines 4a vs 4b
 
-This is the highest-stakes rule in the skill: it decides when code ships unreviewed. Treat the conditions as a checklist, not a vibe.
+This is the highest-stakes rule in the skill: it decides when code ships unreviewed. It is **not yours to apply**. It is a command, and its exit code is the verdict — the command also performs the merge, so there is no path where the gate is skipped:
 
-**Route to 4a (auto-merge)** when ALL hold:
-- Single-file fix
-- Tests pass
-- No new dependencies added
-- The fix is a null-check, guard clause, error-handling addition, or straightforward correction — **not** a logic rewrite
-- Seer actionability is "high", if Seer was consulted (skip this check if it wasn't)
-- No active cooldown on the affected file/module (Step 1.6)
+```
+node "${CLAUDE_PLUGIN_ROOT}/tools/safe-merge/cli.js" \
+  --repo Tessellate-Studio/<repo> --pr <n> \
+  --source crash-monitor --what "<one line for the auto-ship log>" \
+  --declare guard|rewrite [--why "<why you believe this is safe>"] [--dry-run]
+```
 
-**Route to 4b (needs-input)** when ANY hold:
-- Multi-file fix
-- Logic rewrite or behavioural change
-- Seer says "low" actionability
-- Active cooldown on the file/module
+| Exit | Meaning |
+|---|---|
+| `0` | Merged, and the auto-ship-log row was written. Continue with 4a. |
+| `10` | Refused. This IS the 4b route — the PR stays open, add `needs-input`, push-notify. The printed reasons are what needs deciding. |
+| `11` | Merged, but the log append FAILED. Say so loudly in the run summary and add the row by hand — it is Step 1.6's breadcrumb. |
+| `2` | You called it wrong. Fix the flags. |
+| `1` | It crashed. Treat as refused. |
 
-No path exclusions — auth, payment, and data-deletion fixes auto-merge too if they clear the heuristic. Revert is easy and the cooldown catches repeat failures.
+Gate on the command's own exit status, never through a pipe — `cmd; if [ $? -eq 0 ]`, not `cmd | tail`.
+
+It checks, and prints evidence for, each of: every CI check concluded success; no revert touched these paths in 14 days; no manifest or lockfile change; exactly one production file (tests and docs alongside are fine); and that the diff shape is consistent with your `--declare`. **Anything it cannot verify routes to 4b** — an unknown is a refusal, not a shrug.
+
+**Do not re-derive this verdict.** If your reading of the fix disagrees with the command, the command wins and you file an issue against it. A routing decision reached by reading the diff is an inference wearing the costume of a fact (`standards/authoritative-claims.md`).
+
+Two things it does **not** decide, which stay your judgement and stay here in prose:
+
+- **Seer actionability.** It has no Sentry token and cannot check one. If Seer says "low", route to 4b yourself whatever the exit code says.
+- **Whether the fix is correct.** Exit `0` says the fix passed the checks that exist. No test in these repos covered the crash being fixed — that is why it reached production.
+
+`--declare` is checked in one direction only: a diff shape inconsistent with `guard` is rejected, but no shape ever rescues a declared `rewrite`. It verifies the diff shape is **consistent with** your declaration; it does not verify the fix is a guard clause, and nothing can.
+
+No path exclusions — auth, payment, and data-deletion fixes merge too if they clear the gate. Note what that rests on: it was justified by the cooldown catching repeat failures, and until this command existed the cooldown had never once fired. The cooldown is real now, but it catches a *revert* — evidence the gate already got that code wrong — not a first-time bad merge into a sensitive path.
+
+**This gate is not universal.** `security-sweep` and `roadmap-pulse` merge on their own prose criteria and do not route through it.
 
 ### 4a. CODE BUG — confident fix (auto-merge)
 
 1. Branch: `crash-monitor/{issue-id}` (e.g. `crash-monitor/ALATE-42`, `crash-monitor/issue-17`)
 2. Make the fix
-3. Run tests: `npx jest --no-coverage` in the relevant package root, or the repo's equivalent
+3. Optionally run the package's own `npm test` for a fast local signal — note alate's `backend/` is vitest, not jest, so do not hardcode a runner. CI is the gate either way: the confidence command reads CI's result, so a local pass is convenience, never authorisation.
 4. Open a PR:
 
 Title: `fix({issue-id}): {short description of what was wrong}`
@@ -179,21 +194,23 @@ Body:
 
 Labels: `crash-monitor`, `auto-generated`.
 
-5. **Auto-merge:** `gh pr merge --squash --auto <pr-number>` — but only after
-   confirming this repo has a real merge gate for `--auto` to wait on; see
-   `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Merge on green" before
-   the first run against a new repo. No gate → gated watch instead, every
-   time (this skill runs unattended, so a silent instant-merge here ships
-   unverified code with nobody watching).
+5. **Merge:** run the confidence command above. It waits for CI, refuses if
+   anything is unverified, merges on `0`, and writes the auto-ship-log row
+   itself. Never `gh pr merge --auto` — on these repos that merges instantly,
+   before CI has run, with a success message identical to the case where it
+   genuinely waited (`${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Merge
+   on green").
 6. **Tag the source:** resolve the Sentry issue, or close the GitHub issue referencing the PR
-7. **Log to the auto-ship log:** append to `Tessellate-Studio/litmus` `auto-ship-log.md` (default branch `main`; create the file if missing):
-   `| <date> | crash-monitor | <repo> | PR #<n> | <1-line what> | <Sentry ID or Issue #> |`
+7. **Only on exit `11`:** the merge landed but the auto-ship-log append failed.
+   Add the row the command printed by hand, and say so loudly in the summary —
+   Step 1.6 goes blind without it.
 
 ### 4b. CODE BUG — ambiguous / risky / multi-file (needs-input)
 
-Same as 4a, except:
+This is where exit `10` lands you. Same as 4a, except:
 - Add label `needs-input`
-- Do NOT enable auto-merge
+- Do NOT merge — the command already refused, and re-running it will refuse again
+- Paste the command's printed reasons into the PR body so the human sees the blocker without re-running anything
 - Add to the PR body:
 
 ```
@@ -260,9 +277,9 @@ If nothing was actioned: `"No real issues — quiet day"`.
 - NEVER silence an error by wrapping it in try/catch without fixing the cause
 - NEVER disable or remove functionality as a "fix" for a config issue
 - NEVER commit secrets, env values, or API keys
-- NEVER auto-merge a fix touching a file under active cooldown, however confident it looks
+- NEVER merge by any route other than the confidence command — no `gh pr merge`, no `--auto`, no exceptions. A gate you can step around is not a gate
 - If a fix could break other things, route to 4b and explain
 - Always run tests before opening a PR
 - Keep the TLDR genuinely simple — assume the reader is not a developer
 - Silence when nothing is wrong is correct behaviour, not a bug
-- Auto-ship log entries are mandatory for every auto-merged PR — it is the revert breadcrumb, and Step 1.6 depends on it
+- The auto-ship-log row is written by the command, not by you. If it exits `11` the row is MISSING — add it by hand and flag it, loudly

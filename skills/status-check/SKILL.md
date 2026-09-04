@@ -1,6 +1,6 @@
 ---
 name: status-check
-description: Session loop-closer — inventories every loop THIS conversation opened (PRs created, failing checks, issues that should have auto-closed, branches/worktrees left behind, device-test queue items enqueued, background agents spawned, promises made in the transcript, uncommitted work), verifies each against live GitHub/git state, then closes what it safely can — arms or executes merges per Merge-on-green, diagnoses and fixes failing PR checks with auto-merge gated on crash-monitor's confidence checklist, closes issues a merged PR forgot to close with a linking comment, prunes provably-merged branches and worktrees. Everything it cannot safely close lands in a short manual-for-you list with the exact unblock. Use whenever the user asks to "status check", "close the loops", "wrap up the session", "anything left hanging?", "is everything merged?", or wants this conversation's pending work chased down before stopping. Also fires on passive cues like "are we done here", "did that PR ever land", or "what's still outstanding from today". Manual invocation only — never scheduled, never self-scheduling. Output is a two-bucket wrap-up table (closed automatically / manual for you); "No pending loops" with nothing else attached is correct output, not a failure.
+description: Session loop-closer — inventories every loop THIS conversation opened (PRs created, failing checks, issues that should have auto-closed, branches/worktrees left behind, device-test queue items enqueued, background agents spawned, promises made in the transcript, uncommitted work), verifies each against live GitHub/git state, then closes what it safely can — arms or executes merges per Merge-on-green, diagnoses and fixes failing PR checks with auto-merge gated on crash-monitor's confidence command, closes issues a merged PR forgot to close with a linking comment, prunes provably-merged branches and worktrees. Everything it cannot safely close lands in a short manual-for-you list with the exact unblock. Use whenever the user asks to "status check", "close the loops", "wrap up the session", "anything left hanging?", "is everything merged?", or wants this conversation's pending work chased down before stopping. Also fires on passive cues like "are we done here", "did that PR ever land", or "what's still outstanding from today". Manual invocation only — never scheduled, never self-scheduling. Output is a two-bucket wrap-up table (closed automatically / manual for you); "No pending loops" with nothing else attached is correct output, not a failure.
 ---
 
 # Status check
@@ -61,18 +61,22 @@ when not.
 - **Verify:** `gh pr checks <n> -R <owner>/<repo>`; failing log via
   `gh run view <run-id> --log-failed`.
 - **Auto-act:** diagnose from the log plus source; fix on the PR branch; push.
-  Then gate the merge on crash-monitor's Confidence heuristic
-  (`${CLAUDE_PLUGIN_ROOT}/skills/crash-monitor/SKILL.md` → "Confidence
-  heuristic" — single-file, tests pass, no new deps, guard-type fix not a
-  rewrite, no active cooldown per crash-monitor Step 1.6 / the litmus
-  auto-ship log). ALL hold → merge per (a) and append the auto-ship-log row in
-  `Tessellate-Studio/litmus` → `auto-ship-log.md`:
-  `| <date> | status-check | <repo> | PR #<n> | <1-line what> | <ref> |`.
-  ANY fail → the fix stays pushed, the merge does not happen.
-- **Escalate when:** the confidence checklist fails, the failure is
-  infra/config (never weaken CI to make it pass), or the fix would touch a
-  cooled-down file/module. Manual row with the pushed-fix link and the specific
-  blocker.
+  Then merge — and merge ONLY — through the confidence command, which waits for
+  CI, refuses anything it cannot verify, and writes the auto-ship-log row
+  itself:
+  ```
+  node "${CLAUDE_PLUGIN_ROOT}/tools/safe-merge/cli.js" \
+    --repo <owner>/<repo> --pr <n> \
+    --source status-check --what "<one line>" --declare guard|rewrite
+  ```
+  Exit `0` → merged and logged. Exit `10` → refused; the fix stays pushed, the
+  merge does not happen. Exit `11` → merged but the log row is MISSING; add it
+  by hand and flag it. Gate on the exit status, never through a pipe. Full
+  contract and what it does not check:
+  `${CLAUDE_PLUGIN_ROOT}/skills/crash-monitor/SKILL.md` → "Confidence gate".
+- **Escalate when:** the command refuses, or the failure is infra/config (never
+  weaken CI to make it pass). Manual row with the pushed-fix link and the
+  reasons the command printed.
 
 ### (c) Issue a merged PR should have closed but didn't
 
@@ -162,7 +166,7 @@ One table, two buckets, then the counts:
 
 | Loop | Repo | Type | Verdict |
 |---|---|---|---|
-| PR #42 auto-fix | alate | (b) failing PR | ✅ fixed + merged (confidence: all-hold) |
+| PR #42 auto-fix | alate | (b) failing PR | ✅ fixed + merged (safe-merge exit 0) |
 | Issue #17 | badige | (c) unclosed issue | ✅ closed, linked PR #40 |
 | branch fix/foo | alate | (d) branch | ✅ deleted (PR MERGED) |
 | OTA for queue item | alate | (e) stranded | 🙋 manual — publish OTA, then drainable |
@@ -183,16 +187,19 @@ click through to learn what to do. Clean session → the single line
   `gh pr list --head <branch> --state all` printing `MERGED` first.
 - NEVER merge past a carve-out: outward-facing, hard-to-reverse,
   needs-human-judgment, or an explicit user hold stays open.
-- NEVER auto-merge a pushed fix that fails ANY item of the confidence
-  checklist, and never one touching a cooled-down module.
-- NEVER gate a merge through a pipe —
-  `gh pr checks N --watch >/dev/null && gh pr merge N --squash` only; probe
-  branch protection once per repo before trusting `--auto`.
+- NEVER merge a pushed fix except through the confidence command, and never
+  when it exits anything other than `0`. Do not re-derive its verdict by
+  reading the diff — if you disagree with it, file an issue against it.
+- NEVER gate a merge through a pipe. For an automation-authored fix (b), the
+  confidence command is the ONLY merge path — it waits for CI itself. For this
+  session's own PRs (a), follow Merge-on-green, and remember that `--auto` on a
+  repo with no required checks merges instantly, before CI runs, with a success
+  message identical to the case where it genuinely waited.
 - NEVER trigger heavy builds (APK/AAB, EAS, Docker, emulator E2E) — name the
   dispatch as the manual unblock instead.
 - NEVER act on loops another session opened; scope is this conversation.
-- Append the litmus auto-ship-log row for every auto-merged fix — it is
-  crash-monitor's cooldown breadcrumb.
+- The litmus auto-ship-log row is written by the confidence command, not by
+  you. On exit `11` it is MISSING — add it by hand and flag it loudly.
 - Quiet output on a clean session is correct, not a failure.
 
 ## What this skill does NOT do
