@@ -59,12 +59,47 @@ So on these repos the prefix carries information git has no way to derive, and
 `-D` is the only delete that works — the rename is what licenses it, because
 you asserted "merged" at the moment you knew it was true.
 
+**The licence is only as good as the assertion, and in the field it has been
+wrong.** On loom (2026-09-05) 12 `done/` branches were checked one at a time
+against the default branch and **2 had never landed** —
+`done/claude/size-finder-ux-issues-889306` and
+`done/fix/size-finder-inches-autoswitch` — each with its remote branch already
+deleted and no PR ref to recover from. The blanket `-D` below would have
+destroyed both with no copy anywhere. The prefix records what someone believed
+at rename time; it does not survive a branch renamed speculatively, or commits
+added after the rename.
+
+Squash rewrites the SHA but keeps the commit SUBJECT, so the subject is the
+check ancestry cannot give you:
+
 ```bash
-# List first. `refs/heads/done/*` silently matches only un-nested names
-# (6 of 37 here) — `*` does not cross `/`. Use `**`.
-git for-each-ref --format='%(refname:short)' 'refs/heads/done/**'
-git for-each-ref --format='%(refname:short)' 'refs/heads/done/**' | xargs -r git branch -D
+# 1. CLASSIFY FIRST. Never pipe the list straight into `branch -D`.
+#    `refs/heads/done/*` silently matches only un-nested names (6 of 37 in the
+#    original sweep) — `*` does not cross `/`. Use `**`.
+git fetch origin --quiet
+subjects=$(git log --format='%s' origin/HEAD)   # or origin/master / origin/main
+for b in $(git for-each-ref --format='%(refname:short)' 'refs/heads/done/**'); do
+  subj=$(git log -1 --format='%s' "$b")
+  base=$(printf '%s' "$subj" | sed 's/ (#[0-9]\{1,\})$//')   # drop squash PR suffix
+  sha=$(git rev-parse --short "$b")
+  if grep -Fq "$base" <<<"$subjects"; then
+    echo "LANDED    $sha  $b"
+  else
+    echo "UNLANDED  $sha  $b   <- keep, or salvage before deleting"
+  fi
+done
+
+# 2. Record the SHAs you are about to drop, then delete ONLY the LANDED ones,
+#    named explicitly. `--format` is required above: the default output is
+#    `<sha> commit<TAB><ref>`, so without it xargs feeds SHAs to `branch -D`.
+git branch -D done/<landed-one> done/<landed-two>
 ```
+
+Two things that will bite during the sweep: a branch **checked out in a
+worktree** cannot be deleted (git refuses — finish or `git worktree remove`
+first), and the subject match is a heuristic, so two branches sharing a subject
+both read as LANDED. When a branch matters, diff it against the default branch
+before dropping it.
 
 The two settle into one lifecycle — `done/` is the staging state, deletion is
 the end state — so pick per repo and don't treat the choice as a contradiction:
