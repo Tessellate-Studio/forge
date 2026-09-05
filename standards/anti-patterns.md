@@ -220,6 +220,51 @@ build→deploy→test cycle. *Precedent: inferred an OAuth redirect scheme from
 convention, shipped it, failed — the package source plainly showed the real
 value.* (Fixes-half of the authoritative-claims standard.)
 
+## A cause is a controlled comparison, not a correlated observation
+
+Before you record a root cause — in a regression log, an alert string, a PR
+body — you must have changed ONE variable, held the rest, and seen the result
+move. If the fault might be non-deterministic, run the trial SEVERAL times and
+count; a single green run proves nothing against a coin flip. When you cannot
+meet that bar, write "cause not established" and list what is ruled out.
+**Why:** a wrong cause is worse than no cause — it is copied into alerts, logs
+and follow-up PRs, and every reader it reaches re-derives the same dead end
+with more confidence than the last. The tell is a long-unsolved bug that
+appears fixed on the FIRST try. *Precedent: loom's admin 508 (2026-09) — six
+causes recorded as fact, all six disproven, each from one post-change probe
+against a fault that turned out to be non-deterministic; two CI deploys with
+identical config landed on 404 and 508. One wrong entry was propagated into a
+production alert hours after it had been disproven.*
+
+## A monitor must be proven to go RED, not merely green today
+
+When you add or change a check, verify it fails against a known-bad state —
+point it at the broken thing, or assert the discriminating signal — before
+trusting it. Ask specifically: is this assertion still true in the failure I am
+watching for? **Why:** a check that cannot fail is worse than no check; it
+reads as coverage and trains everyone to ignore the alert. Prerendered/cached
+paths and "did it respond at all" probes are the usual offenders — they pass on
+exactly the broken deployment. Skips count too: a check gated on a missing
+secret must FAIL, not warn, or a half-blind monitor reports healthy.
+*Precedent: loom (2026-09) — three of ~six probes could not detect their own
+target. One queried `shop=` where the endpoint reads `domain=`, returning 400
+on every run since it shipped and concealing a live data outage; one asserted a
+prerendered path that returns 200 on the very deployment it was added to catch;
+and a missing secret silently disabled three checks while the run reported OK.*
+
+## Establish severity at the user's entry point, not the component you are debugging
+
+Before calling anything an outage, identify where users actually enter — from
+config (app manifest, DNS, the proxy's rewrite table), not from the component
+in front of you — and measure there. **Why:** in any app with a proxy, CDN or
+fronting layer, the debugging surface and the user surface are different
+systems, and the severity that drives everyone's priorities belongs to the
+second. *Precedent: loom (2026-09) — the admin 508 was reported as a two-day
+production outage measured against the admin origin; merchants enter through
+the API host that fronts it, where every route served 200 and the data path
+worked throughout. Real impact was a missing favicon and a ceiling on
+server-rendered routes. The entry point was one grep from the app manifest.*
+
 ## WCAG 2.1 AA is a requirement, not a later polish pass (was #17)
 
 Every screen ships meeting WCAG 2.1 AA: text contrast ≥4.5:1 (3:1 large),
