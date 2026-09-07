@@ -384,6 +384,15 @@ parse it — keep the bold field names exactly):
   comment. A failed test's findings go to the app's regression log or a new
   issue; the Status line links there. The queue holds tests, not
   investigations.
+- **A `✅` may not carry an unresolved caveat in prose.** Before writing one,
+  re-read the result for hedge vocabulary — *unproven, unverified, still
+  unobserved, never been run, inferred rather than observed, does not cover,
+  worth carrying*. Every hit is either resolved, or filed as its own queue item
+  / issue whose number appears in the result. A caveat written under a PASSED
+  line is gone the moment the drain moves on: nothing but that sentence knows it
+  exists, and the item will never be re-read because it is closed. A pass with
+  a named limit is a pass; a pass with a loose limit is a lie with a footnote.
+  Standard: `standards/authoritative-claims.md` → "Labelling is not tracking."
 - **`**Status:** 🔧 needs build — <what's needed>`** — a fourth status value,
   distinct from bare `OPEN`: it means the drain *looked* at this item and
   determined it
