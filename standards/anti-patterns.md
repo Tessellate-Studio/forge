@@ -304,7 +304,10 @@ included minutes and all private-repo CI stopped at once.* Full rule + the
 
 Every assertion/status claim cites a verified source (`file:line`, SHA, MCP tool,
 CLI). Unverifiable → label it a hypothesis. If the sentence still reads true with
-"probably/should be/I think" inserted, you're inferring.
+"probably/should be/I think" inserted, you're inferring. **A behaviour
+claim — this bug is live, this path is reachable, this test exercises X — needs
+a probe run, not a read**: a correct `file:line` is evidence of what the code
+says, not of what it does.
 **Why:** assumption-shaped answers burn the user's trust budget and trigger
 re-verification / undo / fixing non-problems. See the full
 [`authoritative-claims.md`](./authoritative-claims.md) standard — this is its
