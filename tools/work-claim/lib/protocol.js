@@ -112,6 +112,28 @@ function isNotice(body) {
   return noticeMarker().test(String(body || ''));
 }
 
+/**
+ * The same removal, but LENGTH-PRESERVING: every code character becomes a
+ * space, so an index into the result is still an index into the original.
+ *
+ * stripCode above is enough when you only need to know *whether* a pattern
+ * occurs. It is not enough when you need to know *where* — and the queue
+ * parser needs where, because it splits a comment into fields and notes at a
+ * byte offset. Real shape, alate#562 comments 5523648406 and 5525920572: a
+ * drain appended a note reading "No `**Status:**` line on this comment
+ * (format drift)", and the parser matched the field name inside those
+ * backticks and reported the comment as having a Status whose value was the
+ * rest of the note. A comment that DOCUMENTS a missing field is not
+ * supplying it.
+ */
+function maskCode(markdown) {
+  const blank = run => ' '.repeat(run.length);
+  return String(markdown || '')
+    .replace(/```[\s\S]*?```/g, blank)
+    .replace(/~~~[\s\S]*?~~~/g, blank)
+    .replace(/`[^`\n]*`/g, blank);
+}
+
 function minutesSince(iso) {
   const parsed = iso ? Date.parse(iso) : NaN;
   return Number.isNaN(parsed)
@@ -335,6 +357,7 @@ module.exports = {
   humanIdle,
   clip,
   stripCode,
+  maskCode,
   NOTICE_GLYPHS,
   noticeMarker,
   isNotice,

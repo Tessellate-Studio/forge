@@ -1,4 +1,9 @@
-const { STATUS, parseComment, expectedGlyph } = require('../scripts/queue-lib');
+const {
+  STATUS,
+  parseComment,
+  expectedGlyph,
+  statusState,
+} = require('../scripts/queue-lib');
 
 // Every comment the parser sees was typed by a different session on a
 // different day. These fixtures are real shapes taken off alate#562 and
@@ -343,5 +348,146 @@ describe('notice detection does not depend on module load order', () => {
       )
     );
     expect(item).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The bookkeeping the queue writes about ITSELF is not a queue item.
+//
+// This is the failure mode the flag exists to survive. Every deploy appends an
+// OTA notice, every drain appends a claim and its corrections — so a rule that
+// mistakes any of them for a malformed item produces a warning that GROWS with
+// use. On alate#562 it reached 27 (30 by the next morning), and at that size
+// nobody reads it, which is exactly when a genuinely dropped test hides in it.
+// The bar for each fixture below: would a human have to do something about it?
+// ---------------------------------------------------------------------------
+describe('bookkeeping the board must not report as a violation', () => {
+  const fx = require('../__fixtures__/queue-comments');
+
+  it('skips the 📦 OTA-publish notice eas-update.yml writes on every deploy', () => {
+    expect(parseComment(fx.otaNotice)).toBeNull();
+  });
+
+  it('skips the 🔒 device claim every drain writes', () => {
+    expect(parseComment(fx.deviceClaim)).toBeNull();
+  });
+
+  it('skips a drain correction written like a document', () => {
+    // alate#562 5571959196: two `###` headings and a closing sentence opening
+    // `**Status:**` that says, in prose, why ANOTHER item is blocked. It has
+    // the furniture of an item and none of the substance — no item glyph, no
+    // Steps, no Expect, and a Status naming no state.
+    expect(parseComment(fx.correctionNote)).toBeNull();
+  });
+
+  it('reads a legacy bold-opener item instead of calling it malformed', () => {
+    // alate#562 5469277783. Written before Steps/Expect were fields, so the
+    // "a bold opener is a title only when the body looks like a test" rule
+    // refused it a title and reported an already-CLOSED test as malformed —
+    // one of the false positives burying the real ones.
+    const item = parseComment(fx.legacyBoldItem);
+    expect(item.state).toBe(STATUS.DONE);
+    expect(item.title).toBe('HUMAN: re-verify');
+
+    // Its heading carries neither glyph nor ID: drift for the drain to stamp,
+    // never a reason to drop or flag the item.
+    expect(item.headingDrift).toBe(true);
+  });
+});
+
+describe('violations that still deserve a human', () => {
+  const fx = require('../__fixtures__/queue-comments');
+
+  it('flags a real test that has no Status line, and says so', () => {
+    // alate#562 5523648406 — a full test (Steps, Expect, PR, Delivery) that
+    // no drain can close because there is no Status line to edit.
+    const item = parseComment(fx.itemMissingStatus);
+    expect(item.state).toBe(STATUS.UNPARSEABLE);
+    expect(item.unparseableReason).toMatch(/no `\*\*Status:\*\*` line/);
+  });
+
+  it('does not read a note DOCUMENTING the missing Status as supplying one', () => {
+    // Same comment. Its drain note reads: No `**Status:**` line on this
+    // comment (format drift). Matched as a field, that mention made the item
+    // look like it had a Status — a paragraph of prose — so the board
+    // reported the wrong defect and no drain would ever have appended one.
+    const item = parseComment(fx.itemMissingStatus);
+    expect(item.statusText).toBeUndefined();
+    expect(item.unparseableReason).not.toMatch(/format drift/);
+  });
+
+  it('flags a Status value the format defines no state for', () => {
+    // alate#562 5424307372 (`CLOSED`) and mood-layer#66 5521503000
+    // (`🅿️ PARKED`). Both are real tests; neither value is one of the four
+    // states, so the board genuinely cannot say where they stand. Guessing
+    // would be worse than asking.
+    const closed = parseComment(fx.itemUndefinedStatus);
+    expect(closed.state).toBe(STATUS.UNPARSEABLE);
+    expect(closed.unparseableReason).toContain('names no state');
+
+    const parked = parseComment(fx.itemParkedStatus);
+    expect(parked.state).toBe(STATUS.UNPARSEABLE);
+    expect(parked.unparseableReason).toContain('names no state');
+  });
+
+  it('clips a long Status in the reason instead of printing the paragraph', () => {
+    // The reason is a nudge, not a transcript. A drifted Status routinely
+    // runs to a paragraph, and one row printing all of it pushes every other
+    // row off the screen — the same "nobody reads it" failure, differently
+    // caused.
+    const parked = parseComment(fx.itemParkedStatus);
+    expect(parked.unparseableReason).toContain('🅿️ PARKED');
+    expect(parked.unparseableReason).toContain('…');
+    expect(parked.unparseableReason).not.toContain('2026-09-03');
+
+    const wordy = parseComment(
+      comment(
+        [
+          '### 🤖 5462960191 — Something',
+          ITEM_FIELDS,
+          `- **Status:** blocked because ${'and so on '.repeat(40)}`,
+        ].join('\n')
+      )
+    );
+    expect(wordy.unparseableReason.length).toBeLessThan(140);
+  });
+});
+
+describe('what counts as an item at all', () => {
+  it('an item glyph in the heading outranks every other signal', () => {
+    // A declared item with a typo'd Status must stay ON the board as a
+    // violation. Skipping it as commentary would be the invisible-item
+    // failure wearing the new rule's clothes.
+    const item = parseComment(
+      comment('### 🤖 5462960191 — Something\n- **Status:** OPNE')
+    );
+    expect(item).not.toBeNull();
+    expect(item.state).toBe(STATUS.UNPARSEABLE);
+  });
+
+  it('a heading with no glyph, no test shape and no state is commentary', () => {
+    expect(
+      parseComment(
+        comment('### Re: the two items above\nBoth were run this morning.')
+      )
+    ).toBeNull();
+  });
+
+  it('a heading plus Steps is an item even with no Status at all', () => {
+    const item = parseComment(
+      comment(['### Something to check', ITEM_FIELDS].join('\n'))
+    );
+    expect(item.state).toBe(STATUS.UNPARSEABLE);
+  });
+
+  it('maps each defined Status value to its state, and nothing else', () => {
+    expect(statusState('OPEN — routed to another agent')).toBe(STATUS.OPEN);
+    expect(statusState('✅ done 2026-09-02')).toBe(STATUS.DONE);
+    expect(statusState('❌ failed → #694')).toBe(STATUS.FAILED);
+    expect(statusState('🔧 needs build — no OTA reaches it')).toBe(
+      STATUS.NEEDS_BUILD
+    );
+    expect(statusState('CLOSED— iOS/TestFlight')).toBeNull();
+    expect(statusState('🅿️ PARKED — being rethought')).toBeNull();
   });
 });

@@ -259,12 +259,22 @@ untested for no stated reason.
    - **A real test missing its Status line** → append `- **Status:** OPEN` so
      it enters the queue, then drain it this sitting like any other item. This
      is the common case: an item enqueued before the format settled.
-   - **A note, or commentary on another item** → leave it alone. The parser
-     ignores anything with neither a title nor a Status, and skips bot notices
-     (`### 📦`, `### 🔒`) outright.
+   - **A Status naming no defined state** (`CLOSED`, `🅿️ PARKED` — both real)
+     → rewrite it to the value that matches what actually happened, and stamp
+     the heading glyph with it. A state the format doesn't define is a state
+     no tool can act on.
+   - **A note, or commentary on another item** → leave it alone; the parser
+     already skips it. It skips bot notices (`### 📦` OTA, `### 🔒` device
+     claim, `### 🚧` work claim) outright, and it skips anything that is not
+     an item in the first place — no item glyph in the heading, no
+     `**Steps:**`/`**Expect`, and no Status naming one of the four states.
+     A correction written like a document is still a correction.
    - **Genuinely ambiguous** → leave it and say so in the wrap-up, with the
      comment URL and what is missing. That is the only case that reaches a
      human, and it should be rare.
+
+   `dtq` prints the reason beside each flagged URL — "no `**Status:**` line",
+   "names no state" — so the repair above is a lookup, not an investigation.
 
    **Restamp drifted headings in the same pass.** `dtq` counts headings that
    don't match their Status line (missing glyph, missing ID, or a glyph that

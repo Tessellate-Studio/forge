@@ -754,3 +754,35 @@ describe('describeClaim reads as a sentence', () => {
     );
   });
 });
+
+describe('maskCode — the same removal, with offsets intact', () => {
+  const { maskCode } = require('../lib/protocol');
+
+  it('blanks a code span without moving anything after it', () => {
+    const body = 'No `**Status:**` line on this comment (format drift).';
+    const masked = maskCode(body);
+    expect(masked).toHaveLength(body.length);
+    expect(masked).not.toContain('**Status:**');
+    expect(masked.indexOf('line on this')).toBe(body.indexOf('line on this'));
+  });
+
+  it('blanks fenced blocks the same way', () => {
+    const body = ['before', '```', '- **Claim:** HELD', '```', 'after'].join(
+      '\n'
+    );
+    const masked = maskCode(body);
+    expect(masked).toHaveLength(body.length);
+    expect(masked).not.toContain('**Claim:**');
+    expect(masked.indexOf('after')).toBe(body.indexOf('after'));
+  });
+
+  it('leaves prose outside code exactly where it was', () => {
+    const body = '- **Status:** OPEN — see `#42`';
+    expect(maskCode(body).indexOf('**Status:**')).toBe(2);
+  });
+
+  it('survives empty and missing input', () => {
+    expect(maskCode('')).toBe('');
+    expect(maskCode(null)).toBe('');
+  });
+});

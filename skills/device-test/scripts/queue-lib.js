@@ -32,7 +32,9 @@ const { gh, checkGhReady, slugRepo } = require(path.join(
   'lib',
   'claim.js'
 ));
-const { minutesSince } = require(path.join(
+// maskCode rides along on this same require: it is a markdown utility, not a
+// claim concept, and the claim files are already its only other caller.
+const { minutesSince, maskCode } = require(path.join(
   __dirname,
   '..',
   '..',
@@ -42,6 +44,27 @@ const { minutesSince } = require(path.join(
   'lib',
   'protocol.js'
 ));
+
+/** The `**Status:**` field regex — one definition, three callers. */
+const STATUS_FIELD = /\*\*Status:\*\*\s*(.+?)\s*$/m;
+
+/**
+ * Find the `**Status:**` field, ignoring any mention of it inside code.
+ *
+ * Located on a code-masked copy (see maskCode) but captured from the
+ * original, so a Status value that legitimately contains a backticked
+ * fragment — `🔧 needs build — needs the `v1.2.2` tag build` — keeps it.
+ */
+function findStatus(text) {
+  const located = STATUS_FIELD.exec(maskCode(text));
+  return located ? text.slice(located.index).match(STATUS_FIELD) : null;
+}
+
+/** Where the `**Status:**` field starts, or -1 — same masking, same reason. */
+function statusIndex(text) {
+  const located = STATUS_FIELD.exec(maskCode(text));
+  return located ? located.index : -1;
+}
 
 // Scope table — keep in sync with skills/device-test/SKILL.md. The scope is
 // deliberately NARROWER than the work-claim board (mobile apps only, because
@@ -84,6 +107,41 @@ const GLYPHS = {
 
 const ITEM_GLYPHS = Object.values(GLYPHS);
 
+/**
+ * A heading that OPENS with an item glyph is declaring itself an item, even
+ * when nothing else in the comment parses. That declaration is the strongest
+ * signal the format has, so it outranks every shape heuristic below — the
+ * alternative is an item with a typo'd Status quietly leaving the board.
+ */
+const ITEM_GLYPH_OPENER = new RegExp(`^\\s*(?:${ITEM_GLYPHS.join('|')})`);
+
+/**
+ * The state a `**Status:**` value names, or null when it names none of them.
+ *
+ * The standard defines exactly four (standards/workflows.md → "Device-test
+ * queue"): `OPEN`, `✅ done`, `❌ failed`, `🔧 needs build`. Anything else —
+ * `CLOSED`, `🅿️ PARKED`, or a sentence of prose that merely opens with
+ * `**Status:**` — names no state, and that distinction does two jobs: on a
+ * test-shaped comment it is real drift a human has to resolve, and on a
+ * comment with no test shape at all it is the tell that the line is
+ * commentary rather than a queue item.
+ */
+function statusState(statusText) {
+  if (/^OPEN\b/.test(statusText)) {
+    return STATUS.OPEN;
+  }
+  if (statusText.startsWith('✅')) {
+    return STATUS.DONE;
+  }
+  if (statusText.startsWith('❌')) {
+    return STATUS.FAILED;
+  }
+  if (statusText.startsWith('🔧')) {
+    return STATUS.NEEDS_BUILD;
+  }
+  return null;
+}
+
 /** The glyph an item's heading SHOULD carry, given its parsed state. */
 function expectedGlyph(item) {
   if (item.state === STATUS.OPEN) {
@@ -116,11 +174,10 @@ function expectedGlyph(item) {
  * exactly as before.
  */
 function splitNotes(body) {
-  const status = body.match(/\*\*Status:\*\*/);
-  if (!status) {
+  const after = statusIndex(body);
+  if (after === -1) {
     return { fields: body, notes: [] };
   }
-  const after = status.index;
   const rule = /^[ \t]*---[ \t]*$/gm;
   rule.lastIndex = after;
   const boundary = rule.exec(body);
@@ -168,23 +225,66 @@ function parseComment(comment) {
   const firstLine = fields.split('\n').find(l => l.trim() !== '') || '';
   const headingMatch = fields.match(/^###\s*(.+)$/m);
 
-  // A bold opener only counts as a TITLE when the body also carries the
-  // shape of a test — Steps or Expect. Plenty of legitimate commentary
-  // opens bold ("**Correction to the two comments above**") and quotes
-  // **PR:** / **Delivery:** while discussing someone else's item; treating
-  // those as malformed items is the nagging this whole pass exists to stop.
+  // Some enqueued items arrive as ONE long line (fields joined with " — "
+  // instead of newline bullets). Every field capture therefore stops at the
+  // next bold **Field:** marker, not just at end-of-line — otherwise a
+  // single-line item's "title" or "Needs runtime" swallows the whole body
+  // and the board renders a word wall.
+  const NEXT_FIELD = /\s*(?:[·—–|-]+\s*)?\*\*[A-Z][^*]*:\*\*[\s\S]*$/;
+  const fieldValue = match =>
+    match ? match[1].replace(NEXT_FIELD, '').trim() : null;
+
+  const statusMatch = findStatus(fields);
+  const statusText = statusMatch
+    ? statusMatch[1].replace(NEXT_FIELD, '').trim()
+    : null;
+  const namedState = statusText === null ? null : statusState(statusText);
+
+  // IS THIS COMMENT AN ATTEMPTED QUEUE ITEM AT ALL?
+  //
+  // A heading alone does not make one. The queue issue also carries drain
+  // corrections and replies that are written like little documents — real
+  // shape, alate#562 comment 5571959196: `### ⚠️ Correction to
+  // <item> — it cannot be run on the dev store`, with a closing sentence
+  // that opens `**Status:**` and then says, in prose, why another item is
+  // blocked. Nothing in it is a test, but it has a heading and a
+  // Status-shaped line, so the parser filed it as a malformed item and the
+  // board asked a human to go look at it — every day, forever.
+  //
+  // Three signals say "item", any one of them is enough, and they are
+  // exactly the ones standards/workflows.md already names:
+  //   1. the heading opens with an item glyph (🤖 🙋 🔧 ⚪ 🔴) — a comment
+  //      declaring itself an item is one, even if it parses no further;
+  //   2. the body carries the SHAPE of a test — `**Steps:**` / `**Expect`;
+  //   3. the Status line names one of the four defined states.
+  // A comment with none of the three is commentary. Skipping it is the
+  // documented behaviour ("notes and bot notices are left alone"), not a
+  // new rule — the parser was simply reading "has a heading" as signal 2.
+  const declaresItemGlyph = Boolean(
+    headingMatch && ITEM_GLYPH_OPENER.test(headingMatch[1])
+  );
   const looksLikeTest = /\*\*Steps:\*\*|\*\*Expect/.test(fields);
+  const isItem = declaresItemGlyph || looksLikeTest || namedState !== null;
+
+  // A bold opener counts as a TITLE on the same evidence. Widening it from
+  // "has Steps/Expect" to "is an item" is what finally reads alate#562
+  // comment 5469277783 — a legacy item opening `**HUMAN: re-verify** — Tab
+  // bar / Recent-card mis-tap fix`, closed `✅ done` by a drain but written
+  // before Steps/Expect were fields, so the old rule refused it a title and
+  // reported a CLOSED test as malformed.
   const boldTitleMatch =
-    !headingMatch && looksLikeTest
-      ? firstLine.match(/^\s*\*\*(.+?)\*\*/)
-      : null;
+    !headingMatch && isItem ? firstLine.match(/^\s*\*\*(.+?)\*\*/) : null;
 
   const titleMatch = headingMatch || boldTitleMatch;
-  const statusMatch = fields.match(/\*\*Status:\*\*\s*(.+?)\s*$/m);
 
   // Neither a title nor a Status field — this is plain commentary (a drain
   // note, a discussion reply), not an attempted queue item. Ignore it.
   if (!titleMatch && !statusMatch) {
+    return null;
+  }
+
+  // Dressed like a document, but none of the three item signals — see above.
+  if (!isItem) {
     return null;
   }
 
@@ -193,6 +293,13 @@ function parseComment(comment) {
   if (!titleMatch || !statusMatch) {
     return {
       state: STATUS.UNPARSEABLE,
+
+      // What is actually wrong, in the words of the repair that fixes it
+      // (SKILL.md Step 0.3). "27 comments don't match the format" is a wall
+      // a human learns to scroll past; "no **Status:** line" is one PATCH.
+      unparseableReason: statusMatch
+        ? 'no title — add a `### <glyph> <id> — <intent>` heading'
+        : 'no `**Status:**` line — append one so it enters the queue',
       title: fields.split('\n')[0].slice(0, 80) || '(empty comment)',
       testId: null,
       glyph: null,
@@ -203,32 +310,11 @@ function parseComment(comment) {
     };
   }
 
-  // Some enqueued items arrive as ONE long line (fields joined with " — "
-  // instead of newline bullets). Every field capture therefore stops at the
-  // next bold **Field:** marker, not just at end-of-line — otherwise a
-  // single-line item's "title" or "Needs runtime" swallows the whole body
-  // and the board renders a word wall.
-  const NEXT_FIELD = /\s*(?:[·—–|-]+\s*)?\*\*[A-Z][^*]*:\*\*[\s\S]*$/;
-  const fieldValue = match =>
-    match ? match[1].replace(NEXT_FIELD, '').trim() : null;
-
-  const statusText = statusMatch[1].replace(NEXT_FIELD, '').trim();
-  let state = STATUS.UNPARSEABLE;
-
-  // Prefix match, NOT equality. `**Status:** OPEN — routed to another agent`
-  // is a perfectly ordinary thing for a session to write, and an equality
-  // check turned it into UNPARSEABLE — so a still-open item vanished from the
-  // board entirely rather than showing as open. Silently losing work is the
-  // worst failure this parser can have; a trailing note must not cause it.
-  if (/^OPEN\b/.test(statusText)) {
-    state = STATUS.OPEN;
-  } else if (statusText.startsWith('✅')) {
-    state = STATUS.DONE;
-  } else if (statusText.startsWith('❌')) {
-    state = STATUS.FAILED;
-  } else if (statusText.startsWith('🔧')) {
-    state = STATUS.NEEDS_BUILD;
-  }
+  // Prefix match, NOT equality — see statusState. An item shaped like a test
+  // whose Status names no defined state (`CLOSED`, `🅿️ PARKED`) stays
+  // UNPARSEABLE: the board genuinely cannot say where it stands, and that is
+  // a human's call, not something to guess at.
+  const state = namedState || STATUS.UNPARSEABLE;
 
   // The PR field can be a bare number, "none", or a markdown link
   // ([#601](url)) — pull the digits out rather than the raw token, since a
@@ -268,8 +354,19 @@ function parseComment(comment) {
   const testId = headingParts ? headingParts[2] || null : null;
   const title = headingParts ? headingParts[3].trim() : rawTitle;
 
+  // Clipped: the reason is a nudge, not a transcript. A drifted Status runs
+  // to a paragraph often enough that printing all of it buries every other
+  // row — the same "nobody reads it" failure, differently caused.
+  const shownStatus =
+    statusText.length > 48 ? `${statusText.slice(0, 47)}…` : statusText;
+
   const item = {
     state,
+    unparseableReason:
+      namedState === null
+        ? `\`**Status:** ${shownStatus}\` names no state ` +
+          '(OPEN / ✅ done / ❌ failed / 🔧 needs build)'
+        : null,
     title,
     testId,
     glyph,
@@ -385,6 +482,7 @@ module.exports = {
   GLYPHS,
   ITEM_GLYPHS,
   expectedGlyph,
+  statusState,
   splitNotes,
 
   // Re-exported so callers get the whole queue surface from one require.

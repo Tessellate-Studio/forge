@@ -87,7 +87,16 @@ function renderRepo(result, opts) {
         `  ⚠ ${unparsed.length} comment(s) don't match the queue format — check them:`
       )
     );
-    unparsed.forEach(i => lines.push(`    ${chalk.dim(i.commentUrl)}`));
+
+    // The URL alone made this a list to scroll past. The reason makes it a
+    // list to act on — each line names the one edit that clears it.
+    unparsed.forEach(i =>
+      lines.push(
+        `    ${chalk.dim(i.commentUrl)}${
+          i.unparseableReason ? chalk.dim(`  — ${i.unparseableReason}`) : ''
+        }`
+      )
+    );
   }
 
   // Drift is cosmetic on the board (the Status line still decides state) but

@@ -34,6 +34,7 @@
     "!references/__tests__/",
     "!references/jest.config.js",
     "!skills/device-test/__tests__/",
+    "!skills/device-test/__fixtures__/",
     "!skills/device-test/jest.config.js",
     "!hooks/__tests__/",
     "!hooks/jest.config.js",

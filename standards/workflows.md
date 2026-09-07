@@ -674,6 +674,28 @@ an item:
   The bold form predates the heading convention. First line only — a bold run
   mid-body is ordinary prose (`**Why:** …`), and matching those turned
   explanatory drain notes into phantom malformed items.
+- **A heading is not, by itself, an item.** Three signals say "item", and any
+  one is enough: the heading **opens with an item glyph** (🤖 🙋 🔧 ⚪ 🔴), the
+  body carries the **shape of a test** (`**Steps:**` / `**Expect`), or the
+  Status line **names one of the four states**. A comment with none of the
+  three is commentary and is skipped, however carefully it is laid out —
+  alate#562 comment 5571959196 is a drain correction with two `###` headings
+  and a closing sentence opening `**Status:**` that explains, in prose, why a
+  *different* item is blocked. It was reported as malformed every day.
+  Conversely the glyph outranks everything: a comment wearing 🤖 with a
+  typo'd Status stays on the board as a violation, because a comment
+  declaring itself an item is one.
+- **A field named inside `` ` `` backticks is documentation, not a field.**
+  The drain that leaves a note reading ``No `**Status:**` line on this
+  comment`` is describing the absence, not supplying the field. Matched
+  literally, that note gave two live alate items a Status made of the note's
+  own prose — so the board reported the wrong defect and no drain would ever
+  have appended the real line.
+- **A Status the format does not define is a violation, not a guess.**
+  `CLOSED`, `🅿️ PARKED` — real values off both queues — name none of the four
+  states, so the board says so and names the comment rather than inventing a
+  state for it. `dtq` prints the reason next to each flagged URL, because the
+  point of the flag is that somebody fixes it.
 - **Bot notices are not items.** `### 📦` (OTA published) and `### 🔒` (device
   claim) are skipped outright. They carry a heading and no Status, so without
   this they pile up as "malformed" forever — six of those nine. A new bot
