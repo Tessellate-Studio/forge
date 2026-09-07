@@ -270,6 +270,7 @@ wip claim alate#562 --doc memory/decisions/rfd-003-queue-lock.md
 wip touch alate#562                  # heartbeat, at each commit/push/phase
 wip release alate#562                # done, stalled, or handed back
 wip sweep                            # drop labels whose claim has died
+wip scan                             # moved recently, but nobody claimed it
 ```
 
 That posts:
@@ -281,15 +282,25 @@ That posts:
 - **Worktree:** `<absolute path>` (branch `<branch>`)
 - **Started at:** <ISO 8601 UTC>
 - **Last touch:** <ISO 8601 UTC — rewritten at each checkpoint>
+- **Related:** <the issue a PR implements, the PRs carrying an issue, or —>
 - **Docs:** <RFD / ADR / pitch / backlog entry this is built against, or —>
 - **Waiting on:** — <or: human — what you handed them>
 - **Claim:** HELD
 ```
 
-The three fields that matter are the ones another agent cannot derive: the
+The fields that matter are the ones another agent cannot derive: the
 **session** (so the work is resumed, not restarted), the **worktree** (where
-the in-flight code physically is), and the **docs** (what it is being built
-against). A claim without those is just a "someone is on it" sticker.
+the in-flight code physically is), the **docs** (what it is being built
+against), and **related** (the issue a PR implements, or the PRs carrying an
+issue). A claim without those is just a "someone is on it" sticker, and one
+without Related is a dead end — alate #696 merged while #707 carried the same
+work forward, with nothing on either naming the other.
+
+**Claiming is not the whole picture, and the board cannot tell you what it
+has never been told.** `wip scan` lists items that moved recently carrying no
+claim — the honest answer to "is anyone on this?" for everything nobody
+claimed. It reports rather than claims: recent activity means something
+moved, not that a session is sitting on it.
 
 **Who claims.** Every session that starts work on a tracked issue or PR —
 `/forge:plan`, `build-feature`, `crash-monitor`, `security-sweep`,
@@ -302,12 +313,21 @@ claim it.
   and still alive → don't start. Resume their session, or say what you need.
   Free, released, or silent past the window → take it, and say in your claim
   that you took over a silent one (`wip claim <item> --force`).
-- **Signal liveness, not duration.** `wip touch <item>` at each natural
-  checkpoint — a commit, a push, a phase boundary, a handoff. A claim reads as
-  abandoned only after **90 minutes with no touch at all**; there is no cap on
-  how long it may be held. Silence is the only abandonment signal. (Longer than
-  the device claim's 30 min: a build legitimately runs a suite and waits on CI
-  without touching GitHub once.)
+- **Idle is not abandoned. A claim survives SEVEN DAYS of silence,** and
+  activity on the item itself counts as a touch — a push, a commit, a comment,
+  a review. `wip touch <item>` is still worth running at a checkpoint, but
+  nothing depends on remembering it: GitHub already knows when the item last
+  moved.
+  - Real work is not continuous. A piece of work spread across two days with a
+    night in the middle is normal, and the first version of this rule — 90
+    minutes, copied from the device lock — called that abandoned before lunch.
+  - The two locks have OPPOSITE economics, which is what the copy missed. The
+    device lock guards a scarce resource with someone actively blocked waiting,
+    so a short window is worth cutting a live holder off. **A work claim blocks
+    nobody** — expiring it early buys no throughput and costs the exact
+    collision the claim exists to prevent.
+  - The board says **quiet** past 8 hours. That is information, not a warning,
+    and nothing acts on it.
 - **Parked on a human never expires.** `wip touch <item> --waiting-on "human —
   <what>"` before handing over. Clear it back to `—` when you resume.
 - **Release when you stop** — `wip release <item>` flips `**Claim:**` to
@@ -320,8 +340,11 @@ claim it.
   still be alive to follow, and the two cases where it is not are the common
   ones: a crashed session cannot release its own claim, and a session that
   ends with the merge never gets to. So `wip sweep` drops the label from any
-  item where nothing live holds it — every claim gone stale, or the item
-  closed at all (nothing legitimately holds a claim on finished work). It
+  item where nothing live holds it — the item **closed** (nothing legitimately
+  holds a claim on finished work, and this is the common case), or every claim
+  silent past the seven-day window. **It never sweeps an open item that is
+  merely quiet** — stripping the label mid-job is the collision it exists to
+  prevent. It
   never touches a live claim, never touches an item it could not read, and
   never edits a comment body: the claim stays as the record of who held it
   and when they went quiet.

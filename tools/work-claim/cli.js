@@ -72,6 +72,18 @@ function refuseAnonymous(action) {
   process.exit(2);
 }
 
+/** Minutes are unreadable past a few hours, and a claim may now legitimately
+ *  be days old. */
+function humanIdle(minutes) {
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+  if (minutes < 48 * 60) {
+    return `${Math.round(minutes / 60)}h`;
+  }
+  return `${Math.round(minutes / (24 * 60))}d`;
+}
+
 function clip(text, max) {
   if (!text) {
     return text;
@@ -124,6 +136,55 @@ async function findClaimComments(repo, number) {
     .filter(c => c.claim);
 }
 
+/**
+ * The issues/PRs this item is bound to, so a claim is not a dead end.
+ *
+ * Two sources, because they catch different things: closing keywords in the
+ * body name the ticket a PR implements, and GitHub's own cross-reference
+ * timeline catches the follow-up nobody wrote a keyword for. alate #696
+ * merged while #707 carried the same work forward, and only the timeline
+ * knew they were related.
+ *
+ * Best-effort: a claim with no Related line is still a claim, so every
+ * failure here degrades to an empty list rather than blocking the claim.
+ */
+async function relatedRefs(repo, number) {
+  const refs = new Set();
+  try {
+    const out = await gh([
+      'api',
+      `repos/${repo}/issues/${number}`,
+      '--jq',
+      '.body // ""',
+    ]);
+    const closing = out.match(/\b(?:fixes|closes|resolves)\s+#(\d+)/gi);
+    (closing || []).forEach(m => refs.add(`closes #${m.match(/\d+/)[0]}`));
+  } catch {
+    /* body unreadable — the timeline may still have something */
+  }
+  try {
+    const out = await gh([
+      'api',
+      `repos/${repo}/issues/${number}/timeline?per_page=100`,
+      '--paginate',
+      '--jq',
+      '[.[] | select(.event=="cross-referenced") | .source.issue.number] | unique | .[]',
+    ]);
+    out
+      .split('\n')
+      .map(n => n.trim())
+      .filter(Boolean)
+      .forEach(n => {
+        if (![...refs].some(r => r.endsWith(`#${n}`))) {
+          refs.add(`#${n}`);
+        }
+      });
+  } catch {
+    /* no timeline access — a claim without Related is still useful */
+  }
+  return [...refs].slice(0, 6);
+}
+
 /** Create the label if the repo has never had one. Idempotent — an existing
  *  label makes `gh label create` fail, which is not an error here. */
 async function ensureLabel(repo) {
@@ -170,10 +231,13 @@ function renderRepo(result) {
     const c = item.claim;
     const kind = item.isPr ? chalk.magenta('PR ') : chalk.cyan('ISS');
     const idle = c.idleMinutes === null ? '?' : c.idleMinutes;
-    const idleText =
-      idle !== '?' && idle >= STALE_MINUTES / 2
-        ? chalk.yellow(`${idle}m idle`)
-        : chalk.gray(`${idle}m idle`);
+
+    // Idle is reported in the largest honest unit, and QUIET is not a
+    // warning — multi-day work is normal, so only real silence is yellow.
+    const human = idle === '?' ? '?' : humanIdle(idle);
+    const idleText = c.quiet
+      ? chalk.yellow(`${human} idle`)
+      : chalk.gray(`${human} idle`);
     lines.push(
       `  ${kind} ${chalk.bold(`#${item.number}`)} ${clip(item.title, 46)}`
     );
@@ -189,6 +253,9 @@ function renderRepo(result) {
       lines.push(
         `      ${chalk.gray(`resume: claude --resume ${c.sessionId}`)}`
       );
+    }
+    if (c.related) {
+      lines.push(`      ${chalk.gray(`related: ${clip(c.related, 62)}`)}`);
     }
     if (c.docs) {
       lines.push(`      ${chalk.gray(`docs: ${clip(c.docs, 66)}`)}`);
@@ -236,8 +303,10 @@ async function board(opts) {
   console.log('');
   console.log(
     chalk.gray(
-      `A claim goes stale after ${STALE_MINUTES} min of silence. ` +
-        'Claims parked on a human never expire.'
+      `A claim goes stale only after ${Math.round(
+        STALE_MINUTES / (24 * 60)
+      )} days of silence — ` +
+        'quiet is not abandoned. Claims parked on a human never expire.'
     )
   );
 
@@ -253,6 +322,104 @@ async function board(opts) {
       )
     );
   }
+  console.log('');
+}
+
+// ----------------------------------------------------------------- scan ----
+
+/**
+ * The other half of the board: items that LOOK actively worked and carry no
+ * claim. The board can only ever show what has been claimed, so on its own it
+ * makes unclaimed work look like no work — reported 2026-09-07, "I find quite
+ * a few issues being actively worked on but no claimed label".
+ *
+ * Deliberately REPORTS rather than claims. Recent activity is evidence that
+ * something moved, not that a session is sitting on it right now; auto-
+ * claiming on that signal would refill the board with the fiction the narrow
+ * retrofit was careful to avoid.
+ */
+async function scan(opts) {
+  const ready = await checkGhReady();
+  if (!ready.ok) {
+    console.error(chalk.red(ready.message));
+    process.exit(1);
+  }
+
+  const days = Number(opts.days || 3);
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const repos = repoList().filter(
+    r => !opts.repo || r.key === opts.repo || r.repo === slugRepo(opts.repo)
+  );
+
+  const rows = [];
+  for (const r of repos) {
+    try {
+      const out = await gh([
+        'api',
+        `repos/${r.repo}/issues?state=open&sort=updated&direction=desc&per_page=50`,
+      ]);
+      JSON.parse(out || '[]').forEach(i => {
+        if (new Date(i.updated_at) < since) {
+          return;
+        }
+        const labels = (i.labels || []).map(l => l.name);
+        if (labels.includes(CLAIM_LABEL)) {
+          return; // already claimed — the board covers it
+        }
+        const bot =
+          i.user && (i.user.type === 'Bot' || /dependabot/i.test(i.user.login));
+        if (bot && !opts.all) {
+          return; // nobody is "working" a dependabot PR
+        }
+        rows.push({
+          key: r.key,
+          number: i.number,
+          title: i.title,
+          isPr: Boolean(i.pull_request),
+          updatedAt: i.updated_at,
+          url: i.html_url,
+        });
+      });
+    } catch (error) {
+      console.error(chalk.red(`${r.key}: ${error.message}`));
+    }
+  }
+
+  if (rows.length === 0) {
+    console.log(
+      chalk.gray(`Nothing unclaimed has moved in the last ${days} day(s).`)
+    );
+    return;
+  }
+
+  console.log('');
+  console.log(
+    chalk.bold(`Moved in the last ${days} day(s), with no claim on them`)
+  );
+  console.log('');
+  rows
+    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
+    .forEach(row => {
+      const kind = row.isPr ? chalk.magenta('PR ') : chalk.cyan('ISS');
+      console.log(
+        `  ${kind} ${chalk.bold(`${row.key}#${row.number}`)} ${clip(
+          row.title,
+          44
+        )}`
+      );
+      console.log(
+        `      ${chalk.gray(
+          `updated ${row.updatedAt.slice(0, 10)}  ${row.url}`
+        )}`
+      );
+    });
+  console.log('');
+  console.log(
+    chalk.gray(
+      'Claim the ones a session is actually on: wip claim <repo>#<n>. ' +
+        'Recent activity is not proof anyone is holding it.'
+    )
+  );
   console.log('');
 }
 
@@ -369,6 +536,7 @@ async function claim(target, opts) {
     ...me,
     at: new Date().toISOString(),
     docs: opts.doc || [],
+    related: opts.related || (await relatedRefs(repo, number)),
     waitingOn: opts.waitingOn,
   });
 
@@ -547,6 +715,16 @@ program
   .action(opts => sweep(opts).catch(fail));
 
 program
+  .command('scan')
+  .description(
+    'Items that moved recently with no claim on them — what the board cannot show'
+  )
+  .option('-r, --repo <key>', 'limit to one repo')
+  .option('-d, --days <n>', 'how far back counts as active (default 3)')
+  .option('-a, --all', 'include bot-authored items')
+  .action(opts => scan(opts).catch(fail));
+
+program
   .command('claim <target>')
   .description('Claim an issue/PR — post the claim comment and label it')
   .option(
@@ -557,6 +735,10 @@ program
   .option(
     '-w, --waiting-on <what>',
     'park it immediately, e.g. "human — needs the phone"'
+  )
+  .option(
+    '-R, --related <ref...>',
+    'issues/PRs to link (default: discovered from the body + cross-references)'
   )
   .option('-f, --force', 'take over a live claim held by another session')
   .action((target, opts) => claim(target, opts).catch(fail));
