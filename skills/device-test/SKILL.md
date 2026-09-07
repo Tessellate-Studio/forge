@@ -1,6 +1,6 @@
 ---
 name: device-test
-description: Drains the per-repo "Device test queue" GitHub issues across all Tessellate mobile apps (alate, mood-layer, badige) — AGENT-FIRST, and always runs its actual work in a cost-controlled model:sonnet subagent regardless of the invoking session's model. The agent executes every adb-automatable step itself (launch, taps, text entry, screenshots, logcat) and verifies Expect from what it captures; the human is pulled in only for steps marked HUMAN: (gesture feel, camera/biometrics, real accounts, iOS). Sessions enqueue tests per forge standards/workflows.md → "Device-test queue"; this skill fetches every OPEN item, verifies the right build/OTA is on the connected device per app, runs or walks each test, and closes items by editing their Status line — filing failures instead of fixing mid-drain. Items that need a fresh native build (no OTA can reach them) get logged as `🔧 needs build` instead of tested — OTA-deliverable changes always test immediately, ad hoc or scheduled, never gated by a build cadence. Self-schedules a daily drain (9am local by default) that skips needs-build items, plus a separate weekly task that dispatches builds only for apps with a needs-build backlog (the one standing exception to the no-automatic-builds CI-spend rule). Use whenever the user asks to "drain the device test queue", "run device tests", "what needs testing on my phone", "device test session", passively "anything waiting on my phone?" — or on a schedule/idle moment whenever a device is adb-connected: agent-only items need no invitation. Empty queues everywhere is a valid, quiet result. Output is a wrap-up table: passed / failed→filed / needs-build→unblock / needs-human, with what unblocks each.
+description: Drains the per-repo "Device test queue" GitHub issues across all Tessellate mobile apps (alate, mood-layer, badige) — AGENT-FIRST, and always runs its actual work in a cost-controlled model:sonnet subagent regardless of the invoking session's model. The agent executes every adb-automatable step itself (launch, taps, text entry, screenshots, logcat) and verifies Expect from what it captures; the human is pulled in only for steps marked HUMAN: (gesture feel, camera/biometrics, real accounts, iOS). Sessions enqueue tests per forge standards/workflows.md → "Device-test queue"; this skill fetches every OPEN item, verifies the right build/OTA is on the connected device per app, runs or walks each test, and closes items by editing their Status line — filing failures instead of fixing mid-drain, and spinning up a tracked chip for every failure it files so the bug is chased to completion instead of accumulating as an unowned issue (later drains re-check each `❌ failed` item and re-spawn a dead chip). Items that need a fresh native build (no OTA can reach them) get logged as `🔧 needs build` instead of tested — OTA-deliverable changes always test immediately, ad hoc or scheduled, never gated by a build cadence. Self-schedules a daily drain (9am local by default) that skips needs-build items, plus a separate weekly task that dispatches builds only for apps with a needs-build backlog (the one standing exception to the no-automatic-builds CI-spend rule). Use whenever the user asks to "drain the device test queue", "run device tests", "what needs testing on my phone", "device test session", passively "anything waiting on my phone?" — or on a schedule/idle moment whenever a device is adb-connected: agent-only items need no invitation. Empty queues everywhere is a valid, quiet result. Output is a wrap-up table: passed / failed→filed / needs-build→unblock / needs-human, with what unblocks each.
 ---
 
 # Device test drain
@@ -194,6 +194,16 @@ enqueued needs rewriting when the delivery path changes.
 
 Classify every item by Status first, then (for OPEN ones) by Steps:
 
+- **Already `❌ failed`** — a previous drain filed this one. It is open work,
+  not a closed item, so it gets re-checked every drain: read the linked issue
+  (`gh issue view`). **Closed** → re-run the item now; if it passes, flip it
+  to `✅ done` and minimize it, which is the only thing that actually retires
+  a failure. **Still open** → check whether its recorded `task_id` chip is
+  still live (`mcp__ccd_session__dismiss_task` reports an already-started or
+  dismissed task); if the chip is gone and the bug is not fixed, **spawn a
+  fresh one** (Step 3 case 3) and record the new id. Either way, carry it into
+  the wrap-up with the issue link and its age — a failure that has been open
+  across several drains is worth saying out loud, not quietly re-listing.
 - **Already `🔧 needs build`** — a previous drain already determined this item
   can't be reached by any OTA and the installed build predates it. On a
   **daily** run, skip these entirely (see "Self-scheduled automation" above —
@@ -307,6 +317,29 @@ For each OPEN item on the current app:
    where it's tracked now; hiding it under "Resolved" reads as handled and
    risks it getting forgotten. It stays fully visible in the queue until
    someone actually fixes it and a later drain flips it to ✅ done.
+
+   **Then spin up a chip for it — filing is not tracking.** An issue with
+   nobody on it is a note, not a fix, and a queue that only accumulates
+   filed-and-forgotten failures has stopped self-healing. So every failure
+   this skill files ALSO gets a background task chip, in the same breath as
+   the issue, via the session-management `spawn_task` tool
+   (`mcp__ccd_session__spawn_task`):
+   - `title` — imperative, under 60 chars, naming the app and the symptom
+     ("Fix alate#694 fit sheet opens expanded").
+   - `cwd` — that app's local checkout from the Scope table, so the spawned
+     session lands in the right repo rather than wherever the drain ran.
+   - `prompt` — self-contained, because that session sees none of this one:
+     the filed issue to read first, the device serial and installed build,
+     what was observed **verbatim** (which entry points reproduced it, how
+     many times, and what was NOT reached), the suggested starting point, an
+     instruction to fix it via `forge:build-feature` so the result is
+     device-verified rather than eyeballed, and a closing instruction to flip
+     this queue item's Status line + heading glyph and close the issue once
+     it verifies.
+   **Record the returned `task_id` on the queue item**, in the note under the
+   `---` rule, beside the issue link. An unrecorded chip is indistinguishable
+   from one that was never spawned, so without it the next drain cannot tell
+   whether the failure is being worked or has simply been sitting.
 4. **Needs build** (Step 2 verdict — no OTA can reach it and the installed
    build predates it) → set `**Status:** 🔧 needs build — <what's needed>`
    (e.g. "next tag ≥ v1.3.2", "next EAS/APK build off master") — this is the
@@ -332,7 +365,8 @@ no-touch window only covers a session that *crashed*; a session that finished
 and left its claim standing has told everyone else the device is busy.
 
 One table: item · app · verdict (✅ agent-verified, with screenshot / ✅ human-
-confirmed / ❌ → filed link / 🔧 needs build → what would unblock it / 🙋
+confirmed / ❌ → filed link + chip `task_id` (or "chip re-spawned", or how
+many drains it has been open) / 🔧 needs build → what would unblock it / 🙋
 needs-human → the specific `HUMAN:` steps waiting). Identify each item by its
 test ID (the comment id) so the user can jump straight to it.
 Then, per the user's communication style: what they need to do (installs,
@@ -341,8 +375,9 @@ had drifted from the format, say what you REPAIRED (Step 0.3) — and list only
 the ones you genuinely could not classify, with their URL and what's missing.
 "N comments don't match the format" with nothing done about them is not an
 acceptable wrap-up line. **A daily automated run only speaks up if this table has at
-least one non-empty row** (something tested, failed, or newly logged as
-needs-build) — an empty drain stays silent per the "quiet is correct" rule,
+least one non-empty row** (something tested, failed, newly logged as
+needs-build, or a failure whose chip had to be re-spawned) — an empty drain
+stays silent per the "quiet is correct" rule,
 same as the SessionStart hook.
 
 ## What this skill does NOT do
@@ -355,7 +390,9 @@ same as the SessionStart hook.
   without a human click is the separate `device-test-weekly-build` scheduled
   task (see "Self-scheduled automation") — narrower logic, its own task, not
   this skill's per-item loop.
-- **No mid-drain fixes** — failures get filed and linked, not debugged live.
+- **No mid-drain fixes** — failures get filed, linked, and handed to a chip
+  (Step 3 case 3), not debugged live. Spawning the chip is part of filing;
+  what stays out of the drain is the debugging itself.
 - **No enqueueing** — writing queue items is the shipping session's job at
   ship time, when Steps and Expect are still warm (see the standard).
 - **Never deletes or rewrites queue comments** beyond the Status line.
