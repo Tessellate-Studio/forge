@@ -1,5 +1,5 @@
-// Device claim — a soft lock so two sessions don't drive the same phone at
-// once.
+// Device claim — the 🔒 variant of the claim protocol: a soft lock so two
+// sessions don't drive the same phone at once.
 //
 // WHY THIS EXISTS. The status board (dtq) is read-only and answers "what is
 // pending?". Nothing answered "is anyone on the device RIGHT NOW?". On
@@ -18,17 +18,55 @@
 // It is advisory, not enforced — nothing can stop a raw `adb` command. It
 // removes the ambiguity, which is what actually went wrong.
 //
-// HOW A CLAIM ENDS (changed 2026-09-03). It used to expire 45 minutes after
-// it was taken. That measured the wrong thing: plenty of fixes run longer
-// than 45 minutes, and the session still holding the phone had its claim
-// quietly ignored mid-job. A claim now ends when its holder CLOSES it — edit
-// `**Claim:**` to RELEASED and minimize the comment. The only automatic
-// escape hatch is SILENCE, not duration: the holder rewrites `**Last touch:**`
-// every time it drives the device, and a claim reads as abandoned only after
-// HEARTBEAT_STALE_MINUTES with no touch at all. A claim parked on a human
-// step (`**Waiting on:** human — …`) never expires, because a human step
+// WHAT LIVES WHERE (changed 2026-09-07). The MECHANISM — heading, fields,
+// HELD/RELEASED, the heartbeat, staleness, latest-comment-wins resolution —
+// is not specific to a phone, and a second claim (🚧 work claim, which says
+// which session owns a piece of WORK) proved it by re-implementing the whole
+// thing. Both now share tools/work-claim/lib/protocol.js and this file
+// declares only what makes the device claim different: the glyph, the
+// 30-minute silence window, `Claimed at` rather than `Started at`, and the
+// `Device` field. See that module's header for the two behaviours the merge
+// had to reconcile.
+//
+// HOW A CLAIM ENDS. It used to expire 45 minutes after it was taken. That
+// measured the wrong thing: plenty of fixes run longer than 45 minutes, and
+// the session still holding the phone had its claim quietly ignored mid-job.
+// A claim now ends when its holder CLOSES it — edit `**Claim:**` to RELEASED
+// and minimize the comment. The only automatic escape hatch is SILENCE, not
+// duration: the holder rewrites `**Last touch:**` every time it drives the
+// device, and a claim reads as abandoned only after HEARTBEAT_STALE_MINUTES
+// with no touch at all. A claim parked on a human step
+// (`**Waiting on:** human — …`) never expires, because a human step
 // legitimately takes hours and stealing the device out from under one is the
 // exact collision this lock exists to prevent.
+
+const path = require('path');
+
+const { NOT_WAITING, noticeMarker, createClaimProtocol } = require(path.join(
+  __dirname,
+  '..',
+  '..',
+  '..',
+  'tools',
+  'work-claim',
+  'lib',
+  'protocol.js'
+));
+
+// Loaded for its SIDE EFFECT: creating the 🚧 variant registers that glyph as
+// a notice, so NOTICE_MARKER below covers it no matter which module the
+// process loaded first. This is the dependency that replaced hand-editing a
+// regex in this file every time a new claim shipped.
+require(path.join(
+  __dirname,
+  '..',
+  '..',
+  '..',
+  'tools',
+  'work-claim',
+  'lib',
+  'claim.js'
+));
 
 /** No touch for this long and the holder is presumed gone — the backstop for
  *  a crashed session, NOT a cap on how long a job may hold the phone. Long
@@ -36,145 +74,61 @@
  *  reading a step; short enough to clear within one sitting. */
 const HEARTBEAT_STALE_MINUTES = 30;
 
-const CLAIM_MARKER = /^###\s*🔒\s*Device claim\b/m;
+const PROTOCOL = createClaimProtocol({
+  heading: 'Device claim',
+  glyph: '🔒',
+  staleMinutes: HEARTBEAT_STALE_MINUTES,
+  startedField: 'Claimed at',
+  fields: [{ name: 'Device', from: 'device', render: o => o.device || 'any' }],
+  footer: ({ staleMinutes }) => [
+    '_Written by /forge:device-test. The claim ends when its holder closes it:',
+    'edit **Claim:** to RELEASED and minimize this comment. There is no cap on',
+    'how long a job may hold the phone — refresh **Last touch:** on every',
+    `device action, and only ${staleMinutes} min of total silence`,
+    'reads as abandoned. A claim **Waiting on:** a human never expires._',
+  ],
+});
+
+const CLAIM_MARKER = PROTOCOL.MARKER;
 
 /**
  * Automated notices that post to the queue issue but are NOT tests — the
- * OTA-publish record written by eas-update.yml, the device claim above, and
- * the 🚧 work claim a session posts when it picks up a tracked item
- * (tools/work-claim/lib/claim.js). They
- * carry a heading and no Status line, so the item parser files them as
+ * OTA-publish record written by eas-update.yml (📦), this device claim (🔒),
+ * and the work claim a session posts when it picks up a tracked item (🚧).
+ * They carry a heading and no Status line, so the item parser files them as
  * malformed items and the board nags forever about drift no human caused.
  * Six of the nine "unparseable" comments on alate#562 were exactly this.
  *
- * 🤖 is deliberately NOT here: since the heading template landed it is an
- * ITEM glyph ("open, agent-runnable"), and matching it as a notice would make
- * every agent-runnable item invisible — the worst failure this parser has.
- * A new bot posting here must pick a heading glyph outside the item set
- * (🤖 🙋 🔧 ⚪ 🔴) and be added to this pattern.
+ * DERIVED, not hand-written: every claim variant registers its own glyph with
+ * the protocol module. Item glyphs (🤖 🙋 🔧 ⚪ 🔴) must never be registered —
+ * matching one would make every item carrying it invisible to the board, the
+ * worst failure this parser has. 🤖 in particular was once listed here and had
+ * to be removed when it became an item glyph.
  */
-const NOTICE_MARKER = /^###\s*(?:📦|🔒|🚧)/m;
-
-/** Placeholders in **Waiting on:** that mean "parked on nothing". */
-const NOT_WAITING = /^(?:—|–|-|none|nothing|n\/a)$/i;
-
-function claimField(body, name) {
-  const pattern = new RegExp(`\\*\\*${name}:\\*\\*\\s*(.+?)\\s*$`, 'm');
-  const match = body.match(pattern);
-  return match ? match[1].trim() : null;
-}
-
-function minutesSince(iso) {
-  const parsed = iso ? Date.parse(iso) : NaN;
-  return Number.isNaN(parsed)
-    ? null
-    : Math.max(0, Math.floor((Date.now() - parsed) / 60000));
-}
+const NOTICE_MARKER = noticeMarker();
 
 /**
  * Parse a claim comment. Returns null for anything that isn't one, so it can
  * be mapped over every comment on the issue.
  */
-function parseClaim(comment) {
-  const body = comment.body || '';
-  if (!CLAIM_MARKER.test(body)) {
-    return null;
-  }
-  const at = claimField(body, 'Claimed at');
-
-  // Claims posted before the heartbeat existed carry only "Claimed at".
-  // Falling back to it keeps those readable, instead of making every one of
-  // them read as abandoned the moment this shipped.
-  const lastTouch = claimField(body, 'Last touch') || at;
-  const waitingOn = claimField(body, 'Waiting on');
-  const waitingOnHuman = Boolean(waitingOn && !NOT_WAITING.test(waitingOn));
-  const idleMinutes = minutesSince(lastTouch);
-
-  return {
-    heldBy: claimField(body, 'Claimed by'),
-    device: claimField(body, 'Device'),
-    at,
-    lastTouch,
-    ageMinutes: minutesSince(at),
-    idleMinutes,
-    waitingOn: waitingOnHuman ? waitingOn : null,
-    waitingOnHuman,
-    released: (claimField(body, 'Claim') || '').toUpperCase() === 'RELEASED',
-
-    // Silence, not elapsed time, is the abandonment signal — and a claim
-    // parked on a human is never silent by accident, so it never expires.
-    // An unreadable timestamp counts as stale rather than as an indefinite
-    // hold: failing open beats wedging the device on a typo.
-    stale: waitingOnHuman
-      ? false
-      : idleMinutes === null || idleMinutes > HEARTBEAT_STALE_MINUTES,
-    commentId: comment.id,
-    commentUrl: comment.html_url,
-  };
-}
+const parseClaim = PROTOCOL.parse;
 
 /**
- * The live holder, or null when the device is free.
- *
- * Resolved PER HOLDER, latest comment wins, rather than by scanning for any
- * un-released claim. The happy path is a session editing its own claim
- * comment in place, which leaves exactly one record — but a session that
- * posts a fresh "RELEASED" comment instead of editing (or that claims twice)
- * would otherwise leave its earlier HELD record standing, and the device
- * would read as claimed forever. Grouping by holder makes both styles
- * converge on the same answer.
+ * The live holder, or null when the device is free. Resolved per holder,
+ * latest comment wins — see the protocol module's header for why.
  */
-function activeClaim(claims) {
-  const latestByHolder = new Map();
-  for (const claim of claims) {
-    const key = claim.heldBy || '(unknown)';
-    const seen = latestByHolder.get(key);
-
-    // Comment ids increase monotonically, so the highest is the newest.
-    if (!seen || (claim.commentId || 0) >= (seen.commentId || 0)) {
-      latestByHolder.set(key, claim);
-    }
-  }
-  const held = [...latestByHolder.values()].filter(
-    c => !c.released && !c.stale
-  );
-  if (held.length === 0) {
-    return null;
-  }
-
-  // More than one holder should not happen; if it does, report the newest so
-  // the message names whoever most recently took it.
-  return held.reduce((a, b) =>
-    (b.commentId || 0) > (a.commentId || 0) ? b : a
-  );
-}
+const activeClaim = PROTOCOL.active;
 
 /**
  * Render a claim comment body.
  * Keep in sync with standards/workflows.md → "Claiming the device".
  */
 function claimBody(opts) {
-  const heldBy = opts.heldBy;
-  const device = opts.device || 'any';
-  const at = opts.at;
-  const lastTouch = opts.lastTouch || at;
-  const waitingOn = opts.waitingOn || '—';
-  const held = opts.held !== false;
-  return [
-    '### 🔒 Device claim',
-    `- **Claimed by:** ${heldBy}`,
-    `- **Device:** ${device}`,
-    `- **Claimed at:** ${at}`,
-    `- **Last touch:** ${lastTouch}`,
-    `- **Waiting on:** ${waitingOn}`,
-    `- **Claim:** ${held ? 'HELD' : 'RELEASED'}`,
-    '',
-    '_Written by /forge:device-test. The claim ends when its holder closes it:',
-    'edit **Claim:** to RELEASED and minimize this comment. There is no cap on',
-    'how long a job may hold the phone — refresh **Last touch:** on every',
-    `device action, and only ${HEARTBEAT_STALE_MINUTES} min of total silence`,
-    'reads as abandoned. A claim **Waiting on:** a human never expires._',
-  ].join('\n');
+  return PROTOCOL.render({
+    ...opts,
+    device: opts.device || 'any',
+    held: opts.held !== false,
+  });
 }
 
 /** One-line summary for the board / hook. Empty string when free. */
@@ -191,8 +145,10 @@ function describeClaim(claim) {
 
 module.exports = {
   HEARTBEAT_STALE_MINUTES,
+  PROTOCOL,
   CLAIM_MARKER,
   NOTICE_MARKER,
+  NOT_WAITING,
   parseClaim,
   activeClaim,
   claimBody,

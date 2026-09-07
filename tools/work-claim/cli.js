@@ -37,6 +37,7 @@ const {
   gh,
   checkGhReady,
   collect,
+  leakedItems,
 } = require('./lib/claim');
 
 /**
@@ -239,7 +240,93 @@ async function board(opts) {
         'Claims parked on a human never expire.'
     )
   );
+
+  // The board is read-only, so it REPORTS the leak rather than fixing it —
+  // but it must report it, because a `claimed` label whose claim has died is
+  // the one state that actively misleads the person this tool is for.
+  const leaked = leakedItems(results);
+  if (leaked.length) {
+    console.log(
+      chalk.yellow(
+        `${leaked.length} item(s) still labelled claimed with no live claim — ` +
+          'run `wip sweep` to clear them.'
+      )
+    );
+  }
   console.log('');
+}
+
+// ---------------------------------------------------------------- sweep ----
+
+/**
+ * Drop the `claimed` label from every item whose claims are all released or
+ * stale.
+ *
+ * WHY THIS EXISTS. `wip release` is the only thing that removes the label, and
+ * it needs a session to still be alive to run it. A crashed session cannot
+ * release its own claim — so the label outlives it, and GitHub's issue list
+ * goes on saying someone is working an item that nobody is. That is worse than
+ * no label at all: it misleads exactly the person the feature is for. The
+ * 90-minute staleness rule already tells the BOARD to ignore such a claim;
+ * this is what tells GITHUB.
+ *
+ * It never touches a live claim, never touches an item whose comments could
+ * not be fetched (an unknown item is not a leaked one), and never edits a
+ * comment body — the claim stays as the record of who held it and when they
+ * went quiet.
+ */
+async function sweep(opts) {
+  const ready = await checkGhReady();
+  if (!ready.ok) {
+    console.error(chalk.red(ready.message));
+    process.exit(1);
+  }
+
+  // state: 'all' — the leak that matters most sits on a MERGED PR, which
+  // is closed, and the default open-only query cannot see it.
+  const leaked = leakedItems(await collect(opts.repo, { state: 'all' }));
+  if (leaked.length === 0) {
+    console.log(
+      chalk.gray('Nothing to sweep — every claimed item has a live claim.')
+    );
+    return;
+  }
+
+  for (const item of leaked) {
+    const held = item.claims.filter(c => c.held);
+    const last = held[held.length - 1];
+    const why = item.closed
+      ? `${
+          item.isPr ? 'PR merged/closed' : 'issue closed'
+        } with the claim still held`
+      : last
+      ? `last holder ${last.heldBy} went silent ${
+          last.idleMinutes ?? '?'
+        } min ago`
+      : 'claim released, label left behind';
+
+    if (opts.dryRun) {
+      console.log(
+        chalk.gray(`would sweep ${item.key}#${item.number} — ${why}`)
+      );
+      continue;
+    }
+    try {
+      await gh([
+        'api',
+        '--method',
+        'DELETE',
+        `repos/${item.repo}/issues/${item.number}/labels/${CLAIM_LABEL}`,
+      ]);
+      console.log(chalk.green(`swept ${item.key}#${item.number} — ${why}`));
+    } catch (error) {
+      console.error(
+        chalk.red(
+          `could not sweep ${item.key}#${item.number}: ${error.message}`
+        )
+      );
+    }
+  }
 }
 
 // --------------------------------------------------------------- writes ----
@@ -449,6 +536,15 @@ program
       .join(', ')})`
   )
   .action(opts => board(opts).catch(fail));
+
+program
+  .command('sweep')
+  .description(
+    'Drop the label from items whose claim went stale — the backstop for a crashed session'
+  )
+  .option('-r, --repo <key>', 'limit to one repo')
+  .option('-n, --dry-run', 'list what would be swept, change nothing')
+  .action(opts => sweep(opts).catch(fail));
 
 program
   .command('claim <target>')
