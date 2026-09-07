@@ -123,7 +123,18 @@ const PROTOCOL = createClaimProtocol({
     {
       name: 'Worktree',
       from: 'worktreeRaw',
-      render: o => `\`${o.worktree}\` (branch \`${o.branch || 'detached'}\`)`,
+      render: o => {
+        const branch = o.branch || 'detached';
+
+        // Not every claim has a local checkout to point at. A branch that
+        // lives only on origin (an agent-opened PR nobody has pulled) still
+        // deserves a claim — and naming some unrelated directory that
+        // happens to be on disk would be worse than saying there is none.
+        if (!o.worktree) {
+          return `— no local worktree (branch \`${branch}\`)`;
+        }
+        return `\`${o.worktree}\` (branch \`${branch}\`)`;
+      },
     },
     {
       // The issue a PR implements, or the PRs that carry an issue. Without
@@ -213,11 +224,15 @@ function parseClaim(comment) {
   const worktreeRaw = parsed.worktreeRaw || '';
   parsed.branch =
     (worktreeRaw.match(/branch\s+`?([^`)]+)`?\)?\s*$/) || [])[1] || null;
+  const worktreePath = worktreeRaw
+    .replace(/\s*\(branch[^)]*\)\s*$/, '')
+    .replace(/^[—–-][ ]*/, '')
+    .replace(/`/g, '')
+    .trim();
   parsed.worktree =
-    worktreeRaw
-      .replace(/\s*\(branch[^)]*\)\s*$/, '')
-      .replace(/`/g, '')
-      .trim() || null;
+    !worktreePath || /^(?:—|-|no local worktree)$/i.test(worktreePath)
+      ? null
+      : worktreePath;
 
   const docsRaw = parsed.docsRaw || '—';
   parsed.docs = NOT_WAITING.test(docsRaw) ? '' : docsRaw;
@@ -483,7 +498,19 @@ async function collect(repoFilter, opts = {}, env = process.env) {
   return Promise.all(targets.map(r => fetchRepoClaims(r, opts)));
 }
 
-/** Every item whose label outlived its claim, flattened across repos. */
+/**
+ * Repos whose fetch failed. A caller that ignores these will report
+ * "nothing to sweep" for a repo it could not read — which is how a tool
+ * tells you it is clean when what it means is that it never looked.
+ */
+function failedRepos(results) {
+  return (results || [])
+    .filter(r => r && r.error)
+    .map(r => ({ key: r.key, repo: r.repo, error: r.error }));
+}
+
+/** Every item whose label outlived its claim, flattened across repos.
+ *  Silently skips errored repos — pair it with failedRepos(). */
 function leakedItems(results) {
   const out = [];
   (results || []).forEach(r => {
@@ -526,4 +553,5 @@ module.exports = {
   collect,
   isLeaked,
   leakedItems,
+  failedRepos,
 };

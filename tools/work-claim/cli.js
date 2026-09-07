@@ -38,6 +38,7 @@ const {
   checkGhReady,
   collect,
   leakedItems,
+  failedRepos,
 } = require('./lib/claim');
 const { stripCode } = require('./lib/protocol');
 
@@ -476,10 +477,28 @@ async function sweep(opts) {
 
   // state: 'all' — the leak that matters most sits on a MERGED PR, which
   // is closed, and the default open-only query cannot see it.
-  const leaked = leakedItems(await collect(opts.repo, { state: 'all' }));
+  const results = await collect(opts.repo, { state: 'all' });
+  const leaked = leakedItems(results);
+
+  // A repo that failed to fetch is NOT a clean repo. Reporting "nothing to
+  // sweep" for one we could not read is how a tool says it is clean when it
+  // means it never looked — mood-layer#112 sat merged-and-labelled through a
+  // sweep that announced everything was fine.
+  const failed = failedRepos(results);
+  failed.forEach(f => {
+    console.error(chalk.red(`${f.key}: could not check — ${f.error}`));
+  });
+
   if (leaked.length === 0) {
     console.log(
-      chalk.gray('Nothing to sweep — every claimed item has a live claim.')
+      failed.length
+        ? chalk.yellow(
+            `No leaks in the ${
+              results.length - failed.length
+            } repo(s) checked; ` +
+              `${failed.length} could not be read (above). Re-run to cover them.`
+          )
+        : chalk.gray('Nothing to sweep — every claimed item has a live claim.')
     );
     return;
   }
@@ -528,6 +547,12 @@ async function claim(target, opts) {
   const existing = await findClaimComments(repo, number);
   const live = activeClaim(existing.map(e => e.claim));
   const me = identity({ branch: opts.branch || (await currentBranch()) });
+
+  // `--worktree none` for a branch that exists only on origin: better an
+  // explicit "none" than a path that is not on this branch.
+  if (opts.worktree) {
+    me.worktree = /^(?:none|-|—)$/i.test(opts.worktree) ? null : opts.worktree;
+  }
 
   if (live && !isMine(live, me) && !opts.force) {
     console.error(
@@ -764,6 +789,10 @@ program
   .option(
     '-R, --related <ref...>',
     'issues/PRs to link (default: discovered from the body + cross-references)'
+  )
+  .option(
+    '-w, --worktree <path>',
+    'worktree path, or "none" for a branch that only exists on origin'
   )
   .option('-f, --force', 'take over a live claim held by another session')
   .action((target, opts) => claim(target, opts).catch(fail));

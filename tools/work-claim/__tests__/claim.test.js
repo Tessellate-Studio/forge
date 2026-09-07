@@ -650,3 +650,62 @@ describe('stripCode — documentation is not data', () => {
     expect(stripCode(null)).toBe('');
   });
 });
+
+describe('a claim without a local worktree', () => {
+  // An agent-opened PR nobody has pulled still deserves a claim. Naming an
+  // unrelated directory that happens to sit on disk would be worse than
+  // saying plainly that there is no local checkout.
+  it('says so instead of naming a path that is not on the branch', () => {
+    const body = claimBody({
+      heldBy: 'security-sweep/x (HOST)',
+      sessionId: 'unknown',
+      host: 'HOST',
+      worktree: null,
+      branch: 'security-sweep/x',
+      at: '2026-09-08T10:00:00.000Z',
+    });
+    expect(body).toContain('no local worktree');
+    expect(body).toContain('branch `security-sweep/x`');
+
+    const parsed = parseClaim({ id: 1, body });
+    expect(parsed.worktree).toBeNull();
+    expect(parsed.branch).toBe('security-sweep/x');
+  });
+
+  it('still reads a real worktree path back unchanged', () => {
+    const body = claimBody({
+      heldBy: 'x',
+      sessionId: 's',
+      host: 'H',
+      worktree: 'C:/repos/alate/wt',
+      branch: 'feat/x',
+      at: '2026-09-08T10:00:00.000Z',
+    });
+    expect(parseClaim({ id: 1, body }).worktree).toBe('C:/repos/alate/wt');
+  });
+});
+
+describe('an unread repo is not a clean repo', () => {
+  const { failedRepos, leakedItems } = require('../lib/claim');
+
+  // mood-layer#112 sat merged and still labelled through a sweep that
+  // announced "nothing to sweep": its repo fetch had failed, leakedItems
+  // skips errored repos, and the caller read that silence as clean.
+  it('names the repos that could not be read', () => {
+    const results = [
+      { key: 'alate', items: [] },
+      { key: 'mood-layer', error: 'gh timed out', items: [] },
+    ];
+    expect(failedRepos(results).map(f => f.key)).toEqual(['mood-layer']);
+    expect(leakedItems(results)).toEqual([]); // still silent on its own
+  });
+
+  it('is empty when every repo was read', () => {
+    expect(failedRepos([{ key: 'alate', items: [] }])).toEqual([]);
+  });
+
+  it('tolerates junk in the results list', () => {
+    expect(failedRepos([null, undefined])).toEqual([]);
+    expect(failedRepos(null)).toEqual([]);
+  });
+});
