@@ -64,7 +64,7 @@ const OWNER = 'Tessellate-Studio';
 /** Repos a board sweep covers. Wider than the device-test scope (which is
  *  mobile-app-only) because work claims are not about a phone. Override with
  *  FORGE_CLAIM_REPOS as a comma-separated list of keys or owner/name pairs. */
-const REPOS = ['alate', 'mood-layer', 'badige', 'loom', 'forge'];
+const REPOS = ['alate', 'mood-layer', 'badige', 'loom', 'forge', 'litmus'];
 
 /**
  * The 🚧 variant. Its three extra fields ARE the point of the claim — they are
@@ -85,10 +85,18 @@ const PROTOCOL = createClaimProtocol({
     {
       name: 'Session',
       from: 'sessionRaw',
-      render: o =>
-        `\`claude --resume ${o.sessionId || 'unknown'}\` on ${
-          o.host || 'unknown host'
-        }`,
+      render: o => {
+        const host = o.host || 'unknown host';
+
+        // A retrofitted claim — reconstructed from a worktree found on
+        // disk — knows WHERE the work is but not WHICH session holds it.
+        // Printing a resume command that cannot work would be worse than
+        // saying so: the next agent would run it and get nothing.
+        if (!o.sessionId || o.sessionId === 'unknown') {
+          return `session not identified — reconstructed from the live worktree on ${host}`;
+        }
+        return `\`claude --resume ${o.sessionId}\` on ${host}`;
+      },
     },
     {
       name: 'Worktree',

@@ -417,3 +417,43 @@ describe('a closed item is leaked by definition', () => {
     ).toEqual([]);
   });
 });
+
+describe('a reconstructed claim admits what it does not know', () => {
+  it('never prints a resume command it cannot back up', () => {
+    const body = claimBody({
+      heldBy: 'fix/x (HOST-1)',
+      sessionId: 'unknown',
+      host: 'HOST-1',
+      worktree: 'C:/repos/alate/wt',
+      branch: 'fix/x',
+      at: '2026-09-07T10:00:00.000Z',
+    });
+    expect(body).toContain('session not identified');
+    expect(body).not.toContain('claude --resume unknown');
+
+    // The parts it DOES know are still the point of the claim.
+    const p = parseClaim({ id: 1, body });
+    expect(p.branch).toBe('fix/x');
+    expect(p.worktree).toBe('C:/repos/alate/wt');
+    expect(p.sessionId).toBeNull();
+  });
+
+  it('still renders a resume command when the session IS known', () => {
+    const body = claimBody({
+      heldBy: 'x',
+      sessionId: 'abc-123',
+      host: 'H',
+      worktree: 'W',
+      branch: 'b',
+      at: '2026-09-07T10:00:00.000Z',
+    });
+    expect(body).toContain('claude --resume abc-123');
+  });
+});
+
+describe('repo scope', () => {
+  it('covers litmus — it carries real in-flight work', () => {
+    const { REPOS } = require('../lib/claim');
+    expect(REPOS).toContain('litmus');
+  });
+});
