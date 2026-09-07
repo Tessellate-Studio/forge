@@ -457,3 +457,32 @@ describe('repo scope', () => {
     expect(REPOS).toContain('litmus');
   });
 });
+
+describe('isLeaked — what the label is allowed to outlive', () => {
+  const { isLeaked } = require('../lib/claim');
+
+  // The closed-item rule shipped counting every claim COMMENT, so an item
+  // whose holder released it properly still reported as leaked. A sweep that
+  // cries leak on correct behaviour is a sweep people learn to ignore.
+  it('a closed item whose claims were all released is clean', () => {
+    expect(
+      isLeaked({ closed: true }, [{ held: false }, { held: false }], null)
+    ).toBe(false);
+  });
+
+  it('a closed item with a claim still HELD is leaked', () => {
+    expect(
+      isLeaked({ closed: true }, [{ held: false }, { held: true }], null)
+    ).toBe(true);
+  });
+
+  it('an open item is leaked only when nothing resolves as active', () => {
+    const live = { heldBy: 'x' };
+    expect(isLeaked({ closed: false }, [{ held: true }], live)).toBe(false);
+    expect(isLeaked({ closed: false }, [{ held: true }], null)).toBe(true);
+  });
+
+  it('a closed item with no claims at all is clean', () => {
+    expect(isLeaked({ closed: true }, [], null)).toBe(false);
+  });
+});
