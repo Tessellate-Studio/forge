@@ -130,6 +130,7 @@ wip                                        # the board — who is on what
 wip claim alate#562 --doc memory/decisions/rfd-003-x.md
 wip touch alate#562                        # heartbeat, at each commit/push/phase
 wip release alate#562                      # done, stalled, or handed back
+wip sweep                                  # backstop: drop labels whose claim died
 ```
 
 `hooks/work-claims.mjs` puts live claims in front of every new session, which is
