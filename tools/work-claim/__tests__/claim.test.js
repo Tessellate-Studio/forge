@@ -308,3 +308,112 @@ describe('CLAIM_LABEL', () => {
     expect(slugRepo('Tessellate-Studio/loom')).toBe('Tessellate-Studio/loom');
   });
 });
+
+describe('leakedItems — what the sweep acts on', () => {
+  const { leakedItems } = require('../lib/claim');
+
+  it('reports an item whose label outlived every claim on it', () => {
+    const out = leakedItems([
+      {
+        key: 'alate',
+        repo: 'Tessellate-Studio/alate',
+        items: [
+          { number: 1, leaked: true, claims: [] },
+          { number: 2, leaked: false, claims: [] },
+        ],
+      },
+    ]);
+    expect(out.map(i => i.number)).toEqual([1]);
+    expect(out[0].repo).toBe('Tessellate-Studio/alate');
+  });
+
+  it('never sweeps a repo whose fetch failed — unknown is not leaked', () => {
+    expect(
+      leakedItems([
+        {
+          key: 'loom',
+          error: 'gh exploded',
+          items: [{ number: 9, leaked: true }],
+        },
+      ])
+    ).toEqual([]);
+  });
+
+  it('is empty when nothing is claimed anywhere', () => {
+    expect(leakedItems([{ key: 'forge', items: [] }])).toEqual([]);
+  });
+});
+
+describe('protocol decisions shared with the device claim', () => {
+  it('an unreadable timestamp fails OPEN, not closed', () => {
+    // A typo in Last touch must not hold an item forever. A wrongly-released
+    // claim is re-taken in seconds; a wedged one needs a human.
+    const p = parseClaim(
+      held({ lastTouch: 'not-a-date', startedAt: 'also-bad' })
+    );
+    expect(p.idleMinutes).toBeNull();
+    expect(p.stale).toBe(true);
+  });
+
+  it('a fresh RELEASED comment retires the same holder’s earlier HELD one', () => {
+    // A session that posts a new comment instead of editing its own would
+    // otherwise leave the earlier HELD record standing, and the item would
+    // read as claimed forever.
+    const earlier = parseClaim({ ...held({ heldBy: 'session-a' }), id: 1 });
+    const later = parseClaim({
+      ...held({ heldBy: 'session-a', claim: 'RELEASED' }),
+      id: 2,
+    });
+    expect(activeClaim([earlier, later])).toBeNull();
+  });
+
+  it('registers 🚧 as a notice glyph so the queue parser skips it', () => {
+    const { noticeMarker } = require('../lib/protocol');
+    expect(noticeMarker().test('### 🚧 Work claim')).toBe(true);
+    expect(noticeMarker().test('### 📦 production OTA published')).toBe(true);
+
+    // Item glyphs must never be swallowed — an invisible item is the worst
+    // failure the queue parser has.
+    expect(noticeMarker().test('### 🤖 123 — a real test')).toBe(false);
+  });
+});
+
+describe('a closed item is leaked by definition', () => {
+  const { leakedItems } = require('../lib/claim');
+
+  // Found the hard way: forge#95 merged on 2026-09-07 still carrying `claimed`,
+  // and the board reported "nothing claimed" because it only queried
+  // state=open. The most common leak of all was invisible to the tool built
+  // to catch it.
+  it('a closed item with a live-looking claim is still leaked', () => {
+    const out = leakedItems([
+      {
+        key: 'forge',
+        repo: 'Tessellate-Studio/forge',
+        items: [
+          { number: 95, closed: true, leaked: true, claims: [{ held: true }] },
+        ],
+      },
+    ]);
+    expect(out.map(i => i.number)).toEqual([95]);
+  });
+
+  it('an OPEN item with a live claim is left alone', () => {
+    expect(
+      leakedItems([
+        {
+          key: 'forge',
+          repo: 'Tessellate-Studio/forge',
+          items: [
+            {
+              number: 96,
+              closed: false,
+              leaked: false,
+              claims: [{ held: true }],
+            },
+          ],
+        },
+      ])
+    ).toEqual([]);
+  });
+});

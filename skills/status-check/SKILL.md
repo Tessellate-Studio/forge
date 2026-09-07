@@ -173,6 +173,11 @@ when not.
   id) — never release someone else's claim, even a stale one; it is theirs to
   close and the staleness window already handles the abandoned case. Manual row
   naming the holder and its resume id.
+- **Then sweep, always:** `wip sweep`. Releasing only works while a session is
+  alive to run it, so labels outlive their claims — most often on a PR that
+  merged, since the merge ends the work and the session together. The sweep is
+  what makes the label self-healing rather than a rule everyone has to
+  remember; it only ever touches items nothing live holds.
 
 ## Step 3 — Wrap up
 

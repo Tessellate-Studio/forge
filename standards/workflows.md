@@ -265,7 +265,11 @@ the `claimed` label, which is what makes the whole board listable and shows
 ownership in GitHub's own issue list without opening anything.
 
 ```bash
+wip                                  # the board — who is on what
 wip claim alate#562 --doc memory/decisions/rfd-003-queue-lock.md
+wip touch alate#562                  # heartbeat, at each commit/push/phase
+wip release alate#562                # done, stalled, or handed back
+wip sweep                            # drop labels whose claim has died
 ```
 
 That posts:
@@ -312,6 +316,22 @@ claim it.
   handed it back unfinished; **especially** then, because an abandoned-looking
   item nobody released is exactly what the next agent re-does. Merging the PR
   is not a release — the merge closes the work, the release closes the claim.
+- **The label is swept, not trusted.** Releasing is a rule a session has to
+  still be alive to follow, and the two cases where it is not are the common
+  ones: a crashed session cannot release its own claim, and a session that
+  ends with the merge never gets to. So `wip sweep` drops the label from any
+  item where nothing live holds it — every claim gone stale, or the item
+  closed at all (nothing legitimately holds a claim on finished work). It
+  never touches a live claim, never touches an item it could not read, and
+  never edits a comment body: the claim stays as the record of who held it
+  and when they went quiet.
+  - `status-check` sweeps as part of closing a session, and `wip` names the
+    leak count so a human sees it without being asked.
+  - **Precedent, 2026-09-07:** forge #95 merged still carrying `claimed`,
+    and `wip` reported "nothing claimed" — the board queried `state=open`,
+    so the most common leak of all was invisible to the tool built to catch
+    it. A rule whose only enforcement is "the session remembers" is not
+    enforced.
 - **It is advisory.** Nothing stops a second session opening the same issue,
   and it is not trying to. It removes the ambiguity, which is the part that
   actually failed.
