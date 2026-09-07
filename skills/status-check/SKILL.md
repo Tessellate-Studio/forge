@@ -24,7 +24,7 @@ caller-supplies-scope rule as crash-monitor and security-sweep).
 
 ## Step 1 — Inventory from the transcript
 
-Re-read the conversation and list every loop it opened, tagged by type (a)–(h)
+Re-read the conversation and list every loop it opened, tagged by type (a)–(i)
 from Step 2. For each, record: repo, identifier (PR # / issue # / branch /
 path), and what the transcript last claimed about it ("opened PR #42, armed
 auto-merge", "enqueued device test", "I'll clean that up later").
@@ -158,6 +158,28 @@ when not.
 - **Escalate when:** dirty state this session didn't create, or ownership is
   ambiguous → **never discard** (roadmap-pulse fix-vs-report split — it may be
   another live session's work); manual row with the file list.
+
+### (i) Work claims this session took and never released
+
+- **Verify:** `wip` for the board, then match its live claims against this
+  session's own id (`CLAUDE_CODE_SESSION_ID`) and the items the transcript says
+  it worked. A claim is this session's loop if the session id in it is ours.
+- **Auto-act:** work finished, merged, or handed back →
+  `wip release <repo>#<n>`. This is the closing half of every other row here:
+  the PR can be merged and the issue closed while the item still reads 🚧 held
+  by a session that has ended, and the next agent then skips work it should
+  pick up. Genuinely parked on the user rather than finished →
+  `wip touch <repo>#<n> --waiting-on "human — <what>"`, which keeps the claim
+  alive on purpose instead of letting it rot into a stale one.
+- **Escalate when:** the claim belongs to ANOTHER session (a different session
+  id) — never release someone else's claim, even a stale one; it is theirs to
+  close and the staleness window already handles the abandoned case. Manual row
+  naming the holder and its resume id.
+- **Then sweep, always:** `wip sweep`. Releasing only works while a session is
+  alive to run it, so labels outlive their claims — most often on a PR that
+  merged, since the merge ends the work and the session together. The sweep is
+  what makes the label self-healing rather than a rule everyone has to
+  remember; it only ever touches items nothing live holds.
 
 ## Step 3 — Wrap up
 

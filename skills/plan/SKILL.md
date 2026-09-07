@@ -55,6 +55,12 @@ scale:
    for related decision docs. Read any whose titles overlap with the current
    ask — they may already answer the question, or the new decision may need to
    supersede one.
+4. **Claim the item, if this planning came from one.** If the ask is attached
+   to a GitHub issue or PR, read the board first (`wip`) and claim it before
+   drafting: `wip claim <repo>#<n>`. Held by a live session already → don't
+   draft a competing doc; resume that session or say what you need. Full rule:
+   [`workflows.md` → "Work claims"](${CLAUDE_PLUGIN_ROOT}/standards/workflows.md).
+   No issue/PR behind the ask → nothing to claim, carry on.
 
 ## Step 1 — Size the decision (auto-detect tier)
 
@@ -160,9 +166,13 @@ Surface key trade-offs and ask for sign-off on:
 ### Commit
 1. Commit the planning doc separately from any code:
    `docs: add decision <type>-NNN-<slug>`.
-2. If this was triggered from `build-feature`, the doc reference carries
+2. **Attach the doc to the claim** if this planning came from an issue/PR:
+   `wip touch <repo>#<n> --doc memory/decisions/<type>-NNN-<slug>.md`. That is
+   the whole point of the Docs field — the next agent finds what this work is
+   being built against without checking out the branch.
+3. If this was triggered from `build-feature`, the doc reference carries
    forward into Step 1 (acceptance criteria): "per decision <type>-NNN".
-3. If this supersedes a prior decision, update the prior doc's status:
+4. If this supersedes a prior decision, update the prior doc's status:
    "superseded by <type>-NNN-<new-slug>" and add the link.
 
 ---

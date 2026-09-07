@@ -248,6 +248,125 @@ sessions, `npm ci` before the commit gate, SHA-explicit git, verify `HEAD`
 before every commit/push. Full rule:
 [`anti-patterns.md` → "Isolate concurrent sessions"](./anti-patterns.md).
 
+## Work claims — say who is on an issue/PR, before you start
+
+Worktree isolation stops two sessions corrupting one checkout. It does nothing
+about the question that actually gets asked: **who is working on this?** Every
+session commits under the same GitHub account, so the byline names nobody. The
+branch lives in a worktree no other session can see. The RFD the work is being
+built against sits on that branch, unpushed. So agents pick up items other
+agents already have in flight, and there is no way to find the session holding
+it — reported 2026-09-07 as "too many agents not knowing who's working on
+what".
+
+**Claim the item the moment you pick it up, not when you open the PR.** The
+claim is a comment on the issue/PR itself — where anyone already looks — plus
+the `claimed` label, which is what makes the whole board listable and shows
+ownership in GitHub's own issue list without opening anything.
+
+```bash
+wip                                  # the board — who is on what
+wip claim alate#562 --doc memory/decisions/rfd-003-queue-lock.md
+wip touch alate#562                  # heartbeat, at each commit/push/phase
+wip release alate#562                # done, stalled, or handed back
+wip sweep                            # drop labels whose claim has died
+wip scan                             # moved recently, but nobody claimed it
+```
+
+That posts:
+
+```markdown
+### 🚧 Work claim
+- **Claimed by:** <branch (session-id tail)>
+- **Session:** `claude --resume <session id>` on <host>
+- **Worktree:** `<absolute path>` (branch `<branch>`)
+- **Started at:** <ISO 8601 UTC>
+- **Last touch:** <ISO 8601 UTC — rewritten at each checkpoint>
+- **Related:** <the issue a PR implements, the PRs carrying an issue, or —>
+- **Docs:** <RFD / ADR / pitch / backlog entry this is built against, or —>
+- **Waiting on:** — <or: human — what you handed them>
+- **Claim:** HELD
+```
+
+The fields that matter are the ones another agent cannot derive: the
+**session** (so the work is resumed, not restarted), the **worktree** (where
+the in-flight code physically is), the **docs** (what it is being built
+against), and **related** (the issue a PR implements, or the PRs carrying an
+issue). A claim without those is just a "someone is on it" sticker, and one
+without Related is a dead end — alate #696 merged while #707 carried the same
+work forward, with nothing on either naming the other.
+
+**Claiming is not the whole picture, and the board cannot tell you what it
+has never been told.** `wip scan` lists items that moved recently carrying no
+claim — the honest answer to "is anyone on this?" for everything nobody
+claimed. It reports rather than claims: recent activity means something
+moved, not that a session is sitting on it.
+
+**Who claims.** Every session that starts work on a tracked issue or PR —
+`/forge:plan`, `build-feature`, `crash-monitor`, `security-sweep`,
+`device-test`, `status-check`, and hand-driven sessions alike. If you are about
+to spend more than a couple of minutes on an item someone could also pick up,
+claim it.
+
+- **Read before you take.** `wip` prints the board; the SessionStart hook puts
+  live claims in front of every new session automatically. Held by someone else
+  and still alive → don't start. Resume their session, or say what you need.
+  Free, released, or silent past the window → take it, and say in your claim
+  that you took over a silent one (`wip claim <item> --force`).
+- **Idle is not abandoned. A claim survives SEVEN DAYS of silence,** and
+  activity on the item itself counts as a touch — a push, a commit, a comment,
+  a review. `wip touch <item>` is still worth running at a checkpoint, but
+  nothing depends on remembering it: GitHub already knows when the item last
+  moved.
+  - Real work is not continuous. A piece of work spread across two days with a
+    night in the middle is normal, and the first version of this rule — 90
+    minutes, copied from the device lock — called that abandoned before lunch.
+  - The two locks have OPPOSITE economics, which is what the copy missed. The
+    device lock guards a scarce resource with someone actively blocked waiting,
+    so a short window is worth cutting a live holder off. **A work claim blocks
+    nobody** — expiring it early buys no throughput and costs the exact
+    collision the claim exists to prevent.
+  - The board says **quiet** past 8 hours. That is information, not a warning,
+    and nothing acts on it.
+- **Parked on a human never expires.** `wip touch <item> --waiting-on "human —
+  <what>"` before handing over. Clear it back to `—` when you resume.
+- **Release when you stop** — `wip release <item>` flips `**Claim:**` to
+  RELEASED, drops the label, and minimizes the comment so only live claims are
+  worth scrolling past. Do this even when the work failed, stalled, or you
+  handed it back unfinished; **especially** then, because an abandoned-looking
+  item nobody released is exactly what the next agent re-does. Merging the PR
+  is not a release — the merge closes the work, the release closes the claim.
+- **The label is swept, not trusted.** Releasing is a rule a session has to
+  still be alive to follow, and the two cases where it is not are the common
+  ones: a crashed session cannot release its own claim, and a session that
+  ends with the merge never gets to. So `wip sweep` drops the label from any
+  item where nothing live holds it — the item **closed** (nothing legitimately
+  holds a claim on finished work, and this is the common case), or every claim
+  silent past the seven-day window. **It never sweeps an open item that is
+  merely quiet** — stripping the label mid-job is the collision it exists to
+  prevent. It
+  never touches a live claim, never touches an item it could not read, and
+  never edits a comment body: the claim stays as the record of who held it
+  and when they went quiet.
+  - `status-check` sweeps as part of closing a session, and `wip` names the
+    leak count so a human sees it without being asked.
+  - **Precedent, 2026-09-07:** forge #95 merged still carrying `claimed`,
+    and `wip` reported "nothing claimed" — the board queried `state=open`,
+    so the most common leak of all was invisible to the tool built to catch
+    it. A rule whose only enforcement is "the session remembers" is not
+    enforced.
+- **It is advisory.** Nothing stops a second session opening the same issue,
+  and it is not trying to. It removes the ambiguity, which is the part that
+  actually failed.
+- A work claim is **not** a device claim. The 🔒 device claim below locks one
+  physical handset; 🚧 says who owns a piece of work. A device-test drain takes
+  both.
+- Claim comments are not queue items — the device-test parser skips 🚧 the same
+  way it skips 🔒 and 📦.
+
+Board and lifecycle: `wip` (alias `forge-wip`), backed by
+`tools/work-claim/lib/claim.js` — keep that file and this section in sync.
+
 ## Shared planning docs — check who else is in the file
 
 Worktree isolation does not prevent two branches editing the same doc or the same
@@ -400,6 +519,15 @@ parse it — keep the bold field names exactly):
   comment. A failed test's findings go to the app's regression log or a new
   issue; the Status line links there. The queue holds tests, not
   investigations.
+- **A `✅` may not carry an unresolved caveat in prose.** Before writing one,
+  re-read the result for hedge vocabulary — *unproven, unverified, still
+  unobserved, never been run, inferred rather than observed, does not cover,
+  worth carrying*. Every hit is either resolved, or filed as its own queue item
+  / issue whose number appears in the result. A caveat written under a PASSED
+  line is gone the moment the drain moves on: nothing but that sentence knows it
+  exists, and the item will never be re-read because it is closed. A pass with
+  a named limit is a pass; a pass with a loose limit is a lie with a footnote.
+  Standard: `standards/authoritative-claims.md` → "Labelling is not tracking."
 - **`**Status:** 🔧 needs build — <what's needed>`** — a fourth status value,
   distinct from bare `OPEN`: it means the drain *looked* at this item and
   determined it

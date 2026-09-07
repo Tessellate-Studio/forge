@@ -336,7 +336,15 @@ untested for no stated reason.
    on its own. That is why the check now also runs on the **launch** path
    ("Before you spawn a drain", above) and why re-delegation is banned: a
    claim can only protect a window it is inside.
-5. **All queues empty → say so and stop.** Quiet is a correct result — don't
+5. **A device claim is not a work claim.** 🔒 locks the handset; 🚧 says who
+   owns a piece of work
+   ([`standards/workflows.md` → "Work claims"](../../standards/workflows.md)).
+   The drain takes 🔒 and needs nothing else to walk the queue — but the moment
+   it stops draining and starts *fixing* a tracked issue or PR, that item gets
+   its own `wip claim <repo>#<n>`, released when the fix is handed off. A drain
+   that files a failure is still draining; a drain that opens a fix PR is
+   working an item someone else could pick up.
+6. **All queues empty → say so and stop.** Quiet is a correct result — don't
    invent work. Close your claim before stopping (Step 4).
 
 ### Step 1 — Split the work: agent items, human items, and build-blocked items
