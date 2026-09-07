@@ -248,6 +248,82 @@ sessions, `npm ci` before the commit gate, SHA-explicit git, verify `HEAD`
 before every commit/push. Full rule:
 [`anti-patterns.md` → "Isolate concurrent sessions"](./anti-patterns.md).
 
+## Work claims — say who is on an issue/PR, before you start
+
+Worktree isolation stops two sessions corrupting one checkout. It does nothing
+about the question that actually gets asked: **who is working on this?** Every
+session commits under the same GitHub account, so the byline names nobody. The
+branch lives in a worktree no other session can see. The RFD the work is being
+built against sits on that branch, unpushed. So agents pick up items other
+agents already have in flight, and there is no way to find the session holding
+it — reported 2026-09-07 as "too many agents not knowing who's working on
+what".
+
+**Claim the item the moment you pick it up, not when you open the PR.** The
+claim is a comment on the issue/PR itself — where anyone already looks — plus
+the `claimed` label, which is what makes the whole board listable and shows
+ownership in GitHub's own issue list without opening anything.
+
+```bash
+wip claim alate#562 --doc memory/decisions/rfd-003-queue-lock.md
+```
+
+That posts:
+
+```markdown
+### 🚧 Work claim
+- **Claimed by:** <branch (session-id tail)>
+- **Session:** `claude --resume <session id>` on <host>
+- **Worktree:** `<absolute path>` (branch `<branch>`)
+- **Started at:** <ISO 8601 UTC>
+- **Last touch:** <ISO 8601 UTC — rewritten at each checkpoint>
+- **Docs:** <RFD / ADR / pitch / backlog entry this is built against, or —>
+- **Waiting on:** — <or: human — what you handed them>
+- **Claim:** HELD
+```
+
+The three fields that matter are the ones another agent cannot derive: the
+**session** (so the work is resumed, not restarted), the **worktree** (where
+the in-flight code physically is), and the **docs** (what it is being built
+against). A claim without those is just a "someone is on it" sticker.
+
+**Who claims.** Every session that starts work on a tracked issue or PR —
+`/forge:plan`, `build-feature`, `crash-monitor`, `security-sweep`,
+`device-test`, `status-check`, and hand-driven sessions alike. If you are about
+to spend more than a couple of minutes on an item someone could also pick up,
+claim it.
+
+- **Read before you take.** `wip` prints the board; the SessionStart hook puts
+  live claims in front of every new session automatically. Held by someone else
+  and still alive → don't start. Resume their session, or say what you need.
+  Free, released, or silent past the window → take it, and say in your claim
+  that you took over a silent one (`wip claim <item> --force`).
+- **Signal liveness, not duration.** `wip touch <item>` at each natural
+  checkpoint — a commit, a push, a phase boundary, a handoff. A claim reads as
+  abandoned only after **90 minutes with no touch at all**; there is no cap on
+  how long it may be held. Silence is the only abandonment signal. (Longer than
+  the device claim's 30 min: a build legitimately runs a suite and waits on CI
+  without touching GitHub once.)
+- **Parked on a human never expires.** `wip touch <item> --waiting-on "human —
+  <what>"` before handing over. Clear it back to `—` when you resume.
+- **Release when you stop** — `wip release <item>` flips `**Claim:**` to
+  RELEASED, drops the label, and minimizes the comment so only live claims are
+  worth scrolling past. Do this even when the work failed, stalled, or you
+  handed it back unfinished; **especially** then, because an abandoned-looking
+  item nobody released is exactly what the next agent re-does. Merging the PR
+  is not a release — the merge closes the work, the release closes the claim.
+- **It is advisory.** Nothing stops a second session opening the same issue,
+  and it is not trying to. It removes the ambiguity, which is the part that
+  actually failed.
+- A work claim is **not** a device claim. The 🔒 device claim below locks one
+  physical handset; 🚧 says who owns a piece of work. A device-test drain takes
+  both.
+- Claim comments are not queue items — the device-test parser skips 🚧 the same
+  way it skips 🔒 and 📦.
+
+Board and lifecycle: `wip` (alias `forge-wip`), backed by
+`tools/work-claim/lib/claim.js` — keep that file and this section in sync.
+
 ## Shared planning docs — check who else is in the file
 
 Worktree isolation does not prevent two branches editing the same doc or the same

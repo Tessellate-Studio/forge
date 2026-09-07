@@ -63,12 +63,22 @@ exit it by verifying yourself.
 3. **Branch placement.** If the change doesn't belong on the current branch, cut
    `feat/<slug>` or `fix/<slug>` off the default branch automatically — don't ask.
    Keep code commits separate from doc commits.
-4. **Respect frozen scope.** If the user has said "don't touch X", do not modify
+4. **Claim the item.** If this work is attached to a GitHub issue or PR, read
+   the board (`wip`) and claim it before writing code — after the branch exists,
+   so the claim names the right worktree:
+   `wip claim <repo>#<n> --doc <planning doc, once Step 0 item 8 has one>`. Already
+   held by a live session → stop and resume that session (the claim carries its
+   `claude --resume` id and worktree path) rather than building a second copy of
+   the same change. Refresh with `wip touch <repo>#<n>` at each commit, and
+   `wip release <repo>#<n>` when you hand back — including when you hand back
+   unfinished. Full rule:
+   [`workflows.md` → "Work claims"](${CLAUDE_PLUGIN_ROOT}/standards/workflows.md).
+5. **Respect frozen scope.** If the user has said "don't touch X", do not modify
    those screens — even incidentally.
-5. **Read before editing.** Know the screen's current structure and its theme
+6. **Read before editing.** Know the screen's current structure and its theme
    tokens (the app's `constants/theme.ts` — spacing, typography, alphas, colors).
    The app's design vision lives in its `memory/project_design_vision.md`.
-6. **Map the integrations, then verify the smallest shippable slice FIRST.**
+7. **Map the integrations, then verify the smallest shippable slice FIRST.**
    Before building the full feature, write a 5-line **integration map** — the
    things that silently sink a build when discovered late:
    - **Endpoints** it calls or adds (which repo owns each?)
@@ -88,12 +98,12 @@ exit it by verifying yourself.
    built in full before confirming the quiz path shipped instantly while the
    app-handoff path needed an OTA + a deep-link scheme in the installed binary —
    knowing that up front would have led with the cheap path.*
-7. **Planning gate — size the decision, document it if non-trivial.** Run
+8. **Planning gate — size the decision, document it if non-trivial.** Run
    the sizing guide (`${CLAUDE_PLUGIN_ROOT}/skills/plan/references/sizing-guide.md`).
    Tactical → skip or quick ADR. Feature-scope → Shape Up Pitch with research.
    Architecture → RFD with full research. Planning doc must exist before Step 1
    (acceptance criteria). Trivial changes: one-line skip note.
-8. **Greenfield or multi-phase build? Render on a device BEFORE stacking
+9. **Greenfield or multi-phase build? Render on a device BEFORE stacking
    phases.** As soon as the scaffold + theme produce a first screen, put pixels
    on a real device/emulator — don't build N more phases on top of an unseen
    base. Unit tests mock every native module, so they cannot catch import-time
@@ -132,7 +142,7 @@ plan mode only once the approach is settled.
 
 ## Step 1.5 — Multi-agent build (conditional — Pitch/RFD tier only)
 
-If the planning gate (Step 0, item 7) sized this as **Pitch or RFD tier** AND
+If the planning gate (Step 0, item 8) sized this as **Pitch or RFD tier** AND
 the workflow script exists at
 `${CLAUDE_PLUGIN_ROOT}/references/workflows/researched-build.js`, delegate the
 build (Steps 2–4) to the multi-agent pipeline instead of building single-handed.
@@ -418,7 +428,14 @@ good PRs and destroys feedback speed, so the bulk of E2E runs *post*-merge.
 6. Report with the **bottom line first**, the measured verdicts, the screenshot,
    and only the sections that have real content (per the repo's communication
    style). If you added a regression-worthy fix, log it.
-7. **Worktree cleanup.** Before reporting done, prune stale git worktrees left
+7. **Release the work claim.** If you claimed an issue/PR at Step 0 item 4,
+   `wip release <repo>#<n>` before reporting — and do it whether the build
+   shipped, stalled, or you are handing back unfinished. A merged PR does not
+   release the claim, and an item still showing 🚧 held by a session that has
+   ended is exactly what makes the next agent skip work it should pick up. If
+   the work is genuinely parked on the user rather than finished, park the
+   claim instead: `wip touch <repo>#<n> --waiting-on "human — <what>"`.
+8. **Worktree cleanup.** Before reporting done, prune stale git worktrees left
    by this session or earlier ones. Run `git worktree list` — any worktree
    whose branch is merged or whose path sits outside `.claude/worktrees/` and
    is no longer needed gets `git worktree remove --force <path>`. Then

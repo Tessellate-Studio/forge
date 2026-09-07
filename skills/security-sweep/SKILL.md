@@ -278,6 +278,17 @@ If npm audit reports a **critical or high severity** vulnerability in a **runtim
 
 These can't wait for the bi-weekly cycle — the notification ensures the user sees it.
 
+## Step 3.5: Claim the tracked issues you pick up
+
+A sweep that only *files* issues has nothing to claim — filing is not working.
+But the moment this sweep starts actually fixing an issue that already exists
+(a tracked vuln from a prior cycle, an open Dependabot alert someone else may
+also be on), claim it first: `wip claim <repo>#<n>`, and
+`wip release <repo>#<n>` when the PR is open or the finding is dismissed. Held
+by a live session → leave it and note it in the disposition table rather than
+opening a second bump PR against the same package. Full rule:
+[`workflows.md` → "Work claims"](${CLAUDE_PLUGIN_ROOT}/standards/workflows.md).
+
 ## Step 4: Update disposition logs
 
 Each app already has a log — **use the existing file and its conventions, don't

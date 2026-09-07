@@ -154,6 +154,17 @@ describe('heading — status glyph + test ID', () => {
         )
       )
     ).toBeNull();
+
+    // A work claim (tools/work-claim) can land on the queue issue like any
+    // other tracked item. It carries no Status line, so without the notice
+    // rule it would file as a malformed item and nag the board forever.
+    expect(
+      parseComment(
+        comment(
+          '### 🚧 Work claim\n- **Claimed by:** feat/x (abc12345)\n- **Claim:** HELD'
+        )
+      )
+    ).toBeNull();
   });
 });
 

@@ -39,6 +39,7 @@ inherits it — interchangeable, inter-usable, self-learning (via reviewed PRs).
 | `standards-cli/` | The code-standards SDK: `standards`/`bp` CLI, validators, scaffolding templates. |
 | `rubric/` | The rubric SDK: `rubric` CLI + `evaluateFromContext` scoring API (root export). |
 | `tools/brief/` | The `brief` CLI: run any command, print a token-cheap summary of its output instead of the raw dump. See `standards/workflows.md`. |
+| `tools/work-claim/` | The `wip` CLI: who is working on which issue/PR — post, heartbeat and release the 🚧 work claim, and print the cross-repo board. See `standards/workflows.md` → "Work claims". |
 | `.github/workflows/code-inspection.yml` | **Reusable** advisory inspection gate apps call from their CI. |
 
 ## Install
@@ -58,7 +59,7 @@ version pins or bumps (platform decision 2026-07-16).
 **CLIs (machine-global, from GitHub — nothing is on the npm registry):**
 
 ```bash
-npm install -g github:Tessellate-Studio/forge   # standards, bp, rubric, brief
+npm install -g github:Tessellate-Studio/forge   # standards, bp, rubric, brief, dtq, wip
 ```
 
 **CI gate (per app):**
@@ -111,6 +112,35 @@ threads for you. See `skills/device-test/SKILL.md`.
 
 ```bash
 FORGE_DEVICE_TEST_STATUS_DISABLE=1
+```
+
+## Work claims (SessionStart)
+
+Every session commits under the same GitHub account, so nothing on an issue or
+PR says WHICH session is on it — and the branch, the worktree and the RFD the
+work is being built against all live somewhere no other session can see. Agents
+kept picking up work another agent already had in flight.
+
+A session claims an item when it picks it up: a 🚧 comment on the issue/PR
+carrying its `claude --resume` id, its worktree path and its planning docs, plus
+the `claimed` label so the whole board is listable.
+
+```bash
+wip                                        # the board — who is on what
+wip claim alate#562 --doc memory/decisions/rfd-003-x.md
+wip touch alate#562                        # heartbeat, at each commit/push/phase
+wip release alate#562                      # done, stalled, or handed back
+```
+
+`hooks/work-claims.mjs` puts live claims in front of every new session, which is
+where the collision actually happens — by the time an agent has read the code it
+has already decided to work the item. Quiet when nothing is claimed. Rules and
+lifecycle: `standards/workflows.md` → "Work claims".
+
+**Turning it off:**
+
+```bash
+FORGE_WORK_CLAIMS_DISABLE=1
 ```
 
 ## Layering rule
