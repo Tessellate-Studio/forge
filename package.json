@@ -9,7 +9,9 @@
     "rubric": "rubric/cli/index.js",
     "device-test-status": "skills/device-test/scripts/status-board.js",
     "dtq": "skills/device-test/scripts/status-board.js",
-    "brief": "tools/brief/cli/index.js"
+    "brief": "tools/brief/cli/index.js",
+    "wip": "tools/work-claim/cli.js",
+    "forge-wip": "tools/work-claim/cli.js"
   },
   "files": [
     "index.js",
@@ -23,6 +25,8 @@
     "rubric/docs/",
     "tools/brief/lib/",
     "tools/brief/cli/",
+    "tools/work-claim/lib/",
+    "tools/work-claim/cli.js",
     "standards/",
     "skills/",
     "references/",
@@ -30,6 +34,8 @@
     "!references/jest.config.js",
     "!skills/device-test/__tests__/",
     "!skills/device-test/jest.config.js",
+    "!tools/work-claim/__tests__/",
+    "!tools/work-claim/jest.config.js",
     "!tools/safe-merge/__tests__/",
     "!tools/safe-merge/jest.config.js",
     ".claude-plugin/"
@@ -42,7 +48,7 @@
     "./integrations": "./standards-cli/lib/integrations/index.js"
   },
   "scripts": {
-    "test": "npm run test:standards && npm run test:rubric && npm run test:workflows && npm run test:hooks && npm run test:brief && npm run test:device-test && npm run test:safe-merge",
+    "test": "npm run test:standards && npm run test:rubric && npm run test:workflows && npm run test:hooks && npm run test:brief && npm run test:device-test && npm run test:safe-merge && npm run test:work-claim",
     "test:standards": "jest --config standards-cli/jest.config.js",
     "test:rubric": "jest --config rubric/jest.config.js",
     "test:workflows": "jest --config references/jest.config.js",
@@ -50,9 +56,10 @@
     "test:brief": "jest --config tools/brief/jest.config.js",
     "test:device-test": "jest --config skills/device-test/jest.config.js",
     "test:safe-merge": "jest --config tools/safe-merge/jest.config.js",
+    "test:work-claim": "jest --config tools/work-claim/jest.config.js",
     "test:coverage": "jest --config standards-cli/jest.config.js --coverage && jest --config rubric/jest.config.js --coverage",
-    "lint": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/brief/lib/ tools/brief/cli/ --fix",
-    "lint:check": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/brief/lib/ tools/brief/cli/",
+    "lint": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/brief/lib/ tools/brief/cli/ tools/work-claim/lib/ tools/work-claim/cli.js --fix",
+    "lint:check": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/brief/lib/ tools/brief/cli/ tools/work-claim/lib/ tools/work-claim/cli.js",
     "audit": "npm audit --audit-level=high",
     "validate": "node standards-cli/cli/bp-validate.js",
     "init": "node standards-cli/cli/bp-init.js",
