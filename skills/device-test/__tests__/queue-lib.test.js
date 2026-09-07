@@ -372,6 +372,14 @@ describe('bookkeeping the board must not report as a violation', () => {
     expect(parseComment(fx.deviceClaim)).toBeNull();
   });
 
+  it('skips a correction whose first words are "Expect correction"', () => {
+    // alate#562 5575634751, posted the morning after the first pass of this
+    // fix. `**Expect` without the colon matched its opening bold run, so a
+    // note correcting ANOTHER item's Expect was promoted to a malformed
+    // item — the same bug this file exists to close, one comment later.
+    expect(parseComment(fx.expectCorrectionNote)).toBeNull();
+  });
+
   it('skips a drain correction written like a document', () => {
     // alate#562 5571959196: two `###` headings and a closing sentence opening
     // `**Status:**` that says, in prose, why ANOTHER item is blocked. It has
@@ -489,5 +497,27 @@ describe('what counts as an item at all', () => {
     );
     expect(statusState('CLOSED— iOS/TestFlight')).toBeNull();
     expect(statusState('🅿️ PARKED — being rethought')).toBeNull();
+  });
+});
+
+describe('the Expect field, not a sentence that starts with "Expect"', () => {
+  it('accepts both spellings of the field', () => {
+    const modern = parseComment(
+      comment('### Something\n- **Expect:** it renders')
+    );
+    const legacy = parseComment(
+      comment('### Something\n- **Expected:** it renders')
+    );
+    expect(modern.state).toBe(STATUS.UNPARSEABLE);
+    expect(legacy.state).toBe(STATUS.UNPARSEABLE);
+  });
+
+  it('does not read a bold run merely opening with the word', () => {
+    expect(
+      parseComment(comment('**Expect correction for item 123** — see below.'))
+    ).toBeNull();
+    expect(
+      parseComment(comment('### Re: 123\n**Expectations here were wrong.**'))
+    ).toBeNull();
   });
 });

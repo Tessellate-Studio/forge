@@ -263,7 +263,13 @@ function parseComment(comment) {
   const declaresItemGlyph = Boolean(
     headingMatch && ITEM_GLYPH_OPENER.test(headingMatch[1])
   );
-  const looksLikeTest = /\*\*Steps:\*\*|\*\*Expect/.test(fields);
+
+  // The COLON is load-bearing. `**Expect` alone also matches the opening of
+  // `**Expect correction for item 5572382793 — and why it FAILed…**`, a real
+  // alate#562 comment (5575634751) that is a correction to another item and
+  // contains no test at all. `Expected:` is the legacy spelling of the field
+  // and stays accepted.
+  const looksLikeTest = /\*\*Steps:\*\*|\*\*Expect(?:ed)?:\*\*/.test(fields);
   const isItem = declaresItemGlyph || looksLikeTest || namedState !== null;
 
   // A bold opener counts as a TITLE on the same evidence. Widening it from

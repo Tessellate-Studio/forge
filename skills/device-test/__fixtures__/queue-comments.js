@@ -180,7 +180,35 @@ const itemParkedStatus = moodLayer(
   ].join('\n')
 );
 
+/**
+ * A correction to another item's Expect, posted the morning after the first
+ * pass of this fix shipped. Its opening bold run is `**Expect correction for
+ * item …**` — which a shape rule matching a bare `**Expect` reads as the
+ * Expect FIELD, promoting a note with no test in it to a malformed item.
+ */
+const expectCorrectionNote = alate(
+  5575634751,
+  [
+    '**Expect correction for item `5572382793` (size-not-carried-card) — and why it FAILed on a case it should not have been judged on.**',
+    '',
+    'The drain agent was right on both counts, so recording it here rather than',
+    "leaving the item's own text misleading.",
+    '',
+    "**1. That item's Expect #2 is stale.** It reads:",
+    '',
+    '> A line under the stats divider reading **"this brand\'s range stops at L — they don\'t make XXL"**',
+    '',
+    'That was written for the **ladder-only** world before #711. …',
+    '',
+    '**2. The FAIL it filed (#714) was still real, and was mine.** …',
+    '',
+    '**Applies to that item going forward:** judge the sentence by which route',
+    'produced the verdict. …',
+  ].join('\n')
+);
+
 module.exports = {
+  expectCorrectionNote,
   otaNotice,
   deviceClaim,
   legacyBoldItem,
