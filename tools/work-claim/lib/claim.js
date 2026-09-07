@@ -267,6 +267,19 @@ async function checkGhReady() {
   }
 }
 
+/**
+ * Does this item carry a `claimed` label that nothing live justifies?
+ *
+ * OPEN item  — leaked when no claim resolves as active (all stale/released).
+ * CLOSED item — leaked when ANY claim is still HELD. The work is over, so a
+ *   held claim there is one nobody closed; but a claim its holder RELEASED is
+ *   the system working, and reporting that as a leak teaches the reader to
+ *   ignore the sweep.
+ */
+function isLeaked(item, claims, active) {
+  return item.closed ? (claims || []).some(c => c.held) : !active;
+}
+
 const FETCH_CONCURRENCY = 5;
 
 /** Promise.all with a ceiling on how many run at once. Order is preserved. */
@@ -353,7 +366,7 @@ async function fetchRepoClaims(repoDef, opts = {}) {
 
         // A closed item with any claim on it is leaked regardless of
         // staleness: the work is over, so nothing is legitimately held.
-        const leaked = item.closed ? claims.length > 0 : !claim;
+        const leaked = isLeaked(item, claims, claim);
         return { ...item, claim, claims, leaked };
       } catch (error) {
         // Unknown, NOT leaked — sweeping on a failed fetch would strip the
@@ -429,5 +442,6 @@ module.exports = {
   checkGhReady,
   fetchRepoClaims,
   collect,
+  isLeaked,
   leakedItems,
 };
