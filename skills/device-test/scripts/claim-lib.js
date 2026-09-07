@@ -40,7 +40,9 @@ const CLAIM_MARKER = /^###\s*🔒\s*Device claim\b/m;
 
 /**
  * Automated notices that post to the queue issue but are NOT tests — the
- * OTA-publish record written by eas-update.yml, plus the claim above. They
+ * OTA-publish record written by eas-update.yml, the device claim above, and
+ * the 🚧 work claim a session posts when it picks up a tracked item
+ * (tools/work-claim/lib/claim.js). They
  * carry a heading and no Status line, so the item parser files them as
  * malformed items and the board nags forever about drift no human caused.
  * Six of the nine "unparseable" comments on alate#562 were exactly this.
@@ -51,7 +53,7 @@ const CLAIM_MARKER = /^###\s*🔒\s*Device claim\b/m;
  * A new bot posting here must pick a heading glyph outside the item set
  * (🤖 🙋 🔧 ⚪ 🔴) and be added to this pattern.
  */
-const NOTICE_MARKER = /^###\s*(?:📦|🔒)/m;
+const NOTICE_MARKER = /^###\s*(?:📦|🔒|🚧)/m;
 
 /** Placeholders in **Waiting on:** that mean "parked on nothing". */
 const NOT_WAITING = /^(?:—|–|-|none|nothing|n\/a)$/i;

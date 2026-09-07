@@ -96,6 +96,18 @@ For each revert of a crash-monitor PR:
 
 **You do not record the cooldown anywhere.** The confidence command derives it at merge time from the repo's own commit history — any revert touching the changed paths in the last 14 days refuses the merge. This replaces the old `COOLDOWN_UNTIL` marker in the auto-ship log, which was never actually writable: that table has no column for a module path, so no cooldown was ever recorded and the condition silently passed on every run from the skill's creation until 2026-09-04. A revert is evidence the gate was wrong about that code once; deriving it from git is what makes the loop-breaker real, because a revert cannot forget to record itself.
 
+## Step 1.7: Claim what you are about to work
+
+For every GitHub issue that survives triage and that you are going to
+investigate or fix, claim it before touching code: `wip claim <repo>#<n>`. An
+auto-fix cycle is exactly the case that surprises another agent — the issue
+looks untouched right up to the moment a PR appears against it. Held by a live
+session already → skip that issue this cycle and say so in the report; do not
+open a competing fix. Release with `wip release <repo>#<n>` once the PR is
+armed or the issue is routed to a human. Sentry-only issues with no GitHub
+issue behind them have nothing to claim. Full rule:
+[`workflows.md` → "Work claims"](${CLAUDE_PLUGIN_ROOT}/standards/workflows.md).
+
 ## Step 2: Investigate each surviving issue
 
 **From Sentry:**
