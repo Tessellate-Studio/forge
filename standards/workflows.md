@@ -485,6 +485,11 @@ parse it — keep the bold field names exactly):
 - **Status:** OPEN
 ```
 
+- **Prove the Steps are reachable on the user's real setup before you write
+  them.** An item that asks for state the app can never reach there spends the
+  user's hands on nothing — and a setting they flip to satisfy it can wreck the
+  ground truth of another queued item. One `curl` against the live surface
+  first: `standards/authoritative-claims.md` → "Reading is not running."
 - **Write Steps machine-first.** The drain agent executes every step it can
   reach itself — app launch/force-stop, navigation taps (`adb shell input
   tap`/`text`/`keyevent`), screenshots (`adb exec-out screencap -p`), logcat

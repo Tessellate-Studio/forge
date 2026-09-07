@@ -333,7 +333,12 @@ tooling included);** skip with a one-line note for a true one-liner:
    Fix what's real, re-verify on-device. (For NEW web/screen surfaces built
    from scratch, `/frontend-design` guides the initial build back in Step 2 —
    not a post-hoc check.)
-4. Commit the cleanups separately (`chore: simplify <scope>`) — don't fold them
+4. **Probe every behaviour claim the diff or your report makes** — this bug is
+   live, this path is reachable, this new test exercises X. Run it (mutate the
+   fix and watch the test go red; `curl` the endpoint) or say it is a
+   hypothesis. Full rule: `${CLAUDE_PLUGIN_ROOT}/standards/authoritative-claims.md`
+   → "Reading is not running".
+5. Commit the cleanups separately (`chore: simplify <scope>`) — don't fold them
    into the feature/fix commit.
 
 Full platform rule: `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Quality
@@ -460,7 +465,9 @@ way to know).
    were never exercised for real (integration points, flows verified only by
    unit tests or mocks, environments never touched). "Nothing" is almost never
    the honest answer. For each: what would exercise it, and what failure would
-   look like.
+   look like. **Anything you concluded by reading rather than running belongs
+   in this list** (`standards/authoritative-claims.md` → "Reading is not
+   running").
 2. **What's the biggest thing the user doesn't realize?** Surface the systemic
    or situational fact the user can't see from the diff or the demo — a silent
    pipeline failure, an inert-until-X switch, a dependency chain where failures

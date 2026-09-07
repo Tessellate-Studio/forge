@@ -35,6 +35,55 @@ that *could* be wrong. If the source isn't named, the claim isn't authoritative 
 If the sentence still reads true with **"probably" / "should be" / "I think"**
 inserted, you're inferring. Verify, delete, or relabel as a hypothesis.
 
+## Reading is not running
+
+The rule above governs where a claim's evidence comes from. This governs
+whether that evidence is of the right *kind* — and an accurate `file:line` can
+be the wrong kind.
+
+**When the claim is about behaviour, a code read is a hypothesis.** *This bug
+is live · this path is reachable · this test exercises X · this input crashes*
+— each is a claim about what the code **does**, while the citation establishes
+only what it **says**. Reasoning from a correct source to a behavioural verdict
+is still inferring; it just leaves a footnote.
+
+Discharge it by running something: a probe test, a `curl`, a mutation, a
+one-off script — the smallest thing that makes the machine answer instead of
+you. If you cannot run it, the claim ships labelled a hypothesis, in the words
+you actually use to the user.
+
+### Two corollaries
+
+- **A test that passes against the unfixed code is not a regression test.**
+  Mutate the fix away and watch it go red, or you have not established that it
+  tests anything.
+- **Exit status through a pipe is the last command's.** `npx tsc --noEmit |
+  head; echo $?` reports `head`'s, and `cmd | tail && next` gates on `tail`'s.
+  The same trap [`workflows.md` → "Merge on green"](./workflows.md) names for
+  `gh pr checks | tail && merge`, and it takes the same fix:
+  `cmd >/dev/null && next`.
+
+**Why:** the failure is invisible from the inside — the reasoning is sound, the
+citation is real, and nothing contradicts you until a human pays for it.
+*Precedents, all alate, all one session (2026-09-05 → 09-07). (1) A device-test
+item asked the user to find a Shopify variant with `inventory_management: null`.
+The code that reads that field can never run on their store: the storefront is
+password-locked, so `shopifyFetch.ts` never executes and the composed endpoint
+supplies stock instead. They flipped a live store setting for nothing, and the
+flip destroyed the ground truth of a different queued item. One `curl` first
+would have caught it. (2) A reviewer's finding — a blank size label makes a
+sold-out product report "unknown" — was agreed with from a read, escalated to
+"a real bug and worse than I'd assessed", and covered by two regression tests.
+Both passed against the unfixed code: the case is unreachable, because a blank
+label only enters the list from a purchasable variant, and the sold-out branch
+is then already false. One test was deleted for proving nothing. (3) A clean
+typecheck claimed from `tsc --noEmit | head; echo $?` — the tree happened to be
+clean, so the claim happened to be true, and it was still not evidence. By
+contrast: the same session's two adversarial reviews found six real defects
+between them, including a P0 that told shoppers of ordinary boutiques "they
+make S, M and L — not Medium" — and every one came from executing a probe and
+pasting the output.*
+
 ## Labelling is not tracking
 
 Everything above governs how you **say** an unproven thing. Nothing above
