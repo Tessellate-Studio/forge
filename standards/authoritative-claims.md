@@ -76,6 +76,23 @@ inferred rather than observed · does not cover · worth carrying · caveat
 item, or a backlog row is a home. If the caveat does not deserve one, it did
 not deserve writing down either — say nothing and move on.
 
+### If this fails again
+
+This section is **guidance**: it binds the skills that read these standards at
+preflight, not a hook that can refuse. So it has a stated escalation, because a
+rule with no escalation is a wish.
+
+**If a caveat is lost this way again, move it down a layer — do not restate
+this section more firmly.** The next layer is a scheduled sweep in the shape of
+`crash-monitor` / `security-sweep`: grep recent issue and PR comments for the
+vocabulary above, check each hit for an accompanying issue number, file what is
+untracked. Tracked as forge issue #94, which carries the full shape and the
+condition for closing it.
+
+It is deliberately not built yet — enforcement written before the guidance has
+been shown to fail is over-fitting to one bad session. That judgement is the
+reason to keep it in an issue rather than in someone's head.
+
 ### Why this is not covered by "label it a hypothesis"
 
 Because that rule can be followed perfectly while this one is broken, and was:
