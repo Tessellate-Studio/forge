@@ -59,47 +59,53 @@ So on these repos the prefix carries information git has no way to derive, and
 `-D` is the only delete that works — the rename is what licenses it, because
 you asserted "merged" at the moment you knew it was true.
 
-**The licence is only as good as the assertion, and in the field it has been
-wrong.** On loom (2026-09-05) 12 `done/` branches were checked one at a time
-against the default branch and **2 had never landed** —
-`done/claude/size-finder-ux-issues-889306` and
-`done/fix/size-finder-inches-autoswitch` — each with its remote branch already
-deleted and no PR ref to recover from. The blanket `-D` below would have
-destroyed both with no copy anywhere. The prefix records what someone believed
-at rename time; it does not survive a branch renamed speculatively, or commits
-added after the rename.
+**The licence is only as good as the assertion, so classify before you delete —
+but classify against the MERGE RECORD, not the commit subject.** An earlier
+version of this section told you to subject-match against the default branch,
+on the reasoning that squash rewrites the SHA but preserves the subject. That
+reasoning is wrong: GitHub's squash commit takes the **PR title**, which is
+routinely reworded at merge time, so a landed branch reads as UNLANDED.
 
-Squash rewrites the SHA but keeps the commit SUBJECT, so the subject is the
-check ancestry cannot give you:
+It failed immediately. On loom (2026-09-05) subject-matching flagged 2 of 12
+`done/` branches as never landed — `done/claude/size-finder-ux-issues-889306`
+and `done/fix/size-finder-inches-autoswitch`. Both had in fact merged, as #87
+and #89, each retitled at squash time. The heuristic was not a conservative
+approximation; it was noise in the one direction that decides the delete.
+
+Ask the forge that actually merged it. Strip the `done/` prefix to recover the
+branch name the PR was opened from:
 
 ```bash
 # 1. CLASSIFY FIRST. Never pipe the list straight into `branch -D`.
 #    `refs/heads/done/*` silently matches only un-nested names (6 of 37 in the
 #    original sweep) — `*` does not cross `/`. Use `**`.
 git fetch origin --quiet
-subjects=$(git log --format='%s' origin/HEAD)   # or origin/master / origin/main
 for b in $(git for-each-ref --format='%(refname:short)' 'refs/heads/done/**'); do
-  subj=$(git log -1 --format='%s' "$b")
-  base=$(printf '%s' "$subj" | sed 's/ (#[0-9]\{1,\})$//')   # drop squash PR suffix
   sha=$(git rev-parse --short "$b")
-  if grep -Fq "$base" <<<"$subjects"; then
-    echo "LANDED    $sha  $b"
+  pr=$(gh pr list --state merged --head "${b#done/}" --json number --jq '.[0].number')
+  if [ -n "$pr" ]; then
+    echo "MERGED as #$pr   $sha  $b"
   else
-    echo "UNLANDED  $sha  $b   <- keep, or salvage before deleting"
+    echo "NO MERGE RECORD  $sha  $b   <- investigate before deleting"
   fi
 done
 
-# 2. Record the SHAs you are about to drop, then delete ONLY the LANDED ones,
+# 2. Record the SHAs you are about to drop, then delete ONLY the merged ones,
 #    named explicitly. `--format` is required above: the default output is
 #    `<sha> commit<TAB><ref>`, so without it xargs feeds SHAs to `branch -D`.
-git branch -D done/<landed-one> done/<landed-two>
+git branch -D done/<merged-one> done/<merged-two>
 ```
 
-Two things that will bite during the sweep: a branch **checked out in a
-worktree** cannot be deleted (git refuses — finish or `git worktree remove`
-first), and the subject match is a heuristic, so two branches sharing a subject
-both read as LANDED. When a branch matters, diff it against the default branch
-before dropping it.
+`NO MERGE RECORD` means "GitHub has no merged PR whose head was this branch" —
+which covers a branch merged locally, or one pushed under a different name, not
+just genuinely unlanded work. Treat it as a prompt to look, never as proof. The
+cheap follow-up is `git diff origin/HEAD...$b --stat`: an empty diff means the
+content is already on the default branch whatever the PR record says, and a
+non-empty one tells you exactly what you would be dropping.
+
+One more thing that will bite during the sweep: a branch **checked out in a
+worktree** cannot be deleted at all — git refuses, so finish or
+`git worktree remove` that worktree first.
 
 The two settle into one lifecycle — `done/` is the staging state, deletion is
 the end state — so pick per repo and don't treat the choice as a contradiction:
