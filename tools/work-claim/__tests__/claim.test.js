@@ -486,3 +486,167 @@ describe('isLeaked — what the label is allowed to outlive', () => {
     expect(isLeaked({ closed: true }, [], null)).toBe(false);
   });
 });
+
+describe('a claim survives work spread over days', () => {
+  const { withItemActivity, QUIET_MINUTES } = require('../lib/claim');
+
+  // Reported 2026-09-07: "I sometimes work on an issue for 2 days or more.
+  // It's not necessary that the issue is continuously worked on." The first
+  // window was 90 minutes, copied from the device lock without re-deriving
+  // it — which called a normal working pattern abandoned before lunch.
+  it('is not stale after a night away', () => {
+    const overnight = parseClaim(held({ lastTouch: minutesAgo(14 * 60) }));
+    expect(overnight.stale).toBe(false);
+  });
+
+  it('is not stale after two days', () => {
+    expect(parseClaim(held({ lastTouch: minutesAgo(2 * 24 * 60) })).stale).toBe(
+      false
+    );
+  });
+
+  it('IS stale after eight days of total silence', () => {
+    expect(parseClaim(held({ lastTouch: minutesAgo(8 * 24 * 60) })).stale).toBe(
+      true
+    );
+  });
+
+  it('marks a long-idle claim quiet without calling it abandoned', () => {
+    const [claim] = withItemActivity(
+      [parseClaim(held({ lastTouch: minutesAgo(2 * 24 * 60) }))],
+      new Date(Date.now() - 2 * 24 * 60 * 60_000).toISOString()
+    );
+    expect(claim.quiet).toBe(true);
+    expect(claim.stale).toBe(false);
+    expect(QUIET_MINUTES).toBeLessThan(STALE_MINUTES);
+  });
+});
+
+describe('activity on the item counts as a heartbeat', () => {
+  const { withItemActivity } = require('../lib/claim');
+
+  // `wip touch` is a thing a session has to remember, and the long-running
+  // sessions this window protects are the likeliest to forget. A push on the
+  // branch is better evidence than a heartbeat nobody ran.
+  it('revives a claim whose own heartbeat is old but whose item just moved', () => {
+    const old = parseClaim(held({ lastTouch: minutesAgo(6 * 24 * 60) }));
+    const [revived] = withItemActivity(
+      [old],
+      new Date(Date.now() - 30 * 60_000).toISOString()
+    );
+    expect(revived.idleMinutes).toBeLessThanOrEqual(30);
+    expect(revived.liveness).toBe('item activity');
+    expect(revived.stale).toBe(false);
+  });
+
+  it('keeps the heartbeat when it is the fresher of the two', () => {
+    const fresh = parseClaim(held({ lastTouch: minutesAgo(5) }));
+    const [out] = withItemActivity(
+      [fresh],
+      new Date(Date.now() - 3 * 24 * 60 * 60_000).toISOString()
+    );
+    expect(out.idleMinutes).toBeLessThanOrEqual(5);
+    expect(out.liveness).toBe('heartbeat');
+  });
+
+  it('leaves a claim parked on a human alone whatever the dates say', () => {
+    const parked = parseClaim(
+      held({
+        lastTouch: minutesAgo(30 * 24 * 60),
+        waitingOn: 'human — needs the phone',
+      })
+    );
+    const [out] = withItemActivity(
+      [parked],
+      new Date(Date.now() - 30 * 24 * 60 * 60_000).toISOString()
+    );
+    expect(out.stale).toBe(false);
+  });
+
+  it('an item with no updated_at is left exactly as parsed', () => {
+    const claim = parseClaim(held());
+    expect(withItemActivity([claim], null)).toEqual([claim]);
+  });
+});
+
+describe('Related — a claim is not a dead end', () => {
+  // alate #696 merged while #707 carried the same work forward, and nothing
+  // on either named the other.
+  it('renders and round-trips the linked refs', () => {
+    const body = claimBody({
+      heldBy: 'x',
+      sessionId: 's1',
+      host: 'H',
+      worktree: 'W',
+      branch: 'b',
+      at: '2026-09-07T10:00:00.000Z',
+      related: ['closes #707', '#696'],
+    });
+    expect(body).toContain('- **Related:** closes #707, #696');
+    expect(parseClaim({ id: 1, body }).related).toBe('closes #707, #696');
+  });
+
+  it('is a dash, not a broken line, when nothing is linked', () => {
+    const body = claimBody({
+      heldBy: 'x',
+      sessionId: 's1',
+      host: 'H',
+      worktree: 'W',
+      branch: 'b',
+      at: '2026-09-07T10:00:00.000Z',
+    });
+    expect(body).toContain('- **Related:** —');
+    expect(parseClaim({ id: 1, body }).related).toBe('');
+  });
+});
+
+describe('sweep stays off open work', () => {
+  const { isLeaked } = require('../lib/claim');
+
+  // Stripping the label off an open item mid-job recreates the exact
+  // collision the claim exists to prevent, and nobody is waiting on it.
+  it('an open item with a live claim is never leaked, however quiet', () => {
+    expect(isLeaked({ closed: false }, [{ held: true }], { quiet: true })).toBe(
+      false
+    );
+  });
+});
+
+describe('stripCode — documentation is not data', () => {
+  const { stripCode } = require('../lib/protocol');
+
+  // forge #99 documented the Related field with a fenced example reading
+  // "- **Related:** closes #707, #696". The reference scanner read its own
+  // documentation as a real closing keyword and linked a forge claim to an
+  // alate number that does not exist in forge.
+  it('drops fenced blocks so an example is not read as a keyword', () => {
+    const body = [
+      'before',
+      '```markdown',
+      '- **Related:** closes #707',
+      '```',
+      'after',
+    ].join('\n');
+    const out = stripCode(body);
+    expect(out).toContain('before');
+    expect(out).toContain('after');
+    expect(/closes\s+#707/i.test(out)).toBe(false);
+  });
+
+  it('drops inline code spans', () => {
+    expect(/fixes\s+#12/i.test(stripCode('use `Fixes #12` in the body'))).toBe(
+      false
+    );
+  });
+
+  it('leaves a real closing keyword in prose alone', () => {
+    expect(/closes\s+#42/i.test(stripCode('This closes #42 at last.'))).toBe(
+      true
+    );
+  });
+
+  it('survives empty and missing input', () => {
+    expect(stripCode('')).toBe('');
+    expect(stripCode(null)).toBe('');
+  });
+});

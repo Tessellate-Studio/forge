@@ -51,6 +51,24 @@ function noticeMarker() {
   return new RegExp(`^###\\s*(?:${[...NOTICE_GLYPHS].join('|')})`, 'm');
 }
 
+/**
+ * Markdown with fenced blocks and inline code spans removed.
+ *
+ * Anything that scans prose for meaning has to do this first. A PR body
+ * that DOCUMENTS a syntax contains that syntax: forge #99 explained the
+ * Related field with a fenced example reading `- **Related:** closes #707,
+ * #696`, and the reference scanner promptly read its own documentation as a
+ * real closing keyword — linking a forge claim to an alate issue number
+ * that does not exist in forge at all.
+ */
+function stripCode(markdown) {
+  return String(markdown || '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/~~~[\s\S]*?~~~/g, ' ')
+    .replace(/`[^`\n]*`/g, ' ')
+    .replace(/^ {4,}\S.*$/gm, ' ');
+}
+
 function minutesSince(iso) {
   const parsed = iso ? Date.parse(iso) : NaN;
   return Number.isNaN(parsed)
@@ -239,6 +257,7 @@ function createClaimProtocol(spec) {
 
 module.exports = {
   NOT_WAITING,
+  stripCode,
   NOTICE_GLYPHS,
   noticeMarker,
   minutesSince,

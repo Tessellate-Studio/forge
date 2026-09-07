@@ -35,16 +35,38 @@ const {
   NOT_WAITING,
   field,
   setField,
+  minutesSince,
   createClaimProtocol,
 } = require('./protocol');
 
 const execFileAsync = promisify(execFile);
 
-/** Longer than the device claim's 30 min: a build can legitimately think, run
- *  a suite, and wait on CI without touching GitHub once. Long enough to cover
- *  a full test + review cycle; short enough that a crashed session clears
- *  within a working session rather than blocking the item all day. */
-const STALE_MINUTES = 90;
+/**
+ * How long a claim may go completely silent before it reads as abandoned.
+ *
+ * SEVEN DAYS, and the first version got this badly wrong at 90 minutes by
+ * copying the device claim without re-deriving it. The two locks have
+ * OPPOSITE economics:
+ *
+ *   - The device lock guards a SCARCE resource. Exactly one session can hold
+ *     the handset, and someone is actively blocked waiting for it, so a short
+ *     window is worth the risk of cutting a live holder off.
+ *   - A work claim guards NOTHING. Nobody is blocked waiting for it to
+ *     expire — a session that wants the item reads the claim and decides.
+ *     Expiring early buys no throughput at all, and costs the exact
+ *     collision the claim exists to prevent.
+ *
+ * And real work is not continuous. Reported 2026-09-07: "I sometimes work on
+ * an issue for 2 days or more. It's not necessary that the issue is
+ * continuously worked on." A 90-minute window called that abandoned before
+ * lunch. Idle is not abandoned; only silence measured in DAYS is evidence
+ * that nobody is coming back.
+ */
+const STALE_MINUTES = 7 * 24 * 60;
+
+/** Idle past this and the board says so, without treating it as abandoned —
+ *  the honest middle between "working" and "gone". */
+const QUIET_MINUTES = 8 * 60;
 
 /** The label that makes the board listable in one API call per repo, and
  *  makes ownership visible in GitHub's own issue list without opening
@@ -102,6 +124,17 @@ const PROTOCOL = createClaimProtocol({
       name: 'Worktree',
       from: 'worktreeRaw',
       render: o => `\`${o.worktree}\` (branch \`${o.branch || 'detached'}\`)`,
+    },
+    {
+      // The issue a PR implements, or the PRs that carry an issue. Without
+      // it a claim is a dead end: alate #696 merged while #707 continued the
+      // same work, and nothing on either named the other.
+      name: 'Related',
+      from: 'relatedRaw',
+      render: o => {
+        const rel = (o.related || []).filter(Boolean);
+        return rel.length ? rel.join(', ') : '—';
+      },
     },
     {
       name: 'Docs',
@@ -188,6 +221,9 @@ function parseClaim(comment) {
 
   const docsRaw = parsed.docsRaw || '—';
   parsed.docs = NOT_WAITING.test(docsRaw) ? '' : docsRaw;
+
+  const relatedRaw = parsed.relatedRaw || '—';
+  parsed.related = NOT_WAITING.test(relatedRaw) ? '' : relatedRaw;
   return parsed;
 }
 
@@ -270,7 +306,10 @@ async function checkGhReady() {
 /**
  * Does this item carry a `claimed` label that nothing live justifies?
  *
- * OPEN item  — leaked when no claim resolves as active (all stale/released).
+ * OPEN item  — leaked ONLY when every claim is released, or silence has run
+ *   past the (now seven-day) window. An open item that is merely quiet is
+ *   NOT swept: work spread over days is normal, and stripping the label
+ *   mid-job recreates the collision this exists to prevent.
  * CLOSED item — leaked when ANY claim is still HELD. The work is over, so a
  *   held claim there is one nobody closed; but a claim its holder RELEASED is
  *   the system working, and reporting that as a leak teaches the reader to
@@ -278,6 +317,40 @@ async function checkGhReady() {
  */
 function isLeaked(item, claims, active) {
   return item.closed ? (claims || []).some(c => c.held) : !active;
+}
+
+/**
+ * Treat ACTIVITY ON THE ITEM as a heartbeat.
+ *
+ * `wip touch` is a thing a session has to remember, and the sessions most
+ * likely to forget it are the long-running ones this window exists to
+ * protect. But GitHub already knows when an item last moved — a push, a
+ * commit on the PR, a comment, a review — and any of those is better
+ * evidence that someone is on it than a heartbeat nobody ran.
+ *
+ * So a claim is as fresh as the LATER of its own `Last touch` and the
+ * item's `updated_at`. This is what lets a claim survive a two-day piece of
+ * work with a night in the middle: the branch moved yesterday, so the claim
+ * is alive today, whether or not anyone remembered to touch it.
+ */
+function withItemActivity(claims, updatedAt) {
+  const itemIdle = minutesSince(updatedAt);
+  if (itemIdle === null) {
+    return claims;
+  }
+  return claims.map(claim => {
+    const idleMinutes =
+      claim.idleMinutes === null
+        ? itemIdle
+        : Math.min(claim.idleMinutes, itemIdle);
+    return {
+      ...claim,
+      idleMinutes,
+      liveness: idleMinutes === itemIdle ? 'item activity' : 'heartbeat',
+      stale: claim.waitingOnHuman ? false : idleMinutes > STALE_MINUTES,
+      quiet: idleMinutes > QUIET_MINUTES,
+    };
+  });
 }
 
 const FETCH_CONCURRENCY = 5;
@@ -340,6 +413,10 @@ async function fetchRepoClaims(repoDef, opts = {}) {
       isPr: Boolean(i.pull_request),
       closed: i.state === 'closed',
 
+      // GitHub already tracks when this item last moved; that is a better
+      // liveness signal than a heartbeat somebody has to remember.
+      updatedAt: i.updated_at,
+
       // per_page=100, not GitHub's default 30: the device-test queue issue
       // alate#562 alone carries hundreds of comments, and --paginate would
       // walk it 30 at a time.
@@ -359,9 +436,12 @@ async function fetchRepoClaims(repoDef, opts = {}) {
     async item => {
       try {
         const out = await gh(['api', item.commentsUrl, '--paginate']);
-        const claims = JSON.parse(out || '[]')
-          .map(parseClaim)
-          .filter(Boolean);
+        const claims = withItemActivity(
+          JSON.parse(out || '[]')
+            .map(parseClaim)
+            .filter(Boolean),
+          item.updatedAt
+        );
         const claim = activeClaim(claims);
 
         // A closed item with any claim on it is leaked regardless of
@@ -421,6 +501,8 @@ function leakedItems(results) {
 
 module.exports = {
   STALE_MINUTES,
+  QUIET_MINUTES,
+  withItemActivity,
   PROTOCOL,
   CLAIM_MARKER,
   CLAIM_LABEL,
