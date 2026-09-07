@@ -39,6 +39,7 @@ const {
   collect,
   leakedItems,
 } = require('./lib/claim');
+const { stripCode } = require('./lib/protocol');
 
 /**
  * Every "is this claim mine?" test compares session ids. Outside Claude Code
@@ -157,7 +158,12 @@ async function relatedRefs(repo, number) {
       '--jq',
       '.body // ""',
     ]);
-    const closing = out.match(/\b(?:fixes|closes|resolves)\s+#(\d+)/gi);
+
+    // stripCode first: a body that DOCUMENTS this syntax contains this
+    // syntax, and the scanner would read the documentation as data.
+    const closing = stripCode(out).match(
+      /\b(?:fixes|closes|resolves)\s+#(\d+)/gi
+    );
     (closing || []).forEach(m => refs.add(`closes #${m.match(/\d+/)[0]}`));
   } catch {
     /* body unreadable — the timeline may still have something */
@@ -182,7 +188,26 @@ async function relatedRefs(repo, number) {
   } catch {
     /* no timeline access — a claim without Related is still useful */
   }
-  return [...refs].slice(0, 6);
+
+  // Verify every ref resolves IN THIS REPO before writing it down. Issue
+  // numbers are repo-scoped, so a number lifted from prose about another
+  // repo points at something unrelated here, or at nothing — and a Related
+  // line that goes nowhere is worse than none, because it is followed.
+  const candidates = [...refs].slice(0, 6);
+  const verified = [];
+  for (const ref of candidates) {
+    const num = (ref.match(/#(\d+)/) || [])[1];
+    if (!num) {
+      continue;
+    }
+    try {
+      await gh(['api', `repos/${repo}/issues/${num}`, '--jq', '.number']);
+      verified.push(ref);
+    } catch {
+      /* no such item here — drop it rather than link a dead end */
+    }
+  }
+  return verified;
 }
 
 /** Create the label if the repo has never had one. Idempotent — an existing

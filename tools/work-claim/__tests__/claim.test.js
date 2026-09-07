@@ -611,3 +611,42 @@ describe('sweep stays off open work', () => {
     );
   });
 });
+
+describe('stripCode — documentation is not data', () => {
+  const { stripCode } = require('../lib/protocol');
+
+  // forge #99 documented the Related field with a fenced example reading
+  // "- **Related:** closes #707, #696". The reference scanner read its own
+  // documentation as a real closing keyword and linked a forge claim to an
+  // alate number that does not exist in forge.
+  it('drops fenced blocks so an example is not read as a keyword', () => {
+    const body = [
+      'before',
+      '```markdown',
+      '- **Related:** closes #707',
+      '```',
+      'after',
+    ].join('\n');
+    const out = stripCode(body);
+    expect(out).toContain('before');
+    expect(out).toContain('after');
+    expect(/closes\s+#707/i.test(out)).toBe(false);
+  });
+
+  it('drops inline code spans', () => {
+    expect(/fixes\s+#12/i.test(stripCode('use `Fixes #12` in the body'))).toBe(
+      false
+    );
+  });
+
+  it('leaves a real closing keyword in prose alone', () => {
+    expect(/closes\s+#42/i.test(stripCode('This closes #42 at last.'))).toBe(
+      true
+    );
+  });
+
+  it('survives empty and missing input', () => {
+    expect(stripCode('')).toBe('');
+    expect(stripCode(null)).toBe('');
+  });
+});
