@@ -1,6 +1,6 @@
 ---
 name: device-test
-description: Drains the per-repo "Device test queue" GitHub issues across all Tessellate mobile apps (alate, mood-layer, badige) — AGENT-FIRST, and always runs its actual work in a cost-controlled model:sonnet subagent regardless of the invoking session's model. The agent executes every adb-automatable step itself (launch, taps, text entry, screenshots, logcat) and verifies Expect from what it captures; the human is pulled in only for steps marked HUMAN: (gesture feel, camera/biometrics, real accounts, iOS). Sessions enqueue tests per forge standards/workflows.md → "Device-test queue"; this skill fetches every OPEN item, verifies the right build/OTA is on the connected device per app, runs or walks each test, and closes items by editing their Status line — filing failures instead of fixing mid-drain. Items that need a fresh native build (no OTA can reach them) get logged as `🔧 needs build` instead of tested — OTA-deliverable changes always test immediately, ad hoc or scheduled, never gated by a build cadence. Self-schedules a daily drain (9am local by default) that skips needs-build items, plus a separate weekly task that dispatches builds only for apps with a needs-build backlog (the one standing exception to the no-automatic-builds CI-spend rule). Use whenever the user asks to "drain the device test queue", "run device tests", "what needs testing on my phone", "device test session", passively "anything waiting on my phone?" — or on a schedule/idle moment whenever a device is adb-connected: agent-only items need no invitation. Empty queues everywhere is a valid, quiet result. Output is a wrap-up table: passed / failed→filed / needs-build→unblock / needs-human, with what unblocks each.
+description: Drains the per-repo "Device test queue" GitHub issues across all Tessellate mobile apps (alate, mood-layer, badige) — AGENT-FIRST, and always runs its actual work in a cost-controlled model:sonnet subagent regardless of the invoking session's model. The agent executes every adb-automatable step itself (launch, taps, text entry, screenshots, logcat) and verifies Expect from what it captures; the human is pulled in only for steps marked HUMAN: (gesture feel, camera/biometrics, real accounts, iOS). Sessions enqueue tests per forge standards/workflows.md → "Device-test queue"; this skill fetches every OPEN item, verifies the right build/OTA is on the connected device per app, runs or walks every step of each test and records a per-step outcome (a failed step never skips the independent ones; a step nobody ran reads as not run), and closes items by editing their Status line — filing failures instead of fixing mid-drain. Items that need a fresh native build (no OTA can reach them) get logged as `🔧 needs build` instead of tested — OTA-deliverable changes always test immediately, ad hoc or scheduled, never gated by a build cadence. Self-schedules a daily drain (9am local by default) that skips needs-build items, plus a separate weekly task that dispatches builds only for apps with a needs-build backlog (the one standing exception to the no-automatic-builds CI-spend rule). Use whenever the user asks to "drain the device test queue", "run device tests", "what needs testing on my phone", "device test session", passively "anything waiting on my phone?" — or on a schedule/idle moment whenever a device is adb-connected: agent-only items need no invitation. Empty queues everywhere is a valid, quiet result. Output is a wrap-up table: passed / failed→filed / needs-build→unblock / needs-human, with what unblocks each.
 ---
 
 # Device test drain
@@ -288,6 +288,36 @@ For each OPEN item on the current app:
    step + Expect verbatim (set `**Waiting on:** human — <what>` on your claim
    first); you keep watching logcat/screenshots around their action.
 
+   **Every step gets its own verdict; a failed step does not end the item.**
+   Steps are independent probes of the same PR unless the item says
+   otherwise, so after a step fails, run the next one and record what *it*
+   did. Stop early only when a step is genuinely **blocked** — the screen
+   can't be reached, the app won't launch, the build is wrong — and then
+   write the remaining steps down as `⏭ NOT RUN — blocked by step N`, never
+   leave them silent. A step prefixed `DEPENDS: step N` (the standard's
+   ordering marker; absent it, steps are independent) is skipped only when
+   step N failed, as `⏭ NOT RUN — depends on step N`. A `HUMAN:` step with
+   nobody to hand the phone to is `⏭ NOT RUN — needs human`; a step that
+   cannot exist on this platform is `⛔ N/A — <why, and where it can run>`.
+
+   Record the outcomes as a per-step table in the note (format and the
+   Status-line rule: standard → "Every step gets its own verdict"), not as
+   one word for the whole item. A step nobody ran must read as *not run* —
+   a reader who sees only `❌ failed → #694` on a five-step item assumes all
+   five were tested. *Precedent: alate #562 item 5526181662 — step 1 failed,
+   the drain stopped "rather than compound on a failed precondition", and
+   step 2 (a swipe) would have hard-crashed the app: every sift swipe had
+   killed it since PR #670 shipped four days earlier, and that queue item
+   was the only scheduled thing that would ever swipe that screen
+   (forge #100).*
+
+   **A crash seen mid-drain is its own finding, filed the moment you see
+   it** — even if it surfaced on a step that wasn't under test, or on an
+   item that had already failed. "No mid-drain fixes" is about not *fixing*;
+   it has never been about not *looking*. File it (regression-log row or
+   issue, per the app's rules), link it from the per-step table, and carry
+   on with the remaining steps if the app relaunches.
+
    **Every status edit moves two lines: the `**Status:**` line and the heading
    glyph** (⚪ passed, 🔴 failed, 🔧 needs build — table in the standard). One
    PATCH, both lines. A ⚪ heading over an OPEN item is worse than no glyph at
@@ -298,7 +328,9 @@ For each OPEN item on the current app:
    that's still missing, a PR/SHA correction. Not a new comment: notes live
    with the test they belong to (standard → "Notes go on the item, under a
    rule").
-2. **Pass** → edit the Status line and the heading (never delete, never new
+2. **Pass** (every step ✅, or ⛔ N/A with a named home — a ⏭ NOT RUN row is
+   not a pass; the item stays OPEN with the table saying what is left) →
+   edit the Status line and the heading (never delete, never new
    comment), then minimize the comment as Resolved so the queue doesn't grow
    unscrollable — see `standards/workflows.md` → "Device-test queue" for the
    GraphQL call (REST has no minimize endpoint):
@@ -307,9 +339,12 @@ For each OPEN item on the current app:
      -X PATCH -f body="<body with 🤖/🙋 → ⚪ in the heading and
                         Status: OPEN → ✅ done <date>>"
    ```
-3. **Fail** → capture what the user saw (their words + screenshot/logcat),
+3. **Fail** (any step in the table is ❌, whatever the others did) → capture
+   what was seen (screenshot/logcat; the user's words for a `HUMAN:` step),
    file it where the app's rules say — regression-log row via PR, or a GitHub
-   issue — and set `**Status:** ❌ failed → <link>`. **Do not fix mid-drain**:
+   issue — and set `**Status:** ❌ failed → <link>`. The per-step table stays
+   in the note, so the steps that passed and the ones that were not run
+   survive alongside the failure. **Do not fix mid-drain**:
    the sitting stays short; the fix is its own session with its own branch.
    **Do not minimize this comment** — the bug is still open regardless of
    where it's tracked now; hiding it under "Resolved" reads as handled and
@@ -364,6 +399,8 @@ same as the SessionStart hook.
   task (see "Self-scheduled automation") — narrower logic, its own task, not
   this skill's per-item loop.
 - **No mid-drain fixes** — failures get filed and linked, not debugged live.
+  Not fixing is not not looking: a crash that surfaces mid-drain is filed on
+  the spot, and the item's remaining steps still run (Step 3).
 - **No enqueueing** — writing queue items is the shipping session's job at
   ship time, when Steps and Expect are still warm (see the standard).
 - **Never deletes or rewrites queue comments** beyond the Status line.
