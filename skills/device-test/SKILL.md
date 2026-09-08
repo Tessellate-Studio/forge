@@ -267,8 +267,9 @@ untested for no stated reason.
      already skips it. It skips bot notices (`### 📦` OTA, `### 🔒` device
      claim, `### 🚧` work claim) outright, and it skips anything that is not
      an item in the first place — no item glyph in the heading, no
-     `**Steps:**`/`**Expect`, and no Status naming one of the four states.
-     A correction written like a document is still a correction.
+     `**Steps:**`/`**Expect:**` field (the colon matters: `**Expect
+     correction for item …**` is prose), and no Status naming one of the
+     four states. A correction written like a document is still a correction.
    - **Genuinely ambiguous** → leave it and say so in the wrap-up, with the
      comment URL and what is missing. That is the only case that reaches a
      human, and it should be rare.

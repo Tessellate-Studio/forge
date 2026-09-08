@@ -676,8 +676,11 @@ an item:
   explanatory drain notes into phantom malformed items.
 - **A heading is not, by itself, an item.** Three signals say "item", and any
   one is enough: the heading **opens with an item glyph** (🤖 🙋 🔧 ⚪ 🔴), the
-  body carries the **shape of a test** (`**Steps:**` / `**Expect`), or the
-  Status line **names one of the four states**. A comment with none of the
+  body carries the **shape of a test** (`**Steps:**` / `**Expect:**`, or its
+  legacy spelling `**Expected:**` — the colon is load-bearing, because a
+  sentence merely opening `**Expect correction for item …**` is prose, not
+  the field), or the Status line **names one of the four states**. A comment
+  with none of the
   three is commentary and is skipped, however carefully it is laid out —
   alate#562 comment 5571959196 is a drain correction with two `###` headings
   and a closing sentence opening `**Status:**` that explains, in prose, why a
