@@ -259,6 +259,13 @@ untested for no stated reason.
    - **A real test missing its Status line** → append `- **Status:** OPEN` so
      it enters the queue, then drain it this sitting like any other item. This
      is the common case: an item enqueued before the format settled.
+   - **More than one test in one comment** → split it: one comment per test,
+     each keeping its own heading, fields and Status, then reduce the original
+     to whatever prose was actually a correction (no Status line, so the
+     parser reads it as commentary). `dtq` reports these separately from the
+     malformed list, because the stacked tests have **no row at all** — the
+     comment's first heading is its title and its first Status line is its
+     state, so everything after the first test is filed as a note on it.
    - **A Status naming no defined state** (`CLOSED`, `🅿️ PARKED` — both real)
      → rewrite it to the value that matches what actually happened, and stamp
      the heading glyph with it. A state the format doesn't define is a state

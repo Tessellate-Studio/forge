@@ -102,6 +102,26 @@ function renderRepo(result, opts) {
   // Drift is cosmetic on the board (the Status line still decides state) but
   // not on the issue page, where the heading glyph is the only thing a human
   // scrolling past actually reads. Report the count; the drain restamps them.
+  // Louder than heading drift, and above it: drift is cosmetic, whereas a
+  // stacked comment means a test that IS NOT ON THIS BOARD. Its own row is
+  // printed normally below — the warning is about the ones underneath it.
+  const stacked = result.items.filter(i => i.itemHeadings > 1);
+  if (stacked.length > 0) {
+    const hidden = stacked.reduce((n, i) => n + i.itemHeadings - 1, 0);
+    lines.push(
+      chalk.magenta(
+        `  ⚠ ${hidden} test(s) are stacked inside another comment and have no row here — split them:`
+      )
+    );
+    stacked.forEach(i =>
+      lines.push(
+        `    ${chalk.dim(i.commentUrl)}${chalk.dim(
+          `  — ${i.itemHeadings} tests in one comment; the queue is one comment per test`
+        )}`
+      )
+    );
+  }
+
   const drifted = result.items.filter(
     i => i.state !== STATUS.UNPARSEABLE && i.headingDrift
   );

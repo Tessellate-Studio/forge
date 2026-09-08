@@ -32,6 +32,7 @@ const { gh, checkGhReady, slugRepo } = require(path.join(
   'lib',
   'claim.js'
 ));
+
 // maskCode rides along on this same require: it is a markdown utility, not a
 // claim concept, and the claim files are already its only other caller.
 const { minutesSince, maskCode } = require(path.join(
@@ -114,6 +115,31 @@ const ITEM_GLYPHS = Object.values(GLYPHS);
  * alternative is an item with a typo'd Status quietly leaving the board.
  */
 const ITEM_GLYPH_OPENER = new RegExp(`^\\s*(?:${ITEM_GLYPHS.join('|')})`);
+
+/** Every `### <item glyph>` heading in a body — one per test, or a problem. */
+const ITEM_HEADING = new RegExp(`^###\\s*(?:${ITEM_GLYPHS.join('|')})`, 'gm');
+
+/**
+ * How many tests this ONE comment is carrying.
+ *
+ * The format is one comment per test (standards/workflows.md → "Notes go on
+ * the item, under a rule"), and everything downstream assumes it: the title
+ * is the comment's first heading, the Status is its first Status line, and
+ * `notes` is whatever sits below the first rule after that. Stack two tests
+ * in one comment and the second is not a second row — it is filed as a NOTE
+ * on the first. Real shape, alate#562 comment 5589887980: a correction plus
+ * `budget-column-739` plus `gender-unisex-739`. The board showed one row,
+ * titled after the correction; the second test had no row at all, so nothing
+ * could run it, close it, or notice it was missing.
+ *
+ * Counted over a code-masked copy so a note QUOTING a heading — the same
+ * trap findStatus already sidesteps — is not mistaken for a second test.
+ */
+function itemHeadingCount(body) {
+  const masked = maskCode(body);
+  ITEM_HEADING.lastIndex = 0;
+  return (masked.match(ITEM_HEADING) || []).length;
+}
 
 /**
  * The state a `**Status:**` value names, or null when it names none of them.
@@ -384,6 +410,13 @@ function parseComment(comment) {
       : /HUMAN:/.test(fields),
     statusText,
     notes,
+
+    // >1 means this comment is hiding tests behind the one being reported —
+    // see itemHeadingCount. Carried on the item rather than turned into
+    // UNPARSEABLE on purpose: the FIRST test here is real, open and correctly
+    // parsed, and dropping it off the board to complain about the second
+    // would trade one invisible item for two.
+    itemHeadings: itemHeadingCount(body),
     commentUrl: comment.html_url,
     createdAt: comment.created_at,
   };
@@ -489,6 +522,7 @@ module.exports = {
   ITEM_GLYPHS,
   expectedGlyph,
   statusState,
+  itemHeadingCount,
   splitNotes,
 
   // Re-exported so callers get the whole queue surface from one require.
