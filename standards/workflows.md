@@ -644,6 +644,18 @@ boundary: **fields above it, notes below.** That boundary is what lets a note
 quote the item it discusses ("Expect is that the button does _not_ appear")
 without the quoted `**Status:**` silently reopening a closed test.
 
+**One comment per test is load-bearing, not tidiness.** A comment's title is
+its first heading, its Status is its first Status line, and its notes are
+whatever sits below the first rule after that — so a SECOND test stacked into
+the same comment is not a second row on the board. It is filed as a *note* on
+the first. On alate#562 comment 5589887980 a correction and two tests shared
+one comment: the board showed one row, titled after the correction, and
+`gender-unisex-739` had no row anywhere — nothing could run it, close it, or
+notice it was missing. `dtq` now counts the `### <glyph>` headings in each
+comment and says how many tests are hidden behind the one it is showing. The
+repair is to split them, each keeping its own heading, fields and Status
+(`skills/device-test/SKILL.md` → Step 0.3).
+
 The habit this replaces — a separate `_Drain note … for the item above_`
 comment — stops making sense the moment another item is enqueued between them,
 and it splits one test's history across the thread. Notes never carry a

@@ -3,6 +3,7 @@ const {
   parseComment,
   expectedGlyph,
   statusState,
+  itemHeadingCount,
 } = require('../scripts/queue-lib');
 
 // Every comment the parser sees was typed by a different session on a
@@ -519,5 +520,67 @@ describe('the Expect field, not a sentence that starts with "Expect"', () => {
     expect(
       parseComment(comment('### Re: 123\n**Expectations here were wrong.**'))
     ).toBeNull();
+  });
+});
+
+describe('one comment per test', () => {
+  const fx = require('../__fixtures__/queue-comments');
+
+  it('counts the tests stacked in one comment', () => {
+    // alate#562 5589887980: a correction plus two whole tests. The board is
+    // built on one-comment-per-test, so the second was filed as a NOTE on
+    // the first and had no row — invisible in the one place that tracks it.
+    const item = parseComment(fx.stackedItems);
+    expect(item.itemHeadings).toBe(2);
+  });
+
+  it('still reports the first test rather than dropping the comment', () => {
+    // The complaint must not cost the item. Turning a stacked comment
+    // UNPARSEABLE would trade one invisible test for two.
+    const item = parseComment(fx.stackedItems);
+    expect(item.state).toBe(STATUS.OPEN);
+    expect(item.title).toContain('Correction to');
+  });
+
+  it('leaves an ordinary one-test comment at one', () => {
+    const item = parseComment(
+      comment(
+        [
+          '### 🤖 5462960191 — Something',
+          ITEM_FIELDS,
+          '- **Status:** OPEN',
+        ].join('\n')
+      )
+    );
+    expect(item.itemHeadings).toBe(1);
+  });
+
+  it('does not count a heading a note merely quotes', () => {
+    // Same trap findStatus sidesteps: a drain note explaining what a heading
+    // should look like is documentation, not a second test.
+    const item = parseComment(
+      comment(
+        [
+          '### 🤖 5462960191 — Something',
+          ITEM_FIELDS,
+          '- **Status:** OPEN',
+          '',
+          '---',
+          '',
+          '**Note — 2026-09-09 · drain:** the heading should read',
+          '`### 🙋 5462960191 — Something` since every step is HUMAN:.',
+        ].join('\n')
+      )
+    );
+    expect(item.itemHeadings).toBe(1);
+  });
+
+  it('counts an unglyphed heading as prose, not a test', () => {
+    // Only a declared item heading counts. A legacy `### Foo` is one test
+    // wearing an unstamped heading, and a `### Re: …` is commentary.
+    expect(itemHeadingCount('### Foo\n### Bar')).toBe(0);
+    expect(itemHeadingCount('### 🙋 1 — a\n### ⚪ 2 — b\n### 🔴 3 — c')).toBe(
+      3
+    );
   });
 });
