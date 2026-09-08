@@ -79,6 +79,7 @@ const PROTOCOL = createClaimProtocol({
   glyph: '🔒',
   staleMinutes: HEARTBEAT_STALE_MINUTES,
   startedField: 'Claimed at',
+  subject: c => (c.device && c.device !== 'any' ? ` ${c.device}` : ''),
   fields: [{ name: 'Device', from: 'device', render: o => o.device || 'any' }],
   footer: ({ staleMinutes }) => [
     '_Written by /forge:device-test. The claim ends when its holder closes it:',
@@ -132,16 +133,7 @@ function claimBody(opts) {
 }
 
 /** One-line summary for the board / hook. Empty string when free. */
-function describeClaim(claim) {
-  if (!claim) {
-    return '';
-  }
-  const idle = claim.idleMinutes === null ? '?' : claim.idleMinutes;
-  const device =
-    claim.device && claim.device !== 'any' ? ` ${claim.device}` : '';
-  const parked = claim.waitingOnHuman ? `, waiting on ${claim.waitingOn}` : '';
-  return `🔒 device${device} claimed by ${claim.heldBy} (last touch ${idle} min ago${parked})`;
-}
+const describeClaim = PROTOCOL.describe;
 
 module.exports = {
   HEARTBEAT_STALE_MINUTES,

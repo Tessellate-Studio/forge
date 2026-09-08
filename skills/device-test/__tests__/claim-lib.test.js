@@ -215,7 +215,8 @@ describe('the one-line summary', () => {
     const line = describeClaim(parsed);
     expect(line).toContain('804KPSL1724518');
     expect(line).toContain('session-a');
-    expect(line).toContain('3 min');
+    // Shared vocabulary with the work claim and the board (humanIdle).
+    expect(line).toContain('3m ago');
   });
 
   it('says so when the holder is parked on a human', () => {

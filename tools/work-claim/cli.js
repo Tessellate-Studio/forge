@@ -39,8 +39,11 @@ const {
   collect,
   leakedItems,
   failedRepos,
+  mapWithLimit,
+  humanIdle,
+  claimDetails,
 } = require('./lib/claim');
-const { stripCode } = require('./lib/protocol');
+const { stripCode, NOT_WAITING } = require('./lib/protocol');
 
 /**
  * Every "is this claim mine?" test compares session ids. Outside Claude Code
@@ -74,16 +77,13 @@ function refuseAnonymous(action) {
   process.exit(2);
 }
 
-/** Minutes are unreadable past a few hours, and a claim may now legitimately
- *  be days old. */
-function humanIdle(minutes) {
-  if (minutes < 60) {
-    return `${minutes}m`;
+/** The same five lines opened board, scan and sweep. */
+async function requireGh() {
+  const ready = await checkGhReady();
+  if (!ready.ok) {
+    console.error(chalk.red(ready.message));
+    process.exit(1);
   }
-  if (minutes < 48 * 60) {
-    return `${Math.round(minutes / 60)}h`;
-  }
-  return `${Math.round(minutes / (24 * 60))}d`;
 }
 
 function clip(text, max) {
@@ -213,6 +213,15 @@ async function relatedRefs(repo, number) {
 
 /** Create the label if the repo has never had one. Idempotent — an existing
  *  label makes `gh label create` fail, which is not an error here. */
+function addLabel(repo, number) {
+  return gh([
+    'api',
+    `repos/${repo}/issues/${number}/labels`,
+    '-f',
+    `labels[]=${CLAIM_LABEL}`,
+  ]);
+}
+
 async function ensureLabel(repo) {
   try {
     await gh([
@@ -256,14 +265,10 @@ function renderRepo(result) {
   claimed.forEach(item => {
     const c = item.claim;
     const kind = item.isPr ? chalk.magenta('PR ') : chalk.cyan('ISS');
-    const idle = c.idleMinutes === null ? '?' : c.idleMinutes;
-
     // Idle is reported in the largest honest unit, and QUIET is not a
     // warning — multi-day work is normal, so only real silence is yellow.
-    const human = idle === '?' ? '?' : humanIdle(idle);
-    const idleText = c.quiet
-      ? chalk.yellow(`${human} idle`)
-      : chalk.gray(`${human} idle`);
+    const tint = c.quiet ? chalk.yellow : chalk.gray;
+    const idleText = tint(`${humanIdle(c.idleMinutes)} idle`);
     lines.push(
       `  ${kind} ${chalk.bold(`#${item.number}`)} ${clip(item.title, 46)}`
     );
@@ -272,20 +277,9 @@ function renderRepo(result) {
         c.waitingOnHuman ? chalk.yellow(`  ⏸ ${clip(c.waitingOn, 40)}`) : ''
       }`
     );
-    if (c.worktree) {
-      lines.push(`      ${chalk.gray(clip(c.worktree, 72))}`);
-    }
-    if (c.sessionId) {
-      lines.push(
-        `      ${chalk.gray(`resume: claude --resume ${c.sessionId}`)}`
-      );
-    }
-    if (c.related) {
-      lines.push(`      ${chalk.gray(`related: ${clip(c.related, 62)}`)}`);
-    }
-    if (c.docs) {
-      lines.push(`      ${chalk.gray(`docs: ${clip(c.docs, 66)}`)}`);
-    }
+    claimDetails(c).forEach(([label, value, width]) => {
+      lines.push(`      ${chalk.gray(label + clip(value, width))}`);
+    });
     lines.push(`      ${chalk.gray(item.url)}`);
   });
 
@@ -305,11 +299,7 @@ function renderRepo(result) {
 }
 
 async function board(opts) {
-  const ready = await checkGhReady();
-  if (!ready.ok) {
-    console.error(chalk.red(ready.message));
-    process.exit(1);
-  }
+  await requireGh();
 
   const results = await collect(opts.repo);
   const out = [];
@@ -365,11 +355,7 @@ async function board(opts) {
  * retrofit was careful to avoid.
  */
 async function scan(opts) {
-  const ready = await checkGhReady();
-  if (!ready.ok) {
-    console.error(chalk.red(ready.message));
-    process.exit(1);
-  }
+  await requireGh();
 
   const days = Number(opts.days || 3);
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
@@ -378,38 +364,41 @@ async function scan(opts) {
   );
 
   const rows = [];
-  for (const r of repos) {
+
+  // Parallel, and filtered server-side. The loop was sequential across six
+  // repos and pulled 50 full issue objects each only to discard most of
+  // them client-side; `since` is the same cutoff, applied by GitHub.
+  await mapWithLimit(repos, 5, async r => {
     try {
       const out = await gh([
         'api',
-        `repos/${r.repo}/issues?state=open&sort=updated&direction=desc&per_page=50`,
+        `repos/${r.repo}/issues?state=open&sort=updated&direction=desc` +
+          `&since=${since.toISOString()}&per_page=50`,
       ]);
-      JSON.parse(out || '[]').forEach(i => {
-        if (new Date(i.updated_at) < since) {
-          return;
-        }
-        const labels = (i.labels || []).map(l => l.name);
-        if (labels.includes(CLAIM_LABEL)) {
-          return; // already claimed — the board covers it
-        }
-        const bot =
-          i.user && (i.user.type === 'Bot' || /dependabot/i.test(i.user.login));
-        if (bot && !opts.all) {
-          return; // nobody is "working" a dependabot PR
-        }
-        rows.push({
-          key: r.key,
-          number: i.number,
-          title: i.title,
-          isPr: Boolean(i.pull_request),
-          updatedAt: i.updated_at,
-          url: i.html_url,
+      JSON.parse(out || '[]')
+        .filter(i => !(i.labels || []).some(l => l.name === CLAIM_LABEL))
+        .filter(
+          i =>
+            opts.all ||
+            !(
+              i.user &&
+              (i.user.type === 'Bot' || /dependabot/i.test(i.user.login))
+            )
+        )
+        .forEach(i => {
+          rows.push({
+            key: r.key,
+            number: i.number,
+            title: i.title,
+            isPr: Boolean(i.pull_request),
+            updatedAt: i.updated_at,
+            url: i.html_url,
+          });
         });
-      });
     } catch (error) {
       console.error(chalk.red(`${r.key}: ${error.message}`));
     }
-  }
+  });
 
   if (rows.length === 0) {
     console.log(
@@ -469,11 +458,7 @@ async function scan(opts) {
  * went quiet.
  */
 async function sweep(opts) {
-  const ready = await checkGhReady();
-  if (!ready.ok) {
-    console.error(chalk.red(ready.message));
-    process.exit(1);
-  }
+  await requireGh();
 
   // state: 'all' — the leak that matters most sits on a MERGED PR, which
   // is closed, and the default open-only query cannot see it.
@@ -551,7 +536,10 @@ async function claim(target, opts) {
   // `--worktree none` for a branch that exists only on origin: better an
   // explicit "none" than a path that is not on this branch.
   if (opts.worktree) {
-    me.worktree = /^(?:none|-|—)$/i.test(opts.worktree) ? null : opts.worktree;
+    // NOT_WAITING is the one place "this value means nothing" is spelled.
+    // A local copy here silently accepted `--worktree nothing` as a literal
+    // path while rejecting `--worktree none`.
+    me.worktree = NOT_WAITING.test(opts.worktree) ? null : opts.worktree;
   }
 
   if (live && !isMine(live, me) && !opts.force) {
@@ -590,7 +578,6 @@ async function claim(target, opts) {
     waitingOn: opts.waitingOn,
   });
 
-  await ensureLabel(repo);
   await gh([
     'api',
     `repos/${repo}/issues/${number}/comments`,
@@ -598,25 +585,29 @@ async function claim(target, opts) {
     `body=${body}`,
   ]);
 
-  // The comment is the claim; the label is only what makes the board listable
-  // in one request. A repo where labelling fails (no write access to labels, a
-  // fork PR) must still end up with a posted claim — losing the claim over a
-  // cosmetic index would be the worse failure — but the caller has to hear that
-  // `wip` will not show it.
+  // The comment is the claim; the label is only what makes the board
+  // listable in one request. A repo where labelling fails (no write access
+  // to labels, a fork PR) must still end up with a posted claim — losing the
+  // claim over a cosmetic index would be the worse failure — but the caller
+  // has to hear that `wip` will not show it.
+  //
+  // Add first, create only on failure: the label exists after the first
+  // claim in a repo, so `gh label create` was a guaranteed-wasted subprocess
+  // on every claim after that one.
   try {
-    await gh([
-      'api',
-      `repos/${repo}/issues/${number}/labels`,
-      '-f',
-      `labels[]=${CLAIM_LABEL}`,
-    ]);
-  } catch (error) {
+    await addLabel(repo, number);
+  } catch {
+    try {
+      await ensureLabel(repo);
+      await addLabel(repo, number);
+    } catch (error) {
     console.error(
       chalk.yellow(
-        `Claim posted, but adding the "${CLAIM_LABEL}" label to ${repo}#${number} failed: ` +
-          `${error.message}. The board will not list it until the label is added.`
-      )
-    );
+          `Claim posted, but adding the "${CLAIM_LABEL}" label to ${repo}#${number} failed: ` +
+            `${error.message}. The board will not list it until the label is added.`
+        )
+      );
+    }
   }
 
   console.log(chalk.green(`🚧 Claimed ${repo}#${number} as ${me.heldBy}.`));
@@ -791,7 +782,7 @@ program
     'issues/PRs to link (default: discovered from the body + cross-references)'
   )
   .option(
-    '-w, --worktree <path>',
+    '-W, --worktree <path>',
     'worktree path, or "none" for a branch that only exists on origin'
   )
   .option('-f, --force', 'take over a live claim held by another session')
@@ -802,7 +793,6 @@ program
   .description(
     'Refresh the heartbeat on your claim (run at each commit/push/phase)'
   )
-  .option('-b, --branch <name>', 'branch (defaults to the current one)')
   .option(
     '-d, --doc <path...>',
     'add a planning doc / RFD link (merged, never replaced)'
@@ -816,7 +806,6 @@ program
 program
   .command('release <target>')
   .description('Release your claim — RELEASED, unlabelled, minimized')
-  .option('-b, --branch <name>', 'branch (defaults to the current one)')
   .option('-a, --all', "release every live claim, not just this session's")
   .action((target, opts) => release(target, opts).catch(fail));
 

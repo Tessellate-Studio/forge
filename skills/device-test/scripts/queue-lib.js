@@ -6,8 +6,7 @@
 // Parses the fixed comment format from standards/workflows.md → "Device-test
 // queue" — keep both in sync if that format changes.
 
-const { execFile } = require('child_process');
-const { promisify } = require('util');
+const path = require('path');
 
 const {
   CLAIM_MARKER,
@@ -15,8 +14,6 @@ const {
   parseClaim,
   activeClaim,
 } = require('./claim-lib');
-
-const execFileAsync = promisify(execFile);
 
 // Scope table — keep in sync with skills/device-test/SKILL.md.
 const REPOS = [
@@ -104,32 +101,23 @@ function splitNotes(body) {
   };
 }
 
-async function gh(args) {
-  const { stdout } = await execFileAsync('gh', args, {
-    encoding: 'utf8',
-    maxBuffer: 20 * 1024 * 1024,
-  });
-  return stdout;
-}
-
-async function checkGhReady() {
-  try {
-    await execFileAsync('gh', ['auth', 'status'], { encoding: 'utf8' });
-    return { ok: true };
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      return {
-        ok: false,
-        message:
-          'gh CLI not found. Install it from https://cli.github.com/ and run `gh auth login`.',
-      };
-    }
-    return {
-      ok: false,
-      message: 'gh CLI is not authenticated. Run `gh auth login` first.',
-    };
-  }
-}
+// gh() and checkGhReady() come from the work-claim lib rather than being
+// declared again here. The copy that used to live in this file was
+// character-identical EXCEPT that it never passed `timeout` — and this
+// tree is exactly where that matters: hooks/device-test-status.mjs races
+// collect() against a deadline, and Promise.race does not cancel the
+// loser, so a slow fetch left gh children running after the hook exited.
+// The reasoning was written down once, in the module that did not need it.
+const { gh, checkGhReady } = require(path.join(
+  __dirname,
+  '..',
+  '..',
+  '..',
+  'tools',
+  'work-claim',
+  'lib',
+  'claim.js'
+));
 
 function parseComment(comment) {
   const body = comment.body || '';

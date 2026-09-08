@@ -69,6 +69,23 @@ function stripCode(markdown) {
     .replace(/^ {4,}\S.*$/gm, ' ');
 }
 
+/**
+ * Idle time in the largest honest unit. Minutes stop being readable within
+ * a shift, and a work claim may legitimately be days old.
+ */
+function humanIdle(minutes) {
+  if (minutes === null || minutes === undefined) {
+    return '?';
+  }
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+  if (minutes < 48 * 60) {
+    return `${Math.round(minutes / 60)}h`;
+  }
+  return `${Math.round(minutes / (24 * 60))}d`;
+}
+
 function minutesSince(iso) {
   const parsed = iso ? Date.parse(iso) : NaN;
   return Number.isNaN(parsed)
@@ -191,9 +208,33 @@ function createClaimProtocol(spec) {
     };
 
     fields.forEach(f => {
-      parsed[f.from] = f.parse ? f.parse(body, field) : field(body, f.name);
+      parsed[f.from] = field(body, f.name);
     });
     return parsed;
+  }
+
+  /**
+   * One-line summary for a board or a hook. Empty string when free.
+   *
+   * This was the last entry on this module's own list of things the two
+   * claims share (see the header) that had NOT been absorbed — and it had
+   * already forked: the two copies drifted on units, one printing
+   * "last touch 4300 min ago" where the board rendered "3d idle". A comment
+   * in hooks/work-claims.mjs argued the phrasing must not fork into two
+   * vocabularies; it was arguing against code that made forking the
+   * default. `subject` is the only part that legitimately differs.
+   */
+  function describe(claim) {
+    if (!claim) {
+      return '';
+    }
+    const where = spec.subject ? spec.subject(claim) : '';
+    const parked = claim.waitingOnHuman
+      ? `, waiting on ${claim.waitingOn}`
+      : '';
+    return `${glyph} claimed by ${claim.heldBy}${where} (last touch ${humanIdle(
+      claim.idleMinutes
+    )} ago${parked})`;
   }
 
   /** The live holder, or null when the item is free (decision 2 in the header). */
@@ -242,6 +283,7 @@ function createClaimProtocol(spec) {
   }
 
   return {
+    describe,
     HEADING: heading,
     GLYPH: glyph,
     STALE_MINUTES: staleMinutes,
@@ -257,6 +299,7 @@ function createClaimProtocol(spec) {
 
 module.exports = {
   NOT_WAITING,
+  humanIdle,
   stripCode,
   NOTICE_GLYPHS,
   noticeMarker,

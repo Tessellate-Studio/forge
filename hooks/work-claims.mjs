@@ -28,7 +28,7 @@ const TIMEOUT_MS = 12_000;
 
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
-const { STALE_MINUTES, collect, describeClaim } = require(
+const { STALE_MINUTES, collect, describeClaim, claimDetails } = require(
   path.join(here, '..', 'tools', 'work-claim', 'lib', 'claim.js')
 );
 
@@ -67,15 +67,13 @@ async function main() {
         // is parked on" phrasing lives — the `wip` board and this hook must not
         // drift into two different vocabularies for the same state.
         const parts = [`- ${where} ${item.title} — ${describeClaim(c)}`];
-        if (c.sessionId) {
-          parts.push(`  resume: claude --resume ${c.sessionId}`);
-        }
-        if (c.worktree) {
-          parts.push(`  worktree: ${c.worktree}`);
-        }
-        if (c.docs) {
-          parts.push(`  docs: ${c.docs}`);
-        }
+
+        // Same rows the board prints, same order, from one definition —
+        // this block used to be a hand-kept copy and had already lost
+        // `related`.
+        claimDetails(c).forEach(([label, value]) => {
+          parts.push(`  ${label}${value}`);
+        });
         parts.push(`  ${item.url}`);
         live.push(parts.join('\n'));
       } else if (item.claims.some(c => c.held)) {

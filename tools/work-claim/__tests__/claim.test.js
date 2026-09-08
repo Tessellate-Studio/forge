@@ -234,7 +234,10 @@ describe('describeClaim', () => {
     const line = describeClaim(parseClaim(held({ lastTouch: minutesAgo(7) })));
     expect(line).toContain('session-a');
     expect(line).toContain('feat/x');
-    expect(line).toMatch(/7 min/);
+    // One vocabulary for idle across the board, the hook and both claim
+    // variants: humanIdle in protocol.js. It used to be raw minutes here and
+    // "3d" on the board — the same state, said two ways.
+    expect(line).toMatch(/7m ago/);
   });
 
   it('says what a parked claim is waiting on', () => {

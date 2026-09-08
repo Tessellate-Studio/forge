@@ -33,6 +33,7 @@ const os = require('os');
 
 const {
   NOT_WAITING,
+  humanIdle,
   field,
   setField,
   minutesSince,
@@ -103,6 +104,7 @@ const PROTOCOL = createClaimProtocol({
   glyph: '🚧',
   staleMinutes: STALE_MINUTES,
   startedField: 'Started at',
+  subject: c => (c.branch ? ` on \`${c.branch}\`` : ''),
   fields: [
     {
       name: 'Session',
@@ -234,11 +236,12 @@ function parseClaim(comment) {
       ? null
       : worktreePath;
 
-  const docsRaw = parsed.docsRaw || '—';
-  parsed.docs = NOT_WAITING.test(docsRaw) ? '' : docsRaw;
-
-  const relatedRaw = parsed.relatedRaw || '—';
-  parsed.related = NOT_WAITING.test(relatedRaw) ? '' : relatedRaw;
+  // Same shape for both: a list field renders as a comma string and reads
+  // back as one, with the placeholder dash meaning empty.
+  ['docs', 'related'].forEach(key => {
+    const raw = parsed[`${key}Raw`] || '—';
+    parsed[key] = NOT_WAITING.test(raw) ? '' : raw;
+  });
   return parsed;
 }
 
@@ -265,24 +268,26 @@ function touchBody(body, opts = {}) {
         .split(',')
         .map(d => d.trim())
         .filter(Boolean);
-  const merged = [...kept];
-  adding.forEach(d => {
-    if (!merged.includes(d)) {
-      merged.push(d);
-    }
-  });
+  const merged = [...new Set([...kept, ...adding])];
   return setField(out, 'Docs', merged.join(', '), 'Waiting on');
 }
 
-/** One-line summary for the board / hook. Empty string when free. */
-function describeClaim(claim) {
-  if (!claim) {
-    return '';
-  }
-  const idle = claim.idleMinutes === null ? '?' : claim.idleMinutes;
-  const where = claim.branch ? ` on \`${claim.branch}\`` : '';
-  const parked = claim.waitingOnHuman ? `, waiting on ${claim.waitingOn}` : '';
-  return `🚧 claimed by ${claim.heldBy}${where} (last touch ${idle} min ago${parked})`;
+const describeClaim = PROTOCOL.describe;
+
+/**
+ * The detail rows under a claim — `[label, value, width]`, empties dropped.
+ *
+ * Shared because it had already drifted: `related` was added to the board
+ * and not to the SessionStart hook, one line below a comment arguing that
+ * the two must not describe the same state differently.
+ */
+function claimDetails(claim) {
+  return [
+    ['', claim.worktree, 72],
+    ['resume: claude --resume ', claim.sessionId, 200],
+    ['related: ', claim.related, 62],
+    ['docs: ', claim.docs, 66],
+  ].filter(row => row[1]);
 }
 
 /** Every gh call is bounded. Promise.race does NOT cancel the loser, so
@@ -354,10 +359,15 @@ function withItemActivity(claims, updatedAt) {
     return claims;
   }
   return claims.map(claim => {
-    const idleMinutes =
-      claim.idleMinutes === null
-        ? itemIdle
-        : Math.min(claim.idleMinutes, itemIdle);
+    // Item activity may only ever LOWER a real idle number. An unreadable
+    // `Last touch` stays null, because protocol.js decided once that it
+    // reads as stale — quietly turning it into "as fresh as the thread"
+    // here would reverse that decision one layer up, which is the exact
+    // drift the shared protocol exists to end.
+    if (claim.idleMinutes === null) {
+      return claim;
+    }
+    const idleMinutes = Math.min(claim.idleMinutes, itemIdle);
     return {
       ...claim,
       idleMinutes,
@@ -546,6 +556,8 @@ module.exports = {
   touchBody,
   releaseBody,
   describeClaim,
+  claimDetails,
+  humanIdle,
   gh,
   mapWithLimit,
   checkGhReady,
