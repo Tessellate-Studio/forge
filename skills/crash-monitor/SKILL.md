@@ -267,6 +267,19 @@ Body:
 
 Labels: `crash-monitor`, `needs-triage`.
 
+**A manual step that sends the human to a vendor's support channel must name
+a channel that exists for the account.** Check the tier with one call before
+writing the step (Vercel: `list_teams` → `plan`; Hobby has no support tickets
+at all, only community.vercel.com), and write the channel that is actually
+open — a community post, a GitHub issue on the vendor's repo, or "upgrade to
+<tier> for email support". A "file a support ticket" step on a tier without
+tickets is a step nobody can take, and it reads as done-pending-human while
+the fault sits for days. *Precedent: litmus#37 (2026-09-05) told a human to
+file a Vercel support ticket for a loop fault on a Hobby team; three days
+later the first thing the pickup session established was that the ticket
+form does not exist for that plan.* The same rule covers "escalate to <vendor>
+support" in the alert text of an ops-watchdog issue.
+
 Push-notify: `"Config issue needs manual action — <repo>: <short description>. <1-2 sentence explanation of what needs doing>."`
 
 ## Step 5: Summary
