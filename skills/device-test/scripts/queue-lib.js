@@ -23,6 +23,11 @@ const REPOS = [
   { key: 'alate', repo: 'Tessellate-Studio/alate' },
   { key: 'mood-layer', repo: 'Tessellate-Studio/mood-layer' },
   { key: 'badige', repo: 'Tessellate-Studio/badige' },
+
+  // loom is a Shopify web surface, not a handset: its items are verified in a
+  // browser (SKILL.md → "loom is in scope"). It still owns a device-test-queue
+  // issue, so the board must count it or the queue accumulates unseen.
+  { key: 'loom', repo: 'Tessellate-Studio/loom' },
 ];
 
 const STATUS = {
