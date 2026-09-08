@@ -62,6 +62,16 @@ module.exports = {
     eqeqeq: ['error', 'always'],
     curly: ['error', 'all'],
 
+    // eslint-config-prettier switches these three off with the formatting
+    // rules, but they are not formatting — they catch real bugs prettier
+    // neither fixes nor flags. no-unexpected-multiline is the ASI trap
+    // (`const a = b` newline `(c)()` silently becomes a call); the other
+    // two are genuine syntax smells. Re-enabled deliberately, the same way
+    // curly is.
+    'no-unexpected-multiline': 'error',
+    'no-extra-semi': 'error',
+    'no-mixed-spaces-and-tabs': 'error',
+
     // Async/await best practices
     'prefer-promise-reject-errors': 'error',
     'no-return-await': 'error',

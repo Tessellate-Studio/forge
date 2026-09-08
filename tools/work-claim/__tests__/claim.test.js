@@ -717,3 +717,40 @@ describe('an unread repo is not a clean repo', () => {
     expect(failedRepos(null)).toEqual([]);
   });
 });
+
+describe('an unreadable claim is never swept', () => {
+  const { isLeaked, withItemActivity } = require('../lib/claim');
+
+  // A held claim whose Last touch cannot be parsed reads as stale, so the
+  // board does not wedge on a typo. But the SWEEP acts on that, and stripping
+  // the label off an item somebody is actively pushing to — because a
+  // timestamp got mangled — is the one thing it must never do.
+  const unreadable = () =>
+    parseClaim(held({ lastTouch: 'NOT-A-DATE', startedAt: 'ALSO-BAD' }));
+
+  it('leaves an open item alone when its claim cannot be read', () => {
+    const claims = withItemActivity([unreadable()], new Date().toISOString());
+    expect(claims[0].idleMinutes).toBeNull();
+    expect(isLeaked({ closed: false }, claims, null)).toBe(false);
+  });
+
+  it('still sweeps an open item whose claim is readable and genuinely silent', () => {
+    const silent = parseClaim(
+      held({ lastTouch: minutesAgo(STALE_MINUTES * 3) })
+    );
+    expect(isLeaked({ closed: false }, [silent], null)).toBe(true);
+  });
+
+  it('still sweeps a closed item, unreadable or not', () => {
+    expect(isLeaked({ closed: true }, [unreadable()], null)).toBe(true);
+  });
+});
+
+describe('describeClaim reads as a sentence', () => {
+  it('names the branch after the holder for a work claim', () => {
+    const line = describeClaim(parseClaim(held({ lastTouch: minutesAgo(3) })));
+    expect(line).toBe(
+      '🚧 claimed by session-a on `feat/x` (last touch 3m ago)'
+    );
+  });
+});

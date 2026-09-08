@@ -64,7 +64,8 @@ const PROTOCOL = createClaimProtocol({
   glyph: '🔒',
   staleMinutes: HEARTBEAT_STALE_MINUTES,
   startedField: 'Claimed at',
-  subject: c => (c.device && c.device !== 'any' ? ` ${c.device}` : ''),
+  subjectBefore: c =>
+    c.device && c.device !== 'any' ? ` device ${c.device}` : ' device',
   fields: [{ name: 'Device', from: 'device', render: o => o.device || 'any' }],
   footer: ({ staleMinutes }) => [
     '_Written by /forge:device-test. The claim ends when its holder closes it:',

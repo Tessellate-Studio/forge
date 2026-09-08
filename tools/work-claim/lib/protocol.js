@@ -154,7 +154,9 @@ function setField(body, name, value, before) {
  * @param {string} spec.glyph        e.g. '🚧'
  * @param {number} spec.staleMinutes silence after which the holder is presumed gone
  * @param {string} spec.startedField the "when was this taken" field name
- * @param {Array}  spec.fields       ordered extra fields: {name, from, render}
+ * @param {Array}  spec.fields       ordered extra fields. `render` is
+ *   REQUIRED on each — there is no fallback, so a `{name, from}` field
+ *   throws at render time rather than emitting something half-formed.
  * @param {function} [spec.footer]   body footer lines, given the variant
  */
 function createClaimProtocol(spec) {
@@ -252,13 +254,20 @@ function createClaimProtocol(spec) {
     if (!claim) {
       return '';
     }
-    const where = spec.subject ? spec.subject(claim) : '';
+
+    // The subject sits in a DIFFERENT place per variant, and collapsing
+    // that to one position broke the device line: it read "🔒 claimed by
+    // session-a 804KPSL…", as though the holder were named after the
+    // handset. The device names its subject before the holder, the work
+    // claim after it; everything else is shared.
+    const lead = spec.subjectBefore ? spec.subjectBefore(claim) : '';
+    const trail = spec.subjectAfter ? spec.subjectAfter(claim) : '';
     const parked = claim.waitingOnHuman
       ? `, waiting on ${claim.waitingOn}`
       : '';
-    return `${glyph} claimed by ${claim.heldBy}${where} (last touch ${humanIdle(
-      claim.idleMinutes
-    )} ago${parked})`;
+    return `${glyph}${lead} claimed by ${
+      claim.heldBy
+    }${trail} (last touch ${humanIdle(claim.idleMinutes)} ago${parked})`;
   }
 
   /** The live holder, or null when the item is free (decision 2 in the header). */

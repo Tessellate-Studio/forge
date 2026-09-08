@@ -103,7 +103,7 @@ const PROTOCOL = createClaimProtocol({
   glyph: '🚧',
   staleMinutes: STALE_MINUTES,
   startedField: 'Started at',
-  subject: c => (c.branch ? ` on \`${c.branch}\`` : ''),
+  subjectAfter: c => (c.branch ? ` on \`${c.branch}\`` : ''),
   fields: [
     {
       name: 'Session',
@@ -286,7 +286,7 @@ const describeClaim = PROTOCOL.describe;
  */
 function claimDetails(claim) {
   return [
-    ['', claim.worktree, 72],
+    ['worktree: ', claim.worktree, 72],
     ['resume: claude --resume ', claim.sessionId, 200],
     ['related: ', claim.related, 62],
     ['docs: ', claim.docs, 66],
@@ -339,7 +339,21 @@ async function checkGhReady() {
  *   ignore the sweep.
  */
 function isLeaked(item, claims, active) {
-  return item.closed ? (claims || []).some(c => c.held) : !active;
+  if (item.closed) {
+    return (claims || []).some(c => c.held);
+  }
+
+  // An UNREADABLE claim is unknown, not abandoned.
+  //
+  // A held claim whose `Last touch` cannot be parsed has idleMinutes null,
+  // and the protocol reads that as stale so it never wedges an item
+  // forever. That is the right call for the BOARD — but the sweep acts on
+  // it, and "stale" here would mean stripping the label off work somebody
+  // is actively pushing to, purely because a timestamp got mangled. The
+  // rule one function up already says an item we could not FETCH is not a
+  // leaked one; an item we could not READ is the same thing.
+  const unreadable = (claims || []).some(c => c.held && c.idleMinutes === null);
+  return !active && !unreadable;
 }
 
 /**
