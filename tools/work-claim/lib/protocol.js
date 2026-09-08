@@ -99,6 +99,19 @@ function clip(text, max) {
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
 
+/**
+ * Is this comment an automated notice rather than a queue item?
+ *
+ * Ask the question; never hold the regex. The glyph set fills in as claim
+ * variants load, so a caller that destructures a marker at import time
+ * snapshots whichever variants happened to load first — which is exactly
+ * how 🚧 work claims briefly went back to filing as malformed device-test
+ * items when the require that had been forcing that order was removed.
+ */
+function isNotice(body) {
+  return noticeMarker().test(String(body || ''));
+}
+
 function minutesSince(iso) {
   const parsed = iso ? Date.parse(iso) : NaN;
   return Number.isNaN(parsed)
@@ -315,6 +328,7 @@ module.exports = {
   stripCode,
   NOTICE_GLYPHS,
   noticeMarker,
+  isNotice,
   minutesSince,
   field,
   setField,

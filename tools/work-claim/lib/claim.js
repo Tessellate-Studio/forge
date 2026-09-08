@@ -115,7 +115,7 @@ const PROTOCOL = createClaimProtocol({
         // disk — knows WHERE the work is but not WHICH session holds it.
         // Printing a resume command that cannot work would be worse than
         // saying so: the next agent would run it and get nothing.
-        if (!o.sessionId || o.sessionId === 'unknown') {
+        if (!o.sessionId) {
           return `session not identified — reconstructed from the live worktree on ${host}`;
         }
         return `\`claude --resume ${o.sessionId}\` on ${host}`;
@@ -194,12 +194,16 @@ function identity(opts = {}) {
   const cwd = opts.cwd || process.cwd();
   const host = opts.host || os.hostname();
   const branch = opts.branch || null;
-  const sessionId = env.CLAUDE_CODE_SESSION_ID || 'unknown';
+
+  // null, not the string "unknown". parseClaim already yields null for an
+  // unidentified claim, so two values meant the same thing and were tested
+  // inconsistently in two modules — every check is now just truthiness.
+  const sessionId = env.CLAUDE_CODE_SESSION_ID || null;
 
   // A short, human-readable holder name. The branch is the most legible
   // handle another agent has ("who is on feat/x?"); the session-id tail
   // disambiguates two sessions on one branch.
-  const tail = sessionId === 'unknown' ? host : sessionId.slice(0, 8);
+  const tail = sessionId ? sessionId.slice(0, 8) : host;
   const heldBy = branch ? `${branch} (${tail})` : `session ${tail}`;
   return { heldBy, sessionId, host, worktree: cwd, branch };
 }
@@ -450,43 +454,9 @@ async function fetchRepoClaims(repoDef, opts = {}) {
     return { ...repoDef, error: error.message || String(error), items: [] };
   }
 
-  // One gh subprocess per claimed item, so an unbounded Promise.all would
-  // spawn as many processes as the org has claims — on session start, on
-  // every machine. Cap the concurrency instead; the board is small, and the
-  // cap is what keeps its worst case constant rather than proportional.
-  const withClaims = await mapWithLimit(
-    items,
-    FETCH_CONCURRENCY,
-    async item => {
-      try {
-        const out = await gh(['api', item.commentsUrl, '--paginate']);
-        const claims = withItemActivity(
-          JSON.parse(out || '[]')
-            .map(parseClaim)
-            .filter(Boolean),
-          item.updatedAt
-        );
-        const claim = activeClaim(claims);
-
-        // A closed item with any claim on it is leaked regardless of
-        // staleness: the work is over, so nothing is legitimately held.
-        const leaked = isLeaked(item, claims, claim);
-        return { ...item, claim, claims, leaked };
-      } catch (error) {
-        // Unknown, NOT leaked — sweeping on a failed fetch would strip the
-        // label off live work, which is the one thing the sweep must never do.
-        return {
-          ...item,
-          claim: null,
-          claims: [],
-          leaked: false,
-          error: error.message,
-        };
-      }
-    }
-  );
-
-  return { ...repoDef, items: withClaims };
+  // Listing only. Reading each item's comments is the caller's job, so
+  // that ONE budget covers every repo — see collect().
+  return { ...repoDef, items };
 }
 
 /**
@@ -504,7 +474,49 @@ async function collect(repoFilter, opts = {}, env = process.env) {
       `Unknown repo "${repoFilter}". Known: ${all.map(r => r.key).join(', ')}`
     );
   }
-  return Promise.all(targets.map(r => fetchRepoClaims(r, opts)));
+
+  const results = await mapWithLimit(targets, FETCH_CONCURRENCY, r =>
+    fetchRepoClaims(r, opts)
+  );
+
+  // ONE budget for the comment fetches, across every repo.
+  //
+  // Each repo used to build its own mapWithLimit, so the cap was per-repo:
+  // six repos × five meant up to THIRTY concurrent gh processes on every
+  // session start, and the comment claiming it "keeps the worst case
+  // constant" was describing a number that scaled with the repo list.
+  // Flattening first is the whole fix — the cap now means what it says.
+  const pending = [];
+  results.forEach(r => {
+    if (r.error) {
+      return;
+    }
+    r.items.forEach(item => pending.push({ repo: r.repo, item }));
+  });
+
+  await mapWithLimit(pending, FETCH_CONCURRENCY, async ({ item }) => {
+    try {
+      const out = await gh(['api', item.commentsUrl, '--paginate']);
+      const claims = withItemActivity(
+        JSON.parse(out || '[]')
+          .map(parseClaim)
+          .filter(Boolean),
+        item.updatedAt
+      );
+      item.claim = activeClaim(claims);
+      item.claims = claims;
+      item.leaked = isLeaked(item, claims, item.claim);
+    } catch (error) {
+      // Unknown, NOT leaked — sweeping on a failed fetch would strip the
+      // label off live work, which is the one thing the sweep must never do.
+      item.claim = null;
+      item.claims = [];
+      item.leaked = false;
+      item.error = error.message;
+    }
+  });
+
+  return results;
 }
 
 /**

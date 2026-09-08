@@ -234,6 +234,7 @@ describe('describeClaim', () => {
     const line = describeClaim(parseClaim(held({ lastTouch: minutesAgo(7) })));
     expect(line).toContain('session-a');
     expect(line).toContain('feat/x');
+
     // One vocabulary for idle across the board, the hook and both claim
     // variants: humanIdle in protocol.js. It used to be raw minutes here and
     // "3d" on the board — the same state, said two ways.
@@ -261,14 +262,18 @@ describe('identity', () => {
     expect(id.worktree).toBe('C:/repos/alate/wt');
   });
 
-  it('degrades to unknown rather than throwing when the env is bare', () => {
+  it('reports NO session id rather than throwing when the env is bare', () => {
     const id = identity({
       env: {},
       cwd: 'C:/repos/alate',
       branch: null,
       host: 'HOST-1',
     });
-    expect(id.sessionId).toBe('unknown');
+
+    // null, not the string 'unknown' — parseClaim already yields null for an
+    // unidentified claim, and two spellings of the same state were being
+    // tested inconsistently across two modules.
+    expect(id.sessionId).toBeNull();
     expect(id.heldBy).toBeTruthy();
   });
 });
@@ -425,14 +430,14 @@ describe('a reconstructed claim admits what it does not know', () => {
   it('never prints a resume command it cannot back up', () => {
     const body = claimBody({
       heldBy: 'fix/x (HOST-1)',
-      sessionId: 'unknown',
+      sessionId: null,
       host: 'HOST-1',
       worktree: 'C:/repos/alate/wt',
       branch: 'fix/x',
       at: '2026-09-07T10:00:00.000Z',
     });
     expect(body).toContain('session not identified');
-    expect(body).not.toContain('claude --resume unknown');
+    expect(body).not.toContain('claude --resume');
 
     // The parts it DOES know are still the point of the claim.
     const p = parseClaim({ id: 1, body });

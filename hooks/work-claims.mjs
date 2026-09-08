@@ -34,13 +34,14 @@ const {
   describeClaim,
   claimDetails,
 } = require(path.join(here, '..', 'tools', 'work-claim', 'lib', 'claim.js'));
-
-function timeout(ms) {
-  return new Promise(resolve => setTimeout(() => resolve(null), ms));
-}
+const { emit, withDeadline, runHook, disabled } = require(path.join(
+  here,
+  'lib',
+  'session-start.js'
+));
 
 async function main() {
-  if (/^(1|true|yes|on)$/i.test(process.env.FORGE_WORK_CLAIMS_DISABLE ?? '')) {
+  if (disabled(process.env.FORGE_WORK_CLAIMS_DISABLE)) {
     return;
   }
 
@@ -50,7 +51,7 @@ async function main() {
   // No `gh auth status` preflight either: every fetch already degrades to
   // `{error, items: []}` on an unauthenticated gh, and this hook skips those
   // silently — so the probe bought nothing and cost a full serial round trip.
-  const results = await Promise.race([collect(), timeout(TIMEOUT_MS)]);
+  const results = await withDeadline(collect(), TIMEOUT_MS);
   if (!results) {
     return; // timed out — degrade silently, never slow session start
   }
@@ -112,26 +113,14 @@ async function main() {
     );
   }
 
-  // additionalContext MUST be nested under hookSpecificOutput with a
-  // hookEventName — a top-level additionalContext key is silently ignored,
-  // so the model never sees it. Same shape as device-test-status.mjs.
-  process.stdout.write(
-    JSON.stringify({
-      systemMessage: `work claims: ${summary} — run \`wip\` for the board`,
-      hookSpecificOutput: {
-        hookEventName: 'SessionStart',
-        additionalContext:
-          `${sections.join('\n\n')}\n` +
-          `This is informational only — don't act on it unless the user asks. ` +
-          `Run \`wip\` for the live board. When THIS session picks up an issue or ` +
-          `PR, claim it: \`wip claim <repo>#<n> --doc <planning doc>\`.`,
-      },
-    })
-  );
+  await emit({
+    systemMessage: `work claims: ${summary} — run \`wip\` for the board`,
+    context:
+      `${sections.join('\n\n')}\n` +
+      `This is informational only — don't act on it unless the user asks. ` +
+      `Run \`wip\` for the live board. When THIS session picks up an issue or ` +
+      `PR, claim it: \`wip claim <repo>#<n> --doc <planning doc>\`.`,
+  });
 }
 
-main()
-  .catch(() => {
-    /* never let this hook be why a session starts noisily */
-  })
-  .finally(() => process.exit(0));
+runHook(main);

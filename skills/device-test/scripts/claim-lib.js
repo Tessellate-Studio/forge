@@ -42,7 +42,7 @@
 
 const path = require('path');
 
-const { NOT_WAITING, noticeMarker, createClaimProtocol } = require(path.join(
+const { NOT_WAITING, isNotice, createClaimProtocol } = require(path.join(
   __dirname,
   '..',
   '..',
@@ -51,21 +51,6 @@ const { NOT_WAITING, noticeMarker, createClaimProtocol } = require(path.join(
   'work-claim',
   'lib',
   'protocol.js'
-));
-
-// Loaded for its SIDE EFFECT: creating the 🚧 variant registers that glyph as
-// a notice, so NOTICE_MARKER below covers it no matter which module the
-// process loaded first. This is the dependency that replaced hand-editing a
-// regex in this file every time a new claim shipped.
-require(path.join(
-  __dirname,
-  '..',
-  '..',
-  '..',
-  'tools',
-  'work-claim',
-  'lib',
-  'claim.js'
 ));
 
 /** No touch for this long and the holder is presumed gone — the backstop for
@@ -100,13 +85,19 @@ const CLAIM_MARKER = PROTOCOL.MARKER;
  * malformed items and the board nags forever about drift no human caused.
  * Six of the nine "unparseable" comments on alate#562 were exactly this.
  *
- * DERIVED, not hand-written: every claim variant registers its own glyph with
+ * DERIVED, not hand-written: every claim variant registers its own glyph
+ * with the protocol module as it is created. queue-lib.js — the only
+ * consumer of this marker — imports the 🚧 variant for its `gh` helpers, so
+ * both variants are always registered before the marker is read. There used
+ * to be a require here whose only purpose was that registration; it went
+ * when the real dependency made it redundant.
+ *
+ * The rest of the rule still holds: every claim variant registers its glyph
  * the protocol module. Item glyphs (🤖 🙋 🔧 ⚪ 🔴) must never be registered —
  * matching one would make every item carrying it invisible to the board, the
  * worst failure this parser has. 🤖 in particular was once listed here and had
  * to be removed when it became an item glyph.
  */
-const NOTICE_MARKER = noticeMarker();
 
 /**
  * Parse a claim comment. Returns null for anything that isn't one, so it can
@@ -139,7 +130,7 @@ module.exports = {
   HEARTBEAT_STALE_MINUTES,
   PROTOCOL,
   CLAIM_MARKER,
-  NOTICE_MARKER,
+  isNotice,
   NOT_WAITING,
   parseClaim,
   activeClaim,

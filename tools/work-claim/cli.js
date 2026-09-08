@@ -53,11 +53,7 @@ const { stripCode, NOT_WAITING, clip, humanIdle } = require('./lib/protocol');
  * to say which claim it means rather than matching by identity.
  */
 function isMine(claim, me) {
-  return (
-    Boolean(claim.sessionId) &&
-    me.sessionId !== 'unknown' &&
-    claim.sessionId === me.sessionId
-  );
+  return Boolean(me.sessionId) && claim.sessionId === me.sessionId;
 }
 
 function refuseAnonymous(action) {
@@ -451,8 +447,17 @@ async function scan(opts) {
  * release its own claim — so the label outlives it, and GitHub's issue list
  * goes on saying someone is working an item that nobody is. That is worse than
  * no label at all: it misleads exactly the person the feature is for. The
- * 90-minute staleness rule already tells the BOARD to ignore such a claim;
- * this is what tells GITHUB.
+ * staleness rule already tells the BOARD to ignore such a claim; this is
+ * what tells GITHUB.
+ *
+ * PRECEDENT (2026-09-07). forge #95 merged still carrying `claimed` while
+ * `wip` reported "nothing claimed" — the label query was `state=open`, so
+ * the most common leak of all (work finishes, PR merges, session ends) was
+ * invisible to the tool built to catch it. Then mood-layer #112 sat merged
+ * and labelled through a sweep that printed "nothing to sweep", because its
+ * repo fetch had failed and an errored repo read as a clean one. A rule
+ * whose only enforcement is "the session remembers" is not enforced, and a
+ * sweep that cannot see the common case is not a backstop.
  *
  * It never touches a live claim, never touches an item whose comments could
  * not be fetched (an unknown item is not a leaked one), and never edits a
@@ -628,7 +633,7 @@ async function touch(target, opts) {
   // already names its branch, so the git spawn would be pure waste — and this
   // is the hottest path in the tool, run at every commit and push.
   const me = identity();
-  if (me.sessionId === 'unknown') {
+  if (!me.sessionId) {
     refuseAnonymous('touch'); // before the fetch — it would be thrown away
   }
   const existing = await findClaimComments(repo, number);
@@ -666,7 +671,7 @@ async function touch(target, opts) {
 async function release(target, opts) {
   const { repo, number } = parseTarget(target);
   const me = identity(); // same as touch: the branch is not read here
-  if (!opts.all && me.sessionId === 'unknown') {
+  if (!opts.all && !me.sessionId) {
     refuseAnonymous('release'); // before the fetch
   }
   const existing = await findClaimComments(repo, number);

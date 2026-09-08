@@ -10,7 +10,7 @@ const path = require('path');
 
 const {
   CLAIM_MARKER,
-  NOTICE_MARKER,
+  isNotice,
   parseClaim,
   activeClaim,
 } = require('./claim-lib');
@@ -146,7 +146,7 @@ function parseComment(comment) {
   // Status, so without this they pile into the UNPARSEABLE bucket and the
   // board nags about "malformed items" that were never items. Six of nine
   // flagged comments on alate#562 were exactly this.
-  if (NOTICE_MARKER.test(body)) {
+  if (isNotice(body)) {
     return null;
   }
 

@@ -39,10 +39,11 @@ const { STATUS, checkGhReady, collect } = require(path.join(
   'scripts',
   'queue-lib.js'
 ));
-
-function timeout(ms) {
-  return new Promise(resolve => setTimeout(() => resolve(null), ms));
-}
+const { emit, withDeadline, runHook, disabled } = require(path.join(
+  here,
+  'lib',
+  'session-start.js'
+));
 
 async function main() {
   if (
@@ -53,12 +54,12 @@ async function main() {
     return;
   }
 
-  const ready = await Promise.race([checkGhReady(), timeout(TIMEOUT_MS)]);
+  const ready = await withDeadline(checkGhReady(), TIMEOUT_MS);
   if (!ready || !ready.ok) {
     return; // no gh, not authenticated, or timed out — an environment fact, not worth a nag
   }
 
-  const results = await Promise.race([collect(), timeout(TIMEOUT_MS)]);
+  const results = await withDeadline(collect(), TIMEOUT_MS);
   if (!results) {
     return; // timed out — degrade silently, never block or slow session start
   }
@@ -115,27 +116,14 @@ async function main() {
     totalUnparsed ? `, ${totalUnparsed} unparseable` : ''
   }`;
 
-  // additionalContext MUST be nested under hookSpecificOutput with a
-  // hookEventName — a top-level additionalContext key is silently ignored
-  // ("Hook JSON output had unrecognized keys"), so the model never sees it.
-  // Verified against the debug log of a live session, 2026-08-26.
-  process.stdout.write(
-    JSON.stringify({
-      systemMessage: `device-test queue: ${summary} — run \`dtq\` for details`,
-      hookSpecificOutput: {
-        hookEventName: 'SessionStart',
-        additionalContext:
-          `The device-test queue (across alate, mood-layer, badige) has pending items:\n` +
-          `${lines.join('\n')}\n` +
-          `This is informational only — don't act on it unless the user asks. Run \`dtq\` ` +
-          `(or \`device-test-status\`) for the live board, or /forge:device-test to drain it.`,
-      },
-    })
-  );
+  await emit({
+    systemMessage: `device-test queue: ${summary} — run \`dtq\` for details`,
+    context:
+      `The device-test queue (across alate, mood-layer, badige) has pending items:\n` +
+      `${lines.join('\n')}\n` +
+      `This is informational only — don't act on it unless the user asks. Run \`dtq\` ` +
+      `(or \`device-test-status\`) for the live board, or /forge:device-test to drain it.`,
+  });
 }
 
-main()
-  .catch(() => {
-    /* never let this hook be why a session starts noisily */
-  })
-  .finally(() => process.exit(0));
+runHook(main);
