@@ -8,7 +8,7 @@ needs an app-specific delta, the app notes only the delta under its own
 
 Rules that are anti-patterns (merge-on-green, concurrent-session isolation,
 TDD-for-data-flows, …) live in [`anti-patterns.md`](./anti-patterns.md) and are
-only *linked* from here — same single-home principle.
+only _linked_ from here — same single-home principle.
 
 ---
 
@@ -16,6 +16,7 @@ only *linked* from here — same single-home principle.
 
 When a task's changes don't belong on the currently checked-out branch, cut a
 new branch off the default branch automatically. Signals:
+
 - Current branch name implies a different scope (`ci/…`, `docs/…`, `chore/…`)
   while the task is a feature/fix.
 - The current branch has unrelated uncommitted edits in flight.
@@ -53,7 +54,7 @@ not an archive: it records "merged, safe to delete without re-verifying".
 That marker earns its keep because **under squash merge, git cannot tell you a
 branch was merged.** Squashing rewrites the commits, so the branch tip is never
 an ancestor of the default branch: `git branch --merged` lists nothing, and
-`git branch -d` refuses with *"the branch is not fully merged"*. Verified on a
+`git branch -d` refuses with _"the branch is not fully merged"_. Verified on a
 squash-only repo (`allow_merge_commit: false`) against 37 real `done/` branches.
 So on these repos the prefix carries information git has no way to derive, and
 `-D` is the only delete that works — the rename is what licenses it, because
@@ -114,7 +115,7 @@ the end state — so pick per repo and don't treat the choice as a contradiction
 - **Auto-delete off** — rename to `done/<original>` rather than leaving a
   merged branch under its original name, then prune periodically.
 
-Either way the *remote* side is settled at merge; `done/` is about the local
+Either way the _remote_ side is settled at merge; `done/` is about the local
 branch list you actually read every day.
 
 Two things stay wrong either way: **leaving a merged branch under its original
@@ -153,7 +154,7 @@ can have no required checks for reasons that have nothing to do with the
 sharper trap) the plan tier can't have one at all — a private repo on GitHub's
 free tier 403s on `gh api repos/<owner>/<repo>/branches/<default>/protection`
 with "Upgrade to GitHub Pro or make this repository public," meaning `--auto`
-can *never* gate there no matter how it's configured. **Check this once per
+can _never_ gate there no matter how it's configured. **Check this once per
 repo, before the first `--auto` of the session**
 (`gh api repos/<owner>/<repo>/branches/<default-branch>/protection` — a 403/404
 means no gate exists) and route accordingly: if it succeeds and lists
@@ -174,6 +175,37 @@ checks', so `&& gh pr merge` fires even when a check failed. Same trap:
 `npm audit | tail; echo $?`. Correct shape:
 `gh pr checks N --watch >/dev/null && gh pr merge N --squash`. (Precedent:
 2026-07-25, forge PR #22 merged past a red Security Scan exactly this way.)
+
+**[enforced] A hook refuses an ungated merge — this is no longer only prose.**
+`hooks/merge-gate.mjs` runs on `PreToolUse` for `Bash` and `PowerShell` and
+denies the tool call outright unless the command is one of the two sanctioned
+routes: the `safe-merge` CLI, or a `gh pr checks … --watch` gated to the merge
+by a single `&&` with its own exit status intact. It also refuses `--auto` and
+`--admin` unconditionally, and refuses `;` / `||` sequencing, which does not
+gate at all (`||` merges precisely _because_ the check failed). The other two
+spellings of a merge — `gh api --method PUT …/pulls/N/merge` and a GraphQL
+`mergePullRequest` mutation — are covered too, since blocking only the obvious
+one moves the problem rather than solving it.
+
+Three things worth knowing about it:
+
+- **It constrains the agent, not you.** `PreToolUse` sees the model's tool calls
+  only; your own terminal and the GitHub UI are untouched.
+- **It reads command position, not raw text.** Quoted spans are blanked before
+  matching, so a commit message or a doc that mentions `gh pr merge --auto` is
+  prose, not an argument. A gate that blocked its own documentation would be
+  something to route around rather than satisfy.
+- **It fails closed.** A command that is merge-shaped but cannot be classified
+  is denied. A false deny costs one retry through a sanctioned route; a false
+  allow ships unverified code.
+
+Why it exists at all: every rule above was written down before it was enforced,
+and each was then broken by the same session that could have read it — alate's
+five 1-2s merges, forge #22's pipe, and the 2026-09-08 session that merged
+loom#131 and mood-layer#111 with a bare `gh pr merge --squash` an hour after
+documenting why not to. `safe-merge` already says it: _a gate the caller can
+decline to invoke is not a gate_. That was true of `safe-merge` itself until
+this hook.
 
 ## Local gates stay light — the runner is the authoritative gate
 
@@ -235,6 +267,7 @@ If a regression-log/BACKLOG entry or an audit reveals a needed fix already
 exists on an unmerged orphan branch (typically `claude/<adjective>-<noun>-<hash>`
 from a prior session), port it to a fresh branch off the default branch without
 asking:
+
 1. Cherry-pick or replay the diff on the new branch.
 2. Run the full test suite — orphan-branch tests should pass on the default
    branch too; if not, fix forward, don't skip.
@@ -269,11 +302,12 @@ That posts:
 
 ```markdown
 ### 🚧 Work claim
+
 - **Claimed by:** <branch (session-id tail)>
 - **Session:** `claude --resume <session id>` on <host>
-      <or: session not identified — reconstructed from the live worktree>
+  <or: session not identified — reconstructed from the live worktree>
 - **Worktree:** `<absolute path>` (branch `<branch>`)
-      <or: — no local worktree (branch `<branch>`), for a branch only on origin>
+  <or: — no local worktree (branch `<branch>`), for a branch only on origin>
 - **Started at:** <ISO 8601 UTC>
 - **Last touch:** <ISO 8601 UTC — rewritten at each checkpoint>
 - **Related:** <the issue a PR implements, the PRs carrying an issue, or —>
@@ -300,9 +334,9 @@ sessions alike.
   past the window → take it, and say so (`wip claim <item> --force`).
 - **Idle is not abandoned — a claim survives seven days of silence,** and
   activity on the item counts as a touch, so nothing depends on remembering
-  `wip touch`. The board says *quiet* past 8 hours; nothing acts on it.
+  `wip touch`. The board says _quiet_ past 8 hours; nothing acts on it.
 - **Parked on a human never expires.** `wip touch <item> --waiting-on "human —
-  <what>"` before handing over; clear it when you resume.
+<what>"` before handing over; clear it when you resume.
 - **Release when you stop** — done, failed, stalled, or handed back unfinished.
   Merging the PR is not a release: the merge closes the work, the release
   closes the claim.
@@ -341,6 +375,7 @@ status) gets its own commit, same PR is fine. Full rule:
 Before writing any code for a reported bug, read the app's
 `memory/project_regression_log.md` end to end (it's a 30-second read; a build
 is minutes):
+
 1. Symptom matches a logged entry → link it, check whether the prior fix
    regressed (run its test), patch from that starting point — don't re-discover.
 2. No match → TDD loop below; once the fix lands, add a new entry
@@ -357,12 +392,13 @@ is minutes):
 ## TDD — write tests first
 
 For any new feature or bug fix:
+
 1. Write the test describing expected behaviour; 2. run it, confirm it fails
-for the right reason; 3. write the code; 4. full suite green before commit.
-New screen → render smoke test. New store action → unit test. New API function
-→ error-path test. Bug fix → regression test that reproduces the bug first.
-(Data-pipeline and legal/trust-sensitive flows: TDD is mandatory — see
-[`anti-patterns.md` → "TDD-first for data-flow changes"](./anti-patterns.md).)
+   for the right reason; 3. write the code; 4. full suite green before commit.
+   New screen → render smoke test. New store action → unit test. New API function
+   → error-path test. Bug fix → regression test that reproduces the bug first.
+   (Data-pipeline and legal/trust-sensitive flows: TDD is mandatory — see
+   [`anti-patterns.md` → "TDD-first for data-flow changes"](./anti-patterns.md).)
 
 ## Quality pass before commit — ALL non-trivial diffs, UI or not
 
@@ -370,6 +406,7 @@ After the suite is green and (for UI) the change is verified on-device, run a
 quality pass on the diff before committing. This applies to **every non-trivial
 diff — backend, data-flow, tooling, not just UI**; skip with a one-line note
 for a true one-liner:
+
 1. `/code-review` — correctness bugs + reuse/simplification/efficiency findings
    in the current diff. Triage and fix what's real.
 2. `/simplify` — applies reuse/efficiency/altitude cleanups (quality only, no
@@ -433,6 +470,7 @@ parse it — keep the bold field names exactly):
 
 ```markdown
 ### 🤖 <test id> — <what this test intends to prove>
+
 - **PR:** #<n> · **SHA:** <merged sha, or "unmerged — branch <name>">
 - **Delivery:** <how it reaches the phone: production OTA (published/pending) |
   needs tag build v<x.y.z> | Expo Go | dev build | APK sideload>
@@ -450,7 +488,7 @@ parse it — keep the bold field names exactly):
   first: `standards/authoritative-claims.md` → "Reading is not running."
 - **Write Steps machine-first.** The drain agent executes every step it can
   reach itself — app launch/force-stop, navigation taps (`adb shell input
-  tap`/`text`/`keyevent`), screenshots (`adb exec-out screencap -p`), logcat
+tap`/`text`/`keyevent`), screenshots (`adb exec-out screencap -p`), logcat
   watches — and involves the human only for what genuinely needs judgment or
   a human-only surface (gesture feel, animation quality, camera/biometrics,
   real-account sign-ins, iOS/TestFlight where there is no adb). Prefix those
@@ -461,7 +499,7 @@ parse it — keep the bold field names exactly):
   verdict", below); a failed step does not skip the rest. Where step N+1
   genuinely needs step N's state — a tip that only shows on the first visit
   after step 1 clears storage — prefix it `DEPENDS: step N`, and the drain
-  records it as *not run* when N fails. Both prefixes can sit on one step
+  records it as _not run_ when N fails. Both prefixes can sit on one step
   (`DEPENDS: step 1 · HUMAN: …`); `DEPENDS:` says nothing about who runs it.
   Don't mark a dependency that isn't one: an item whose every step "depends"
   on the first is an item that gets one step of coverage.
@@ -494,16 +532,16 @@ parse it — keep the bold field names exactly):
   per-step table in the note (below) is what says which steps that value
   actually covers.
 - **A `✅` may not carry an unresolved caveat in prose.** Before writing one,
-  re-read the result for hedge vocabulary — *unproven, unverified, still
+  re-read the result for hedge vocabulary — _unproven, unverified, still
   unobserved, never been run, inferred rather than observed, does not cover,
-  worth carrying*. Every hit is either resolved, or filed as its own queue item
+  worth carrying_. Every hit is either resolved, or filed as its own queue item
   / issue whose number appears in the result. A caveat written under a PASSED
   line is gone the moment the drain moves on: nothing but that sentence knows it
   exists, and the item will never be re-read because it is closed. A pass with
   a named limit is a pass; a pass with a loose limit is a lie with a footnote.
   Standard: `standards/authoritative-claims.md` → "Labelling is not tracking."
 - **`**Status:** 🔧 needs build — <what's needed>`** — a fourth status value,
-  distinct from bare `OPEN`: it means the drain *looked* at this item and
+  distinct from bare `OPEN`: it means the drain _looked_ at this item and
   determined it
   cannot be tested on any currently-installed build, OTA or otherwise — not
   just "didn't get to it yet." Write this instead of leaving the item silently
@@ -554,13 +592,13 @@ way to tell a passed test from a blocked one was to expand it and read to the
 bottom. So the heading leads with the three things anyone scrolling the thread
 is actually looking for: **where it stands · which test it is · what it is for.**
 
-| Heading | `**Status:**` line | What it means |
-|---|---|---|
-| 🤖 | `OPEN` (no `HUMAN:` step) | Open — an agent can run this unattended |
-| 🙋 | `OPEN` (has a `HUMAN:` step) | Open — needs a person with the phone |
-| 🔧 | `🔧 needs build — <what>` | Open, but no installable build can reach it yet |
-| ⚪ | `✅ done <date>` | Closed — passed |
-| 🔴 | `❌ failed → <link>` | Closed as a test; still open as a bug |
+| Heading | `**Status:**` line           | What it means                                   |
+| ------- | ---------------------------- | ----------------------------------------------- |
+| 🤖      | `OPEN` (no `HUMAN:` step)    | Open — an agent can run this unattended         |
+| 🙋      | `OPEN` (has a `HUMAN:` step) | Open — needs a person with the phone            |
+| 🔧      | `🔧 needs build — <what>`    | Open, but no installable build can reach it yet |
+| ⚪      | `✅ done <date>`             | Closed — passed                                 |
+| 🔴      | `❌ failed → <link>`         | Closed as a test; still open as a bug           |
 
 **The `**Status:**` line stays the source of truth.** Every tool parses it; the
 heading glyph is its mirror, for human eyes. Edit the two in the same PATCH,
@@ -603,7 +641,7 @@ for this test.>
 One comment per test, its whole history in reading order. The rule is what
 keeps two notes from reading as one paragraph, and it is also the parser's
 boundary: **fields above it, notes below.** That boundary is what lets a note
-quote the item it discusses ("Expect is that the button does *not* appear")
+quote the item it discusses ("Expect is that the button does _not_ appear")
 without the quoted `**Status:**` silently reopening a closed test.
 
 The habit this replaces — a separate `_Drain note … for the item above_`
@@ -627,21 +665,21 @@ step**, in the note under the rule, and the Status line summarises them:
 ```markdown
 **Note — <date> · <session>:** <build/OTA confirmed how, then the table>
 
-| # | step | result |
-|---|---|---|
-| 1 | docked-on-launch | ❌ FAIL → #694 — opens at ~72% height, Expect was the bottom strip |
-| 2 | end-of-deck bounce | ✅ PASS — refuses to move past the first card; logcat clean |
-| 3 | gesture tip | ⏭ NOT RUN — depends on step 1 |
-| 4 | iOS edge-swipe-back | ⛔ N/A on Android — `HUMAN:`, needs a TestFlight pass |
-| 5 | docked-card legibility | ✅ PASS — text reads over the photo at 0.66 alpha |
+| #   | step                   | result                                                             |
+| --- | ---------------------- | ------------------------------------------------------------------ |
+| 1   | docked-on-launch       | ❌ FAIL → #694 — opens at ~72% height, Expect was the bottom strip |
+| 2   | end-of-deck bounce     | ✅ PASS — refuses to move past the first card; logcat clean        |
+| 3   | gesture tip            | ⏭ NOT RUN — depends on step 1                                      |
+| 4   | iOS edge-swipe-back    | ⛔ N/A on Android — `HUMAN:`, needs a TestFlight pass              |
+| 5   | docked-card legibility | ✅ PASS — text reads over the photo at 0.66 alpha                  |
 ```
 
-| Row | Means |
-|---|---|
-| `✅ PASS — <what was seen>` | Expect met; the evidence sits in the same cell |
-| `❌ FAIL → <link>` | Expect not met; filed, and the link is where it lives now |
-| `⏭ NOT RUN — <why>` | Nobody ran it: `blocked by step N`, `depends on step N`, `needs human`, `app would not relaunch` |
-| `⛔ N/A — <why>` | Cannot exist on this platform or build; say where it *can* run |
+| Row                         | Means                                                                                            |
+| --------------------------- | ------------------------------------------------------------------------------------------------ |
+| `✅ PASS — <what was seen>` | Expect met; the evidence sits in the same cell                                                   |
+| `❌ FAIL → <link>`          | Expect not met; filed, and the link is where it lives now                                        |
+| `⏭ NOT RUN — <why>`         | Nobody ran it: `blocked by step N`, `depends on step N`, `needs human`, `app would not relaunch` |
+| `⛔ N/A — <why>`            | Cannot exist on this platform or build; say where it _can_ run                                   |
 
 **The Status line is the worst row:** any ❌ → `❌ failed → <link>`; no ❌
 but any ⏭ → stays `OPEN`, and the next drain runs only the ⏭ rows; every row
@@ -652,7 +690,7 @@ the item and not in a wrap-up nobody re-reads.
 
 ### Format drift is the drain's job to fix, not yours
 
-A comment that *looks* like an item but cannot be parsed is an **invisible**
+A comment that _looks_ like an item but cannot be parsed is an **invisible**
 item — it is not on the board, so nobody tests it and nobody knows. On
 alate#562 nine comments were flagged at once and two were real OPEN tests that
 had silently dropped off, one for over a week.
@@ -711,10 +749,9 @@ an item:
   this template still read correctly, and what's missing surfaces as a
   restamp, not a disappearance.
 
-
 ### Claiming the device — the queue carries the lock
 
-`dtq` is read-only. It answers *what is pending*; it never answered **is
+`dtq` is read-only. It answers _what is pending_; it never answered **is
 anyone on the device right now**. Nothing did. On 2026-09-01 two sessions
 reached for the same handset within the hour — one ran a 15-cycle relaunch
 investigation and a full drain, the other had enqueued a device item without
@@ -728,6 +765,7 @@ human sees it with the tools they already use.
 
 ```markdown
 ### 🔒 Device claim
+
 - **Claimed by:** <session name>
 - **Device:** <adb serial, or "any">
 - **Claimed at:** <ISO 8601 UTC>
@@ -760,7 +798,7 @@ long a job takes is not evidence that it stopped.
   still alive → don't touch it; report who holds it, what it last touched, and
   what it's waiting on. Free, released, or silent past the window → post your
   own claim, and say in it that you took over a silent one.
-- **And before *spawning* something that will drive the device — read them
+- **And before _spawning_ something that will drive the device — read them
   again, right then.** A claim only protects the window it is inside, and the
   window that actually failed is between a session deciding to launch a drain
   and that drain posting its claim. On 2026-09-07, with this lock in place, a
@@ -786,7 +824,6 @@ long a job takes is not evidence that it stopped.
   they're read against that instead, so nothing already on an issue has to be
   rewritten.
 
-
 ## Docs stay lean — shipped items collapse to a one-line tombstone
 
 The PR is the permanent home of implementation detail (diff, decisions,
@@ -806,18 +843,18 @@ Two carve-outs, both learned by breaking them (alate PRs
 [#349](https://github.com/Tessellate-Studio/alate/pull/349)):
 
 1. **A PR holds what was DONE, not what was considered and rejected.** Before
-   collapsing, ask whether the body contains anything *no diff can give back*:
+   collapsing, ask whether the body contains anything _no diff can give back_:
    a rejected alternative and why it lost, an investigation that corrected a
    false belief, external research, a "don't try this again" finding. That
    content was never in a commit, so collapsing it destroys it permanently —
    the PR link goes to a diff that never contained it. Keep those lines next to
    the tombstone; a few surviving sentences are cheaper than re-running the
-   investigation. *(What was lost the first time: a full-branch history search
+   investigation. _(What was lost the first time: a full-branch history search
    establishing that a feature believed to be a "re-plug" had never existed.
-   The search was real work and left no commit.)*
+   The search was real work and left no commit.)_
 2. **Test artefacts are not planning docs.** Coverage maps, user-path audits,
    E2E contracts and regression tables (e.g. alate's `USER_PATHS.md`) describe
-   paths that must still be *exercised*. A shipped fix there keeps its full
+   paths that must still be _exercised_. A shipped fix there keeps its full
    `Was` / `Now` split — `Was` is the repro, `Now` is the assertion, and a
    tester needs both. Cite the PR alongside them; never collapse them into it.
    Mark such docs with a header note putting them out of scope for this rule.
@@ -829,7 +866,7 @@ column leaves the file the same length. Diff the content, not the line count.
 
 **No build runs unless a human asked for it, or explicitly pre-approved a
 narrow standing exception.** Free-tier Actions minutes are a shared, org-wide,
-monthly budget: when they run out, *every* private repo's CI dies at once —
+monthly budget: when they run out, _every_ private repo's CI dies at once —
 including the cheap PR gates that had nothing to do with the spend. Builds are
 cloud-only (never compiled on the laptop), so the cloud budget is the only
 budget there is. Protect it at the trigger, not with a spending cap.
@@ -842,7 +879,7 @@ E2E — anything measured in tens of minutes. Heavy workflows carry
 - **Never `schedule:`** for a build **in the workflow YAML itself.** A timer
   builds artefacts nobody is waiting on, and a hung one bills silently until
   the job timeout kills it. This is about the trigger definition in the repo's
-  CI config — it does not forbid a *human-approved* Claude-side scheduled task
+  CI config — it does not forbid a _human-approved_ Claude-side scheduled task
   invoking `gh workflow run` (still `workflow_dispatch` under the hood, just
   dispatched by a cron instead of a click); see the device-test carve-out
   immediately below for the one case that does this today.
@@ -850,7 +887,7 @@ E2E — anything measured in tens of minutes. Heavy workflows carry
   repo's emulator/E2E run automatically; the downstream repo's heavy workflow
   stays dispatch-only and gets pointed at an existing artefact by hand.
 - **Release tags (`push: tags: v*`) are the one allowed automatic build** — a
-  tag *is* the explicit human request. Tag deliberately; four tags in a day is
+  tag _is_ the explicit human request. Tag deliberately; four tags in a day is
   four full builds.
 
 **The one standing exception: the device-test weekly build cycle** (set
@@ -874,20 +911,21 @@ cost single-digit minutes. Don't "save minutes" by removing a gate; save them by
 not building.
 
 Two supporting habits, both of which pay for themselves:
+
 - `concurrency: { group: …, cancel-in-progress: true }` on every heavy workflow,
   so a superseded run stops instead of finishing.
 - An explicit `timeout-minutes` (never GitHub's 6-hour default) on every heavy
-  job. *Precedent: a hung Gradle daemon ate the full 6-hour default on every
+  job. _Precedent: a hung Gradle daemon ate the full 6-hour default on every
   scheduled alate run for a month — invisible, because a timeout ends in
-  `cancelled`, not `failure`.*
+  `cancelled`, not `failure`._
 
-**Non-builds on a schedule are fine** when the cron *is* the feature (a nightly
+**Non-builds on a schedule are fine** when the cron _is_ the feature (a nightly
 data-retention/GDPR deletion job, a cert renewal). Judge by cost and purpose, not
 by the presence of the `schedule:` key.
 
-**Why:** *2026-07-18 — Tessellate-Studio exhausted its 2,000 included minutes and
+**Why:** _2026-07-18 — Tessellate-Studio exhausted its 2,000 included minutes and
 every private repo's Actions stopped mid-session. Public repos kept running,
-which is what made it legible as a budget problem rather than a config one.*
+which is what made it legible as a budget problem rather than a config one._
 
 ## External-tool actions — the manual runbook
 
@@ -903,7 +941,7 @@ ends** — actual provider,
 actual values, numbered copy-pasteable steps (never "if you choose A vs B"
 branches), verification command(s), and a "where to look" diagnostic. Not an
 evaluation of options (that's BACKLOG); only the decided outcome. BACKLOG holds
-*what + why*; the runbook holds *exactly how*. Cross-link, don't copy.
+_what + why_; the runbook holds _exactly how_. Cross-link, don't copy.
 
 ### The runbook's shape — same in every repo
 
@@ -936,7 +974,7 @@ running, split it.
 
 **What does NOT belong:** why the decision was made, what was evaluated and
 rejected, what changed in which PR, narrated findings. That is BACKLOG's job and
-git history's job. If a paragraph would still read fine with *"probably"* in it,
+git history's job. If a paragraph would still read fine with _"probably"_ in it,
 or if it tells a story rather than issuing an instruction, it is not runbook
 content. A reader should be able to scan the table, find their one action, and
 do it without reading a word of context.
