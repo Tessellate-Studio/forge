@@ -252,6 +252,21 @@ on every run since it shipped and concealing a live data outage; one asserted a
 prerendered path that returns 200 on the very deployment it was added to catch;
 and a missing secret silently disabled three checks while the run reported OK.*
 
+## A failed step is a finding, not a reason to stop probing
+
+When a verification has several steps, run every step still reachable after
+one fails, and record each step's own outcome — a step nobody ran reads as
+*not run*, never as covered. Stop only when the rest are genuinely blocked
+(the screen is unreachable, the app won't launch), and say so per step.
+**Why:** steps are usually independent probes of the same change, so "don't
+compound on a failed precondition" throws away coverage that was free — and a
+single ❌ on the item hides that the other steps were never looked at.
+*Precedent: alate #562 (2026-09-07) — step 1 of five failed, the drain
+stopped, and step 2 would have shown that every swipe on that screen
+hard-crashed the app. It had done so for four days, and that item was the only
+scheduled thing that would ever swipe it (forge #100).* Rule + per-step
+format: [`workflows.md`](./workflows.md) → "Every step gets its own verdict".
+
 ## Establish severity at the user's entry point, not the component you are debugging
 
 Before calling anything an outage, identify where users actually enter — from
