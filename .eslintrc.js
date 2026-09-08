@@ -1,4 +1,14 @@
 module.exports = {
+  // Stop config resolution here. Without it, ESLint keeps walking up past this
+  // file — and forge's own worktrees live INSIDE the checkout, at
+  // `.claude/worktrees/<name>/`, so linting from a worktree loaded the parent
+  // checkout's copy of this config and then failed to resolve its
+  // `extends: ['prettier']` against a `node_modules/` the parent may not have
+  // installed. That broke `lint-staged`, so every commit from a worktree hit
+  // "ESLint couldn't find the config prettier" and the only ways forward were
+  // installing deps twice or `--no-verify`. A gate whose normal failure mode is
+  // "bypass it" trains people to bypass it.
+  root: true,
   env: {
     browser: true,
     commonjs: true,
