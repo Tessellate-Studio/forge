@@ -103,6 +103,7 @@ const PROTOCOL = createClaimProtocol({
   glyph: '🚧',
   staleMinutes: STALE_MINUTES,
   startedField: 'Started at',
+  subjectAfter: c => (c.branch ? ` on \`${c.branch}\`` : ''),
   fields: [
     {
       name: 'Session',
@@ -114,7 +115,7 @@ const PROTOCOL = createClaimProtocol({
         // disk — knows WHERE the work is but not WHICH session holds it.
         // Printing a resume command that cannot work would be worse than
         // saying so: the next agent would run it and get nothing.
-        if (!o.sessionId || o.sessionId === 'unknown') {
+        if (!o.sessionId) {
           return `session not identified — reconstructed from the live worktree on ${host}`;
         }
         return `\`claude --resume ${o.sessionId}\` on ${host}`;
@@ -193,12 +194,16 @@ function identity(opts = {}) {
   const cwd = opts.cwd || process.cwd();
   const host = opts.host || os.hostname();
   const branch = opts.branch || null;
-  const sessionId = env.CLAUDE_CODE_SESSION_ID || 'unknown';
+
+  // null, not the string "unknown". parseClaim already yields null for an
+  // unidentified claim, so two values meant the same thing and were tested
+  // inconsistently in two modules — every check is now just truthiness.
+  const sessionId = env.CLAUDE_CODE_SESSION_ID || null;
 
   // A short, human-readable holder name. The branch is the most legible
   // handle another agent has ("who is on feat/x?"); the session-id tail
   // disambiguates two sessions on one branch.
-  const tail = sessionId === 'unknown' ? host : sessionId.slice(0, 8);
+  const tail = sessionId ? sessionId.slice(0, 8) : host;
   const heldBy = branch ? `${branch} (${tail})` : `session ${tail}`;
   return { heldBy, sessionId, host, worktree: cwd, branch };
 }
@@ -234,11 +239,12 @@ function parseClaim(comment) {
       ? null
       : worktreePath;
 
-  const docsRaw = parsed.docsRaw || '—';
-  parsed.docs = NOT_WAITING.test(docsRaw) ? '' : docsRaw;
-
-  const relatedRaw = parsed.relatedRaw || '—';
-  parsed.related = NOT_WAITING.test(relatedRaw) ? '' : relatedRaw;
+  // Same shape for both: a list field renders as a comma string and reads
+  // back as one, with the placeholder dash meaning empty.
+  ['docs', 'related'].forEach(key => {
+    const raw = parsed[`${key}Raw`] || '—';
+    parsed[key] = NOT_WAITING.test(raw) ? '' : raw;
+  });
   return parsed;
 }
 
@@ -265,24 +271,26 @@ function touchBody(body, opts = {}) {
         .split(',')
         .map(d => d.trim())
         .filter(Boolean);
-  const merged = [...kept];
-  adding.forEach(d => {
-    if (!merged.includes(d)) {
-      merged.push(d);
-    }
-  });
+  const merged = [...new Set([...kept, ...adding])];
   return setField(out, 'Docs', merged.join(', '), 'Waiting on');
 }
 
-/** One-line summary for the board / hook. Empty string when free. */
-function describeClaim(claim) {
-  if (!claim) {
-    return '';
-  }
-  const idle = claim.idleMinutes === null ? '?' : claim.idleMinutes;
-  const where = claim.branch ? ` on \`${claim.branch}\`` : '';
-  const parked = claim.waitingOnHuman ? `, waiting on ${claim.waitingOn}` : '';
-  return `🚧 claimed by ${claim.heldBy}${where} (last touch ${idle} min ago${parked})`;
+const describeClaim = PROTOCOL.describe;
+
+/**
+ * The detail rows under a claim — `[label, value, width]`, empties dropped.
+ *
+ * Shared because it had already drifted: `related` was added to the board
+ * and not to the SessionStart hook, one line below a comment arguing that
+ * the two must not describe the same state differently.
+ */
+function claimDetails(claim) {
+  return [
+    ['worktree: ', claim.worktree, 72],
+    ['resume: claude --resume ', claim.sessionId, 200],
+    ['related: ', claim.related, 62],
+    ['docs: ', claim.docs, 66],
+  ].filter(row => row[1]);
 }
 
 /** Every gh call is bounded. Promise.race does NOT cancel the loser, so
@@ -331,7 +339,21 @@ async function checkGhReady() {
  *   ignore the sweep.
  */
 function isLeaked(item, claims, active) {
-  return item.closed ? (claims || []).some(c => c.held) : !active;
+  if (item.closed) {
+    return (claims || []).some(c => c.held);
+  }
+
+  // An UNREADABLE claim is unknown, not abandoned.
+  //
+  // A held claim whose `Last touch` cannot be parsed has idleMinutes null,
+  // and the protocol reads that as stale so it never wedges an item
+  // forever. That is the right call for the BOARD — but the sweep acts on
+  // it, and "stale" here would mean stripping the label off work somebody
+  // is actively pushing to, purely because a timestamp got mangled. The
+  // rule one function up already says an item we could not FETCH is not a
+  // leaked one; an item we could not READ is the same thing.
+  const unreadable = (claims || []).some(c => c.held && c.idleMinutes === null);
+  return !active && !unreadable;
 }
 
 /**
@@ -354,10 +376,15 @@ function withItemActivity(claims, updatedAt) {
     return claims;
   }
   return claims.map(claim => {
-    const idleMinutes =
-      claim.idleMinutes === null
-        ? itemIdle
-        : Math.min(claim.idleMinutes, itemIdle);
+    // Item activity may only ever LOWER a real idle number. An unreadable
+    // `Last touch` stays null, because protocol.js decided once that it
+    // reads as stale — quietly turning it into "as fresh as the thread"
+    // here would reverse that decision one layer up, which is the exact
+    // drift the shared protocol exists to end.
+    if (claim.idleMinutes === null) {
+      return claim;
+    }
+    const idleMinutes = Math.min(claim.idleMinutes, itemIdle);
     return {
       ...claim,
       idleMinutes,
@@ -441,43 +468,9 @@ async function fetchRepoClaims(repoDef, opts = {}) {
     return { ...repoDef, error: error.message || String(error), items: [] };
   }
 
-  // One gh subprocess per claimed item, so an unbounded Promise.all would
-  // spawn as many processes as the org has claims — on session start, on
-  // every machine. Cap the concurrency instead; the board is small, and the
-  // cap is what keeps its worst case constant rather than proportional.
-  const withClaims = await mapWithLimit(
-    items,
-    FETCH_CONCURRENCY,
-    async item => {
-      try {
-        const out = await gh(['api', item.commentsUrl, '--paginate']);
-        const claims = withItemActivity(
-          JSON.parse(out || '[]')
-            .map(parseClaim)
-            .filter(Boolean),
-          item.updatedAt
-        );
-        const claim = activeClaim(claims);
-
-        // A closed item with any claim on it is leaked regardless of
-        // staleness: the work is over, so nothing is legitimately held.
-        const leaked = isLeaked(item, claims, claim);
-        return { ...item, claim, claims, leaked };
-      } catch (error) {
-        // Unknown, NOT leaked — sweeping on a failed fetch would strip the
-        // label off live work, which is the one thing the sweep must never do.
-        return {
-          ...item,
-          claim: null,
-          claims: [],
-          leaked: false,
-          error: error.message,
-        };
-      }
-    }
-  );
-
-  return { ...repoDef, items: withClaims };
+  // Listing only. Reading each item's comments is the caller's job, so
+  // that ONE budget covers every repo — see collect().
+  return { ...repoDef, items };
 }
 
 /**
@@ -495,7 +488,49 @@ async function collect(repoFilter, opts = {}, env = process.env) {
       `Unknown repo "${repoFilter}". Known: ${all.map(r => r.key).join(', ')}`
     );
   }
-  return Promise.all(targets.map(r => fetchRepoClaims(r, opts)));
+
+  const results = await mapWithLimit(targets, FETCH_CONCURRENCY, r =>
+    fetchRepoClaims(r, opts)
+  );
+
+  // ONE budget for the comment fetches, across every repo.
+  //
+  // Each repo used to build its own mapWithLimit, so the cap was per-repo:
+  // six repos × five meant up to THIRTY concurrent gh processes on every
+  // session start, and the comment claiming it "keeps the worst case
+  // constant" was describing a number that scaled with the repo list.
+  // Flattening first is the whole fix — the cap now means what it says.
+  const pending = [];
+  results.forEach(r => {
+    if (r.error) {
+      return;
+    }
+    r.items.forEach(item => pending.push({ repo: r.repo, item }));
+  });
+
+  await mapWithLimit(pending, FETCH_CONCURRENCY, async ({ item }) => {
+    try {
+      const out = await gh(['api', item.commentsUrl, '--paginate']);
+      const claims = withItemActivity(
+        JSON.parse(out || '[]')
+          .map(parseClaim)
+          .filter(Boolean),
+        item.updatedAt
+      );
+      item.claim = activeClaim(claims);
+      item.claims = claims;
+      item.leaked = isLeaked(item, claims, item.claim);
+    } catch (error) {
+      // Unknown, NOT leaked — sweeping on a failed fetch would strip the
+      // label off live work, which is the one thing the sweep must never do.
+      item.claim = null;
+      item.claims = [];
+      item.leaked = false;
+      item.error = error.message;
+    }
+  });
+
+  return results;
 }
 
 /**
@@ -546,6 +581,7 @@ module.exports = {
   touchBody,
   releaseBody,
   describeClaim,
+  claimDetails,
   gh,
   mapWithLimit,
   checkGhReady,

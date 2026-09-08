@@ -19,17 +19,11 @@ const {
   daysSince,
   describeClaim,
 } = require('./queue-lib');
+const { clip } = require('../../../tools/work-claim/lib/protocol.js');
 
-// One board row per item, always. Comments are authored by many sessions and
-// drift; whatever the parser hands over gets clamped so a malformed item can
-// cost at most one truncated line, never a word wall.
-function clip(text, max) {
-  if (!text) {
-    return text;
-  }
-  const flat = text.replace(/\s+/g, ' ').trim();
-  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
-}
+// clip lives in the shared claim protocol module: this copy and the `wip`
+// board's had already drifted — one coerced with String(), this one called
+// .replace directly and threw on a non-string title.
 
 function statusIcon(item) {
   switch (item.state) {

@@ -307,3 +307,41 @@ describe('DEPENDS: — a step ordering marker, not a who-is-needed one', () => {
     expect(expectedGlyph(item)).toBe('🙋');
   });
 });
+
+describe('notice detection does not depend on module load order', () => {
+  // The 🚧 glyph is registered by the work-claim variant as it loads. A caller
+  // that grabbed the notice REGEX at import time snapshotted whichever
+  // variants had loaded by then — so removing an unrelated require silently
+  // put 🚧 work claims back into the "malformed item" bucket, which is the one
+  // failure this parser must never have. Asking isNotice() at parse time is
+  // what makes the answer independent of order.
+  it('skips a work claim even with a cold module registry', () => {
+    jest.resetModules();
+    const fresh = require('../scripts/queue-lib');
+    expect(
+      fresh.parseComment(
+        comment(
+          '### 🚧 Work claim\n- **Claimed by:** feat/x\n- **Claim:** HELD'
+        )
+      )
+    ).toBeNull();
+    expect(
+      fresh.parseComment(comment('### 🔒 Device claim\n- **Claim:** HELD'))
+    ).toBeNull();
+  });
+
+  it('still treats an agent-runnable item as an item', () => {
+    jest.resetModules();
+    const fresh = require('../scripts/queue-lib');
+    const item = fresh.parseComment(
+      comment(
+        [
+          '### 🤖 5462960191 — Something',
+          ITEM_FIELDS,
+          '- **Status:** OPEN',
+        ].join('\n')
+      )
+    );
+    expect(item).not.toBeNull();
+  });
+});

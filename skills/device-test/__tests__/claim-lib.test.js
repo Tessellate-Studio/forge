@@ -215,7 +215,9 @@ describe('the one-line summary', () => {
     const line = describeClaim(parsed);
     expect(line).toContain('804KPSL1724518');
     expect(line).toContain('session-a');
-    expect(line).toContain('3 min');
+
+    // Shared vocabulary with the work claim and the board (humanIdle).
+    expect(line).toContain('3m ago');
   });
 
   it('says so when the holder is parked on a human', () => {
@@ -233,5 +235,34 @@ describe('the one-line summary', () => {
 
   it('is empty when the device is free', () => {
     expect(describeClaim(null)).toBe('');
+  });
+});
+
+describe('the device one-liner reads as a sentence', () => {
+  // Sharing describe() across both variants briefly collapsed the subject to
+  // one position, and the device line came out "🔒 claimed by session-a
+  // 804KPSL1724518" — as though the holder were named after the handset.
+  // Asserted exactly, not with toContain, which let that through.
+  it('puts the device before the holder and keeps the word "device"', () => {
+    const body = claimBody({
+      heldBy: 'session-a',
+      device: '804KPSL1724518',
+      at: '2026-09-08T10:00:00.000Z',
+      lastTouch: new Date(Date.now() - 3 * 60_000).toISOString(),
+    });
+    expect(describeClaim(parseClaim({ id: 1, body }))).toBe(
+      '🔒 device 804KPSL1724518 claimed by session-a (last touch 3m ago)'
+    );
+  });
+
+  it('says just "device" when no serial was recorded', () => {
+    const body = claimBody({
+      heldBy: 'session-a',
+      at: '2026-09-08T10:00:00.000Z',
+      lastTouch: new Date(Date.now() - 3 * 60_000).toISOString(),
+    });
+    expect(describeClaim(parseClaim({ id: 1, body }))).toBe(
+      '🔒 device claimed by session-a (last touch 3m ago)'
+    );
   });
 });

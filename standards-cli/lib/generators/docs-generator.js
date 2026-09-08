@@ -52,7 +52,7 @@ class DocsGenerator {
       '**/*.spec.*'
     ];
     
-    let files = [];
+    const files = [];
     for (const pattern of patterns) {
       const found = glob.sync(path.join(sourceDir, pattern), { ignore });
       files.push(...found);

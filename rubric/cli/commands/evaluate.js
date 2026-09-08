@@ -85,7 +85,7 @@ const evaluateCommand = new Command('evaluate')
       }
       
       // Parse custom weights if provided
-      let customWeights = {};
+      const customWeights = {};
       if (options.weights) {
         try {
           const weightPairs = options.weights.split(',');

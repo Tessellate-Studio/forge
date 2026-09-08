@@ -69,6 +69,49 @@ function stripCode(markdown) {
     .replace(/^ {4,}\S.*$/gm, ' ');
 }
 
+/**
+ * Idle time in the largest honest unit. Minutes stop being readable within
+ * a shift, and a work claim may legitimately be days old.
+ */
+function humanIdle(minutes) {
+  if (minutes === null || minutes === undefined) {
+    return '?';
+  }
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+  if (minutes < 48 * 60) {
+    return `${Math.round(minutes / 60)}h`;
+  }
+  return `${Math.round(minutes / (24 * 60))}d`;
+}
+
+/**
+ * One line, clamped to `max` characters. Boards are built from text other
+ * people wrote, so a single long title must cost one truncated line and
+ * never a word wall.
+ */
+function clip(text, max) {
+  if (!text) {
+    return text;
+  }
+  const flat = String(text).replace(/\s+/g, ' ').trim();
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+}
+
+/**
+ * Is this comment an automated notice rather than a queue item?
+ *
+ * Ask the question; never hold the regex. The glyph set fills in as claim
+ * variants load, so a caller that destructures a marker at import time
+ * snapshots whichever variants happened to load first — which is exactly
+ * how 🚧 work claims briefly went back to filing as malformed device-test
+ * items when the require that had been forcing that order was removed.
+ */
+function isNotice(body) {
+  return noticeMarker().test(String(body || ''));
+}
+
 function minutesSince(iso) {
   const parsed = iso ? Date.parse(iso) : NaN;
   return Number.isNaN(parsed)
@@ -111,7 +154,9 @@ function setField(body, name, value, before) {
  * @param {string} spec.glyph        e.g. '🚧'
  * @param {number} spec.staleMinutes silence after which the holder is presumed gone
  * @param {string} spec.startedField the "when was this taken" field name
- * @param {Array}  spec.fields       ordered extra fields: {name, from, render}
+ * @param {Array}  spec.fields       ordered extra fields. `render` is
+ *   REQUIRED on each — there is no fallback, so a `{name, from}` field
+ *   throws at render time rather than emitting something half-formed.
  * @param {function} [spec.footer]   body footer lines, given the variant
  */
 function createClaimProtocol(spec) {
@@ -135,9 +180,7 @@ function createClaimProtocol(spec) {
       `- **Claimed by:** ${opts.heldBy}`,
     ];
     fields.forEach(f => {
-      lines.push(
-        `- **${f.name}:** ${f.render ? f.render(opts) : opts[f.from] || '—'}`
-      );
+      lines.push(`- **${f.name}:** ${f.render(opts)}`);
     });
     lines.push(
       `- **${startedField}:** ${at}`,
@@ -191,9 +234,40 @@ function createClaimProtocol(spec) {
     };
 
     fields.forEach(f => {
-      parsed[f.from] = f.parse ? f.parse(body, field) : field(body, f.name);
+      parsed[f.from] = field(body, f.name);
     });
     return parsed;
+  }
+
+  /**
+   * One-line summary for a board or a hook. Empty string when free.
+   *
+   * This was the last entry on this module's own list of things the two
+   * claims share (see the header) that had NOT been absorbed — and it had
+   * already forked: the two copies drifted on units, one printing
+   * "last touch 4300 min ago" where the board rendered "3d idle". A comment
+   * in hooks/work-claims.mjs argued the phrasing must not fork into two
+   * vocabularies; it was arguing against code that made forking the
+   * default. `subject` is the only part that legitimately differs.
+   */
+  function describe(claim) {
+    if (!claim) {
+      return '';
+    }
+
+    // The subject sits in a DIFFERENT place per variant, and collapsing
+    // that to one position broke the device line: it read "🔒 claimed by
+    // session-a 804KPSL…", as though the holder were named after the
+    // handset. The device names its subject before the holder, the work
+    // claim after it; everything else is shared.
+    const lead = spec.subjectBefore ? spec.subjectBefore(claim) : '';
+    const trail = spec.subjectAfter ? spec.subjectAfter(claim) : '';
+    const parked = claim.waitingOnHuman
+      ? `, waiting on ${claim.waitingOn}`
+      : '';
+    return `${glyph}${lead} claimed by ${
+      claim.heldBy
+    }${trail} (last touch ${humanIdle(claim.idleMinutes)} ago${parked})`;
   }
 
   /** The live holder, or null when the item is free (decision 2 in the header). */
@@ -242,6 +316,7 @@ function createClaimProtocol(spec) {
   }
 
   return {
+    describe,
     HEADING: heading,
     GLYPH: glyph,
     STALE_MINUTES: staleMinutes,
@@ -257,9 +332,12 @@ function createClaimProtocol(spec) {
 
 module.exports = {
   NOT_WAITING,
+  humanIdle,
+  clip,
   stripCode,
   NOTICE_GLYPHS,
   noticeMarker,
+  isNotice,
   minutesSince,
   field,
   setField,

@@ -77,12 +77,16 @@ function printFull(exitCode, stdout, stderr, forceFull) {
 }
 
 function printSummarized(exitCode, stdout, stderr) {
-  const maxLines = parseInt(process.env.BRIEF_MAX_LINES, 10) || DEFAULT_MAX_LINES;
-  const maxBytes = parseInt(process.env.BRIEF_MAX_BYTES, 10) || DEFAULT_MAX_BYTES;
+  const maxLines =
+    parseInt(process.env.BRIEF_MAX_LINES, 10) || DEFAULT_MAX_LINES;
+  const maxBytes =
+    parseInt(process.env.BRIEF_MAX_BYTES, 10) || DEFAULT_MAX_BYTES;
   const summary = summarizeOutput(stdout, { maxLines, maxBytes });
 
   if (stdout) {
-    process.stdout.write(`${summary.text}${summary.text.endsWith('\n') ? '' : '\n'}`);
+    process.stdout.write(
+      `${summary.text}${summary.text.endsWith('\n') ? '' : '\n'}`
+    );
   }
   if (stderr) {
     process.stderr.write(stderr);

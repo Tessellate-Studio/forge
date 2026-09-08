@@ -213,7 +213,7 @@ function multiply(a, b) {
       const perfFile = path.join(testProjectPath, 'src', 'performance.js');
 
       await fs.writeFile(smallFile, '// Small file\nconst x = 1;');
-      await fs.writeFile(largeFile, '// Large file\n' + 'x'.repeat(120000)); // 120KB
+      await fs.writeFile(largeFile, `// Large file\n${  'x'.repeat(120000)}`); // 120KB
       
       const perfContent = `function performanceIssues() {
   console.log("This will be flagged");
