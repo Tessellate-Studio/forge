@@ -11,19 +11,30 @@ module.exports = async function validateProject(options) {
 
   try {
     // Load configuration from project
-    const config = await loadProjectConfig(options.path);
-    
+    await loadProjectConfig(options.path);
+
     // Run validation using SDK
     const validationOptions = {
       path: options.path,
-      standards: options.standards || ['code', 'security', 'performance', 'maintenance'],
-      autoFix: options.fix || false
+      standards: options.standards || [
+        'code',
+        'security',
+        'performance',
+        'maintenance',
+      ],
+      autoFix: options.fix || false,
     };
 
     console.log(chalk.gray(`Validating: ${path.resolve(options.path)}`));
-    console.log(chalk.gray(`Standards: ${validationOptions.standards.join(', ')}`));
+    console.log(
+      chalk.gray(`Standards: ${validationOptions.standards.join(', ')}`)
+    );
     if (validationOptions.autoFix) {
-      console.log(chalk.yellow('🔧 Auto-fix enabled - issues will be automatically resolved where possible'));
+      console.log(
+        chalk.yellow(
+          '🔧 Auto-fix enabled - issues will be automatically resolved where possible'
+        )
+      );
     }
     console.log('');
 
@@ -39,7 +50,6 @@ module.exports = async function validateProject(options) {
 
     // Exit with appropriate code
     process.exit(result.passed ? 0 : 1);
-
   } catch (error) {
     console.error(chalk.red('💥 Validation failed:'), error.message);
     process.exit(1);
@@ -52,7 +62,7 @@ async function loadProjectConfig(projectPath) {
     path.join(projectPath, '.bp-config.yml'),
     path.join(projectPath, '.bp-config.yaml'),
     path.join(projectPath, '.bp-config.json'),
-    path.join(projectPath, 'package.json')
+    path.join(projectPath, 'package.json'),
   ];
 
   for (const configPath of configPaths) {
@@ -63,13 +73,18 @@ async function loadProjectConfig(projectPath) {
 
           // Extract BP config from package.json if it exists
           return content.bestPractices || content.bp || {};
-        } else if (configPath.includes('.yml') || configPath.includes('.yaml')) {
+        } else if (
+          configPath.includes('.yml') ||
+          configPath.includes('.yaml')
+        ) {
           const yaml = require('yaml');
           const content = await fs.readFile(configPath, 'utf8');
           return yaml.parse(content) || {};
         }
       } catch (error) {
-        console.warn(chalk.yellow(`⚠️  Could not parse config file: ${configPath}`));
+        console.warn(
+          chalk.yellow(`⚠️  Could not parse config file: ${configPath}`)
+        );
       }
     }
   }
@@ -79,12 +94,15 @@ async function loadProjectConfig(projectPath) {
     code: { enforceComments: true, maxFunctionLines: 50, testCoverage: 80 },
     security: { scanSecrets: true, vulnerabilityScan: true },
     performance: { bundleSize: '500KB', loadTime: '2s' },
-    maintenance: { dependencies: { required: true }, sdkMap: { required: true } }
+    maintenance: {
+      dependencies: { required: true },
+      sdkMap: { required: true },
+    },
   };
 }
 
 // Display validation results in a user-friendly format
-async function displayValidationResults(result, options) {
+async function displayValidationResults(result, _options) {
   // Overall status
   if (result.passed) {
     console.log(chalk.green('✅ All validations passed!'));
@@ -97,18 +115,33 @@ async function displayValidationResults(result, options) {
     console.log(chalk.blue('\n📊 Scores:'));
     for (const [standard, score] of Object.entries(result.scores)) {
       const color = score >= 90 ? 'green' : score >= 70 ? 'yellow' : 'red';
-      console.log(`  ${standard.charAt(0).toUpperCase() + standard.slice(1)}: ${chalk[color](`${score  }/100`)}`);
+      console.log(
+        `  ${standard.charAt(0).toUpperCase() + standard.slice(1)}: ${chalk[
+          color
+        ](`${score}/100`)}`
+      );
     }
-    
+
     if (result.overallScore !== undefined) {
-      const overallColor = result.overallScore >= 90 ? 'green' : result.overallScore >= 70 ? 'yellow' : 'red';
-      console.log(`  ${chalk.bold('Overall')}: ${chalk[overallColor](`${Math.round(result.overallScore)  }/100`)}`);
+      const overallColor =
+        result.overallScore >= 90
+          ? 'green'
+          : result.overallScore >= 70
+          ? 'yellow'
+          : 'red';
+      console.log(
+        `  ${chalk.bold('Overall')}: ${chalk[overallColor](
+          `${Math.round(result.overallScore)}/100`
+        )}`
+      );
     }
   }
 
   // Display fixed issues
   if (result.fixed && result.fixed.length > 0) {
-    console.log(chalk.green(`\n🔧 Auto-fixed ${result.fixed.length} issue(s):`));
+    console.log(
+      chalk.green(`\n🔧 Auto-fixed ${result.fixed.length} issue(s):`)
+    );
     for (const fix of result.fixed) {
       console.log(`  ✓ ${fix.file}:${fix.line} - ${fix.fix}`);
     }
@@ -117,22 +150,34 @@ async function displayValidationResults(result, options) {
   // Display issues by severity
   if (result.issues && result.issues.length > 0) {
     const issuesBySeverity = groupIssuesBySeverity(result.issues);
-    
+
     for (const [severity, issues] of Object.entries(issuesBySeverity)) {
-      if (issues.length === 0) {continue;}
-      
+      if (issues.length === 0) {
+        continue;
+      }
+
       const severityColor = getSeverityColor(severity);
       const icon = getSeverityIcon(severity);
-      
-      console.log(chalk[severityColor](`\n${icon} ${severity.toUpperCase()} (${issues.length})`));
-      
-      for (const issue of issues.slice(0, 10)) { // Show first 10 issues
-        const location = issue.file && issue.line ? `${issue.file}:${issue.line}` : issue.file || '';
+
+      console.log(
+        chalk[severityColor](
+          `\n${icon} ${severity.toUpperCase()} (${issues.length})`
+        )
+      );
+
+      for (const issue of issues.slice(0, 10)) {
+        // Show first 10 issues
+        const location =
+          issue.file && issue.line
+            ? `${issue.file}:${issue.line}`
+            : issue.file || '';
         console.log(`  ${chalk.gray(location)} - ${issue.message}`);
       }
-      
+
       if (issues.length > 10) {
-        console.log(chalk.gray(`  ... and ${issues.length - 10} more ${severity} issues`));
+        console.log(
+          chalk.gray(`  ... and ${issues.length - 10} more ${severity} issues`)
+        );
       }
     }
   }
@@ -145,10 +190,14 @@ async function displayValidationResults(result, options) {
 
   // Display summary
   console.log(chalk.blue('\n📋 Summary:'));
-  console.log(`  Files scanned: ${result.metrics?.totalFiles || result.metrics?.filesScanned || 'N/A'}`);
+  console.log(
+    `  Files scanned: ${
+      result.metrics?.totalFiles || result.metrics?.filesScanned || 'N/A'
+    }`
+  );
   console.log(`  Issues found: ${result.issues?.length || 0}`);
   console.log(`  Issues fixed: ${result.fixed?.length || 0}`);
-  
+
   if (!result.passed) {
     console.log(chalk.yellow('\n💡 Tips:'));
     console.log('  • Run with --fix to automatically resolve some issues');
@@ -161,7 +210,9 @@ async function displayValidationResults(result, options) {
 function groupIssuesBySeverity(issues) {
   return issues.reduce((groups, issue) => {
     const severity = issue.severity || 'info';
-    if (!groups[severity]) {groups[severity] = [];}
+    if (!groups[severity]) {
+      groups[severity] = [];
+    }
     groups[severity].push(issue);
     return groups;
   }, {});
@@ -175,7 +226,7 @@ function getSeverityColor(severity) {
     medium: 'yellow',
     warning: 'yellow',
     low: 'blue',
-    info: 'blue'
+    info: 'blue',
   };
   return colors[severity] || 'gray';
 }
@@ -188,7 +239,7 @@ function getSeverityIcon(severity) {
     medium: '⚠️',
     warning: '⚠️',
     low: '💡',
-    info: 'ℹ️'
+    info: 'ℹ️',
   };
   return icons[severity] || '•';
 }
@@ -196,25 +247,30 @@ function getSeverityIcon(severity) {
 // Display metrics in a formatted way
 function displayMetrics(metrics) {
   if (metrics.totalFunctions !== undefined) {
-    const commentRatio = metrics.totalFunctions > 0 
-      ? Math.round((metrics.commentedFunctions / metrics.totalFunctions) * 100)
-      : 100;
-    console.log(`  Functions with comments: ${metrics.commentedFunctions}/${metrics.totalFunctions} (${commentRatio}%)`);
+    const commentRatio =
+      metrics.totalFunctions > 0
+        ? Math.round(
+            (metrics.commentedFunctions / metrics.totalFunctions) * 100
+          )
+        : 100;
+    console.log(
+      `  Functions with comments: ${metrics.commentedFunctions}/${metrics.totalFunctions} (${commentRatio}%)`
+    );
   }
-  
+
   if (metrics.bundleSize !== undefined) {
     const bundleSizeKB = Math.round(metrics.bundleSize / 1024);
     console.log(`  Bundle size: ${bundleSizeKB}KB`);
   }
-  
+
   if (metrics.secretsFound !== undefined) {
     console.log(`  Secrets detected: ${metrics.secretsFound}`);
   }
-  
+
   if (metrics.vulnerabilities !== undefined) {
     console.log(`  Vulnerabilities: ${metrics.vulnerabilities}`);
   }
-  
+
   if (metrics.largeFiles && metrics.largeFiles.length > 0) {
     console.log(`  Large files: ${metrics.largeFiles.length}`);
   }
@@ -223,7 +279,7 @@ function displayMetrics(metrics) {
 // Generate detailed validation report
 async function generateValidationReport(result, options) {
   const reportPath = options.output || 'validation-report.json';
-  
+
   const report = {
     timestamp: new Date().toISOString(),
     projectPath: path.resolve(options.path),
@@ -237,14 +293,17 @@ async function generateValidationReport(result, options) {
     summary: {
       totalIssues: result.issues?.length || 0,
       totalFixed: result.fixed?.length || 0,
-      issuesBySeverity: groupIssuesBySeverity(result.issues || [])
-    }
+      issuesBySeverity: groupIssuesBySeverity(result.issues || []),
+    },
   };
 
   try {
     await fs.writeJson(reportPath, report, { spaces: 2 });
     console.log(chalk.green(`\n📄 Validation report saved: ${reportPath}`));
   } catch (error) {
-    console.error(chalk.red('Failed to save validation report:'), error.message);
+    console.error(
+      chalk.red('Failed to save validation report:'),
+      error.message
+    );
   }
 }

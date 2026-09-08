@@ -10,14 +10,14 @@ class CiIntegration {
       runTests: true,
       securityScan: true,
       performanceCheck: true,
-      ...config.ci
+      ...config.ci,
     };
   }
 
   // Setup CI/CD pipeline
   async setupPipeline(projectPath) {
     const cwd = projectPath || process.cwd();
-    
+
     try {
       switch (this.config.platform) {
         case 'github-actions':
@@ -31,7 +31,7 @@ class CiIntegration {
       return {
         success: false,
         message: `Failed to setup CI pipeline: ${error.message}`,
-        error
+        error,
       };
     }
   }
@@ -51,14 +51,17 @@ class CiIntegration {
 
     // Create security workflow
     const securityWorkflow = this._generateSecurityWorkflow();
-    await fs.writeFile(path.join(workflowsDir, 'security.yml'), securityWorkflow);
+    await fs.writeFile(
+      path.join(workflowsDir, 'security.yml'),
+      securityWorkflow
+    );
 
     console.log('✅ GitHub Actions workflows created');
 
     return {
       success: true,
       message: 'GitHub Actions pipeline configured successfully',
-      workflows: ['ci.yml', 'release.yml', 'security.yml']
+      workflows: ['ci.yml', 'release.yml', 'security.yml'],
     };
   }
 
@@ -205,23 +208,23 @@ jobs:
         NPM_TOKEN: \${{ secrets.NPM_TOKEN }}
       run: |
         # Extract version from package.json
-        VERSION=\$(node -p "require('./package.json').version")
-        echo "Current version: \$VERSION"
+        VERSION=$(node -p "require('./package.json').version")
+        echo "Current version: $VERSION"
         
         # Create git tag if not exists
-        if ! git rev-parse v\$VERSION >/dev/null 2>&1; then
+        if ! git rev-parse v$VERSION >/dev/null 2>&1; then
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git tag -a v\$VERSION -m "Release v\$VERSION"
-          git push origin v\$VERSION
+          git tag -a v$VERSION -m "Release v$VERSION"
+          git push origin v$VERSION
         fi
     
     - name: Create GitHub Release
       env:
         GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
       run: |
-        VERSION=\$(node -p "require('./package.json').version")
-        gh release create v\$VERSION --generate-notes --title "Release v\$VERSION"
+        VERSION=$(node -p "require('./package.json').version")
+        gh release create v$VERSION --generate-notes --title "Release v$VERSION"
 `;
   }
 
@@ -276,14 +279,17 @@ jobs:
   // Setup GitLab CI
   async _setupGitLabCI(projectPath) {
     const gitlabCIContent = this._generateGitLabCI();
-    await fs.writeFile(path.join(projectPath, '.gitlab-ci.yml'), gitlabCIContent);
+    await fs.writeFile(
+      path.join(projectPath, '.gitlab-ci.yml'),
+      gitlabCIContent
+    );
 
     console.log('✅ GitLab CI pipeline created');
 
     return {
       success: true,
       message: 'GitLab CI pipeline configured successfully',
-      file: '.gitlab-ci.yml'
+      file: '.gitlab-ci.yml',
     };
   }
 
@@ -368,40 +374,42 @@ deploy:
   async setupBranchProtection(repositoryPath) {
     try {
       const cwd = repositoryPath || process.cwd();
-      
+
       // Enable branch protection for main branch
       const protectionRules = {
         required_status_checks: {
           strict: true,
-          contexts: ['test', 'security', 'performance']
+          contexts: ['test', 'security', 'performance'],
         },
         enforce_admins: true,
         required_pull_request_reviews: {
           required_approving_review_count: 1,
-          dismiss_stale_reviews: true
+          dismiss_stale_reviews: true,
         },
-        restrictions: null
+        restrictions: null,
       };
 
       // Use GitHub CLI to set branch protection
-      execSync(`gh api repos/:owner/:repo/branches/main/protection -X PUT --input -`, {
-        cwd,
-        input: JSON.stringify(protectionRules),
-        encoding: 'utf8'
-      });
+      execSync(
+        `gh api repos/:owner/:repo/branches/main/protection -X PUT --input -`,
+        {
+          cwd,
+          input: JSON.stringify(protectionRules),
+          encoding: 'utf8',
+        }
+      );
 
       console.log('✅ Branch protection rules configured');
 
       return {
         success: true,
-        message: 'Branch protection rules configured successfully'
+        message: 'Branch protection rules configured successfully',
       };
-
     } catch (error) {
       return {
         success: false,
         message: `Failed to setup branch protection: ${error.message}`,
-        error
+        error,
       };
     }
   }
@@ -409,7 +417,7 @@ deploy:
   // Generate status badge for README
   generateStatusBadge(repositoryUrl, branch = 'main') {
     const repoPath = repositoryUrl.replace('https://github.com/', '');
-    
+
     return `[![CI Status](https://github.com/${repoPath}/workflows/CI%20Pipeline/badge.svg?branch=${branch})](https://github.com/${repoPath}/actions)
 [![Security](https://github.com/${repoPath}/workflows/Security%20Scan/badge.svg)](https://github.com/${repoPath}/actions)
 [![Best Practices](https://img.shields.io/badge/Best%20Practices-SDK-blue)](https://github.com/ramsaptami/best-practices-sdk)`;

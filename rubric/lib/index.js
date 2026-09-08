@@ -2,7 +2,10 @@
 const RubricEngine = require('./rubric-engine');
 const ReportGenerator = require('./report-generator');
 const ConfigManager = require('./config-manager');
-const { evaluateFromContext, bandForTotal } = require('./evaluate-from-context');
+const {
+  evaluateFromContext,
+  bandForTotal,
+} = require('./evaluate-from-context');
 
 module.exports = {
   RubricEngine,
@@ -22,16 +25,16 @@ module.exports = {
   // Convenience methods for common operations
   evaluate: async (task, options = {}) => {
     const engine = new RubricEngine(options);
-    return await engine.evaluate(task, options);
+    return engine.evaluate(task, options);
   },
 
   compare: async (tasks, options = {}) => {
     const engine = new RubricEngine(options);
-    return await engine.compareMultiple(tasks, options);
+    return engine.compareMultiple(tasks, options);
   },
 
   generateReport: async (evaluations, format = 'json') => {
     const generator = new ReportGenerator();
-    return await generator.generate(evaluations, format);
-  }
+    return generator.generate(evaluations, format);
+  },
 };
