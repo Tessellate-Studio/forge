@@ -5,5 +5,5 @@ const CiIntegration = require('./ci-integration');
 
 module.exports = {
   ClaudeIntegration,
-  CiIntegration
+  CiIntegration,
 };

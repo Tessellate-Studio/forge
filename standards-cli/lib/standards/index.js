@@ -9,5 +9,5 @@ module.exports = {
   CodeStandards,
   RepoStandards,
   WorkflowStandards,
-  AccessibilityStandards
+  AccessibilityStandards,
 };

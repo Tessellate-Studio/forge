@@ -8,30 +8,30 @@ const CodeStandards = {
     naming: {
       style: 'camelCase',
       descriptive: true,
-      minLength: 3
+      minLength: 3,
     },
     errorHandling: {
       required: true,
       gracefulFallbacks: true,
-      logErrors: true
-    }
+      logErrors: true,
+    },
   },
 
   // Code structure standards
   structure: {
     fileSize: {
       maxLines: 300,
-      warnAt: 200
+      warnAt: 200,
     },
     imports: {
       grouping: true,
       sorting: 'alphabetical',
-      noUnused: true
+      noUnused: true,
     },
     exports: {
       explicit: true,
-      namedPreferred: true
-    }
+      namedPreferred: true,
+    },
   },
 
   // Comment and documentation standards
@@ -40,18 +40,18 @@ const CodeStandards = {
       requireComments: true,
       includeParams: true,
       includeReturns: true,
-      includeExamples: false
+      includeExamples: false,
     },
     files: {
       requireHeader: true,
       includeDescription: true,
-      includeAuthor: false
+      includeAuthor: false,
     },
     inline: {
       complexLogic: true,
       businessRules: true,
-      performance: true
-    }
+      performance: true,
+    },
   },
 
   // Testing standards
@@ -60,17 +60,17 @@ const CodeStandards = {
       minimum: 80,
       branches: 75,
       functions: 85,
-      lines: 80
+      lines: 80,
     },
     structure: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false
+      e2eTests: false,
     },
     naming: {
       descriptive: true,
-      includeShould: true
-    }
+      includeShould: true,
+    },
   },
 
   // Security standards
@@ -78,57 +78,57 @@ const CodeStandards = {
     secrets: {
       noHardcoded: true,
       useEnvVars: true,
-      noCommit: true
+      noCommit: true,
     },
     validation: {
       inputSanitization: true,
       outputEncoding: true,
-      sqlInjectionPrevention: true
+      sqlInjectionPrevention: true,
     },
     dependencies: {
       auditRegularly: true,
       updateFrequently: true,
-      trustworthy: true
-    }
+      trustworthy: true,
+    },
   },
 
   // Performance standards
   performance: {
     bundleSize: {
       maxKb: 500,
-      warnAt: 300
+      warnAt: 300,
     },
     asyncOperations: {
       usePromises: true,
       handleErrors: true,
-      timeouts: true
+      timeouts: true,
     },
     memory: {
       avoidLeaks: true,
       cleanupListeners: true,
-      releaseResources: true
-    }
+      releaseResources: true,
+    },
   },
 
   // Code style standards
   style: {
     indentation: {
       type: 'spaces',
-      size: 2
+      size: 2,
     },
     semicolons: {
       required: true,
-      trailing: false
+      trailing: false,
     },
     quotes: {
       type: 'single',
-      consistent: true
+      consistent: true,
     },
     lineLength: {
       max: 100,
-      wrap: true
-    }
-  }
+      wrap: true,
+    },
+  },
 };
 
 module.exports = CodeStandards;

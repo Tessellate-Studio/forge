@@ -16,25 +16,26 @@ class MaintenanceValidator {
       summary: {
         totalChecks: 0,
         passedChecks: 0,
-        failedChecks: 0
-      }
+        failedChecks: 0,
+      },
     };
 
     this.validateDependenciesFile(results);
     this.validateSdkMapFile(results);
-    
-    results.summary.totalChecks = results.summary.passedChecks + results.summary.failedChecks;
+
+    results.summary.totalChecks =
+      results.summary.passedChecks + results.summary.failedChecks;
     results.passed = results.summary.failedChecks === 0;
-    
+
     return results;
   }
 
   validateDependenciesFile(results) {
     const { dependencies } = this.standards;
     const filePath = path.join(this.projectPath, dependencies.filename);
-    
+
     results.summary.totalChecks++;
-    
+
     if (!fs.existsSync(filePath)) {
       results.summary.failedChecks++;
       results.issues.push({
@@ -43,7 +44,7 @@ class MaintenanceValidator {
         file: dependencies.filename,
         message: `Missing required ${dependencies.filename} file`,
         description: dependencies.purpose,
-        fix: `Create ${dependencies.filename} in project root with required sections`
+        fix: `Create ${dependencies.filename} in project root with required sections`,
       });
       return;
     }
@@ -56,18 +57,18 @@ class MaintenanceValidator {
   validateSdkMapFile(results) {
     const { sdkMap } = this.standards;
     const filePath = path.join(this.projectPath, sdkMap.filename);
-    
+
     results.summary.totalChecks++;
-    
+
     if (!fs.existsSync(filePath)) {
       results.summary.failedChecks++;
       results.issues.push({
         type: 'missing_file',
-        severity: 'error', 
+        severity: 'error',
         file: sdkMap.filename,
         message: `Missing required ${sdkMap.filename} file`,
         description: sdkMap.purpose,
-        fix: `Create ${sdkMap.filename} in project root with required sections`
+        fix: `Create ${sdkMap.filename} in project root with required sections`,
       });
       return;
     }
@@ -79,7 +80,7 @@ class MaintenanceValidator {
 
   validateFileStructure(content, standard, results) {
     const missingSections = [];
-    
+
     standard.sections.forEach(section => {
       const sectionRegex = new RegExp(`#+\\s*${section}`, 'i');
       if (!sectionRegex.test(content)) {
@@ -94,7 +95,7 @@ class MaintenanceValidator {
         file: standard.filename,
         message: `Missing recommended sections in ${standard.filename}`,
         sections: missingSections,
-        fix: `Add missing sections: ${missingSections.join(', ')}`
+        fix: `Add missing sections: ${missingSections.join(', ')}`,
       });
     }
 
@@ -104,7 +105,7 @@ class MaintenanceValidator {
         severity: 'warning',
         file: standard.filename,
         message: `${standard.filename} appears to have minimal content`,
-        fix: 'Add more detailed information about dependencies/SDKs'
+        fix: 'Add more detailed information about dependencies/SDKs',
       });
     }
   }

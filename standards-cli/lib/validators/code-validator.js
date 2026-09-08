@@ -8,7 +8,7 @@ class CodeValidator {
       enforceComments: true,
       maxFunctionLines: 50,
       testCoverage: 80,
-      ...config
+      ...config,
     };
   }
 
@@ -24,8 +24,8 @@ class CodeValidator {
         commentedFunctions: 0,
         totalFunctions: 0,
         longFunctions: 0,
-        testCoverage: 0
-      }
+        testCoverage: 0,
+      },
     };
 
     try {
@@ -36,12 +36,13 @@ class CodeValidator {
       for (const file of files) {
         const content = await fs.readFile(file, 'utf8');
         const fileResults = await this._validateFile(file, content, autoFix);
-        
+
         // Merge results
         results.issues.push(...fileResults.issues);
         results.fixed.push(...fileResults.fixed);
         results.metrics.totalFunctions += fileResults.metrics.totalFunctions;
-        results.metrics.commentedFunctions += fileResults.metrics.commentedFunctions;
+        results.metrics.commentedFunctions +=
+          fileResults.metrics.commentedFunctions;
         results.metrics.longFunctions += fileResults.metrics.longFunctions;
       }
 
@@ -54,19 +55,14 @@ class CodeValidator {
         score: 0,
         issues: [`Code validation failed: ${error.message}`],
         fixed: [],
-        error
+        error,
       };
     }
   }
 
   // Find all code files in the project
   async _findCodeFiles(projectPath) {
-    const patterns = [
-      '**/*.js',
-      '**/*.jsx', 
-      '**/*.ts',
-      '**/*.tsx'
-    ];
+    const patterns = ['**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx'];
 
     // Exclude common directories
     const ignore = [
@@ -74,7 +70,7 @@ class CodeValidator {
       'dist/**',
       'build/**',
       'coverage/**',
-      '.git/**'
+      '.git/**',
     ];
 
     const files = [];
@@ -96,12 +92,12 @@ class CodeValidator {
       metrics: {
         totalFunctions: 0,
         commentedFunctions: 0,
-        longFunctions: 0
-      }
+        longFunctions: 0,
+      },
     };
 
     const lines = content.split('\n');
-    
+
     // Find function definitions and their comments
     const functions = this._extractFunctions(content, lines);
     results.metrics.totalFunctions = functions.length;
@@ -118,7 +114,7 @@ class CodeValidator {
           type: 'missing-comment',
           severity: 'warning',
           message: `Function '${func.name}' missing in-line comment`,
-          rule: 'enforce-comments'
+          rule: 'enforce-comments',
         };
 
         if (autoFix) {
@@ -127,7 +123,7 @@ class CodeValidator {
           lines.splice(func.startLine, 0, comment);
           results.fixed.push({
             ...issue,
-            fix: 'Added placeholder comment'
+            fix: 'Added placeholder comment',
           });
         } else {
           results.issues.push(issue);
@@ -143,7 +139,7 @@ class CodeValidator {
           type: 'long-function',
           severity: 'warning',
           message: `Function '${func.name}' has ${func.lineCount} lines (max: ${this.config.maxFunctionLines})`,
-          rule: 'max-function-lines'
+          rule: 'max-function-lines',
         });
       }
     }
@@ -159,36 +155,41 @@ class CodeValidator {
   // Extract function definitions from code
   _extractFunctions(content, lines) {
     const functions = [];
-    
+
     // Regex patterns for different function types - simpler and more reliable
     const patterns = [
-      /^(?:export\s+)?(?:async\s+)?function\s+(\w+)/,  // function declarations
-      /(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\([^)]*\)\s*=>/,  // arrow functions
-      /(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?function/,  // function expressions
-      /(\w+)\s*:\s*(?:async\s+)?function/,  // object methods
-      /(?:async\s+)?(\w+)\s*\([^)]*\)\s*\{/  // method definitions
+      /^(?:export\s+)?(?:async\s+)?function\s+(\w+)/, // function declarations
+      /(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\([^)]*\)\s*=>/, // arrow functions
+      /(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?function/, // function expressions
+      /(\w+)\s*:\s*(?:async\s+)?function/, // object methods
+      /(?:async\s+)?(\w+)\s*\([^)]*\)\s*\{/, // method definitions
     ];
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
-      
+
       // Skip empty lines and comments
-      if (!line || line.startsWith('//') || line.startsWith('/*') || line.startsWith('*')) {
+      if (
+        !line ||
+        line.startsWith('//') ||
+        line.startsWith('/*') ||
+        line.startsWith('*')
+      ) {
         continue;
       }
-      
+
       for (const pattern of patterns) {
         const match = line.match(pattern);
         if (match) {
           const functionName = match[1];
           const startLine = i;
           const endLine = this._findFunctionEnd(lines, i);
-          
+
           functions.push({
             name: functionName,
             startLine,
             endLine,
-            lineCount: endLine - startLine + 1
+            lineCount: endLine - startLine + 1,
           });
           break;
         }
@@ -205,7 +206,7 @@ class CodeValidator {
 
     for (let i = startLine; i < lines.length; i++) {
       const line = lines[i];
-      
+
       for (const char of line) {
         if (char === '{') {
           braceCount++;
@@ -229,9 +230,11 @@ class CodeValidator {
       const prevLine = lines[functionLine - 1].trim();
 
       // Look for single-line or multi-line comments
-      if (prevLine.startsWith('//') || 
-          prevLine.startsWith('/*') || 
-          prevLine.endsWith('*/')) {
+      if (
+        prevLine.startsWith('//') ||
+        prevLine.startsWith('/*') ||
+        prevLine.endsWith('*/')
+      ) {
         return true;
       }
     }
@@ -249,16 +252,19 @@ class CodeValidator {
 
   // Calculate overall score based on metrics
   _calculateScore(metrics) {
-    if (metrics.totalFunctions === 0) {return 100;}
+    if (metrics.totalFunctions === 0) {
+      return 100;
+    }
 
     // Score components
     const commentRatio = metrics.commentedFunctions / metrics.totalFunctions;
-    const longFunctionPenalty = (metrics.longFunctions / metrics.totalFunctions) * 20;
-    
+    const longFunctionPenalty =
+      (metrics.longFunctions / metrics.totalFunctions) * 20;
+
     // Calculate score (0-100)
-    let score = (commentRatio * 80) + 20; // Base score from comments
+    let score = commentRatio * 80 + 20; // Base score from comments
     score -= longFunctionPenalty; // Penalty for long functions
-    
+
     return Math.max(0, Math.min(100, Math.round(score)));
   }
 }

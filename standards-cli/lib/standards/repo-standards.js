@@ -4,38 +4,38 @@ const RepoStandards = {
   // Required files in repository root
   requiredFiles: [
     'README.md',
-    'CHANGELOG.md', 
+    'CHANGELOG.md',
     '.gitignore',
     'package.json',
-    'LICENSE'
+    'LICENSE',
   ],
 
   // Required directories structure
   structure: {
     src: {
       required: false,
-      purpose: 'Source code directory'
+      purpose: 'Source code directory',
     },
     lib: {
       required: true,
-      purpose: 'Library/core functionality'
+      purpose: 'Library/core functionality',
     },
     docs: {
       required: true,
-      purpose: 'Documentation files'
+      purpose: 'Documentation files',
     },
     tests: {
       required: true,
-      purpose: 'Test files and test utilities'
+      purpose: 'Test files and test utilities',
     },
     examples: {
       required: true,
-      purpose: 'Usage examples and demos'
+      purpose: 'Usage examples and demos',
     },
     templates: {
       required: true,
-      purpose: 'Project templates and boilerplate'
-    }
+      purpose: 'Project templates and boilerplate',
+    },
   },
 
   // README.md standards
@@ -47,16 +47,16 @@ const RepoStandards = {
       'Usage Examples',
       'API Documentation',
       'Contributing Guidelines',
-      'License Information'
+      'License Information',
     ],
     badges: {
       ciStatus: true,
       coverage: true,
       version: true,
-      license: true
+      license: true,
     },
     codeExamples: true,
-    tableOfContents: false
+    tableOfContents: false,
   },
 
   // Git configuration standards
@@ -66,7 +66,7 @@ const RepoStandards = {
       develop: 'develop',
       feature: 'feature/*',
       hotfix: 'hotfix/*',
-      release: 'release/*'
+      release: 'release/*',
     },
     protection: {
       main: {
@@ -74,14 +74,14 @@ const RepoStandards = {
         reviews: 1,
         statusChecks: true,
         dismissStaleReviews: true,
-        enforceAdmin: true
-      }
+        enforceAdmin: true,
+      },
     },
     hooks: {
       preCommit: true,
       commitMsg: true,
-      prePush: false
-    }
+      prePush: false,
+    },
   },
 
   // Version management standards
@@ -91,13 +91,13 @@ const RepoStandards = {
     changelog: {
       required: true,
       format: 'keepachangelog',
-      automated: true
+      automated: true,
     },
     tagging: {
       required: true,
       format: 'v{version}',
-      signTags: false
-    }
+      signTags: false,
+    },
   },
 
   // License standards
@@ -105,30 +105,30 @@ const RepoStandards = {
     required: true,
     types: ['MIT', 'Apache-2.0', 'GPL-3.0', 'BSD-3-Clause'],
     fileLocation: 'LICENSE',
-    includeCopyright: true
+    includeCopyright: true,
   },
 
   // Commit message standards
   commits: {
     format: 'conventional',
     types: [
-      'feat',     // New feature
-      'fix',      // Bug fix
-      'docs',     // Documentation changes
-      'style',    // Formatting changes
+      'feat', // New feature
+      'fix', // Bug fix
+      'docs', // Documentation changes
+      'style', // Formatting changes
       'refactor', // Code refactoring
-      'perf',     // Performance improvements
-      'test',     // Test changes
-      'chore'     // Build/tooling changes
+      'perf', // Performance improvements
+      'test', // Test changes
+      'chore', // Build/tooling changes
     ],
     scope: {
       required: false,
-      examples: ['api', 'ui', 'docs', 'config']
+      examples: ['api', 'ui', 'docs', 'config'],
     },
     breakingChanges: {
       footer: 'BREAKING CHANGE:',
-      exclamation: true // feat!: breaking change
-    }
+      exclamation: true, // feat!: breaking change
+    },
   },
 
   // Package.json standards
@@ -142,26 +142,22 @@ const RepoStandards = {
       'repository',
       'keywords',
       'author',
-      'license'
+      'license',
     ],
     scripts: {
-      required: [
-        'test',
-        'lint',
-        'start'
-      ],
+      required: ['test', 'lint', 'start'],
       recommended: [
         'test:unit',
         'test:integration',
         'build',
         'dev',
-        'validate'
-      ]
+        'validate',
+      ],
     },
     engines: {
       node: '>=16.0.0',
-      npm: '>=7.0.0'
-    }
+      npm: '>=7.0.0',
+    },
   },
 
   // .gitignore standards
@@ -172,7 +168,7 @@ const RepoStandards = {
     environment: ['.env', '.env.local'],
     ide: ['.vscode/', '*.swp', '*.swo'],
     os: ['.DS_Store', 'Thumbs.db'],
-    coverage: ['coverage/', '*.lcov']
+    coverage: ['coverage/', '*.lcov'],
   },
 
   // Security standards
@@ -181,7 +177,7 @@ const RepoStandards = {
     dependencyScanning: true,
     codeScanning: true,
     securityPolicy: false,
-    vulnerabilityReporting: true
+    vulnerabilityReporting: true,
   },
 
   // Maintenance standards
@@ -194,10 +190,10 @@ const RepoStandards = {
       sections: [
         'Dependencies Overview',
         'Upstream Dependencies',
-        'Downstream Dependencies', 
+        'Downstream Dependencies',
         'Integration Points',
-        'Maintenance Notes'
-      ]
+        'Maintenance Notes',
+      ],
     },
     sdkMap: {
       required: true,
@@ -209,10 +205,10 @@ const RepoStandards = {
         'Core SDKs',
         'Development SDKs',
         'Integration SDKs',
-        'Version Management'
-      ]
-    }
-  }
+        'Version Management',
+      ],
+    },
+  },
 };
 
 module.exports = RepoStandards;
