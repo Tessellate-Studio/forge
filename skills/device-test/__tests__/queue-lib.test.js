@@ -266,6 +266,48 @@ describe('regressions the parser already paid for', () => {
   });
 });
 
+describe('DEPENDS: — a step ordering marker, not a who-is-needed one', () => {
+  // forge #100: steps are independent probes unless the item says otherwise.
+  // `DEPENDS: step N` is that declaration. It says nothing about WHO runs the
+  // step, so it must not flip an item to needs-human — and it must not mask a
+  // real HUMAN: prefix sitting on the same line.
+  const withSteps = steps =>
+    comment(
+      [
+        '### 🤖 5462960191 — Something',
+        '- **PR:** #80 · **SHA:** 67f61ce',
+        '- **Delivery:** Expo Go',
+        '- **Needs runtime:** any',
+        '- **Steps:**',
+        ...steps,
+        '- **Expect:** the sheet closes cleanly',
+        '- **Status:** OPEN',
+      ].join('\n')
+    );
+
+  it('a DEPENDS: step stays agent-runnable', () => {
+    const item = parseComment(
+      withSteps([
+        '  1. Open a fit result',
+        '  2. DEPENDS: step 1 · dismiss the tip',
+      ])
+    );
+    expect(item.needsHuman).toBe(false);
+    expect(expectedGlyph(item)).toBe('🤖');
+  });
+
+  it('a DEPENDS: step that is also HUMAN: still needs a human', () => {
+    const item = parseComment(
+      withSteps([
+        '  1. Open a fit result',
+        '  2. DEPENDS: step 1 · HUMAN: judge the rubber-band feel',
+      ])
+    );
+    expect(item.needsHuman).toBe(true);
+    expect(expectedGlyph(item)).toBe('🙋');
+  });
+});
+
 describe('notice detection does not depend on module load order', () => {
   // The 🚧 glyph is registered by the work-claim variant as it loads. A caller
   // that grabbed the notice REGEX at import time snapshotted whichever

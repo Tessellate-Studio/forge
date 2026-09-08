@@ -51,6 +51,11 @@ const REPOS = [
   { key: 'alate', repo: slugRepo('alate') },
   { key: 'mood-layer', repo: slugRepo('mood-layer') },
   { key: 'badige', repo: slugRepo('badige') },
+
+  // loom is a Shopify web surface, not a handset: its items are verified in a
+  // browser (SKILL.md → "loom is in scope"). It still owns a device-test-queue
+  // issue, so the board must count it or the queue accumulates unseen.
+  { key: 'loom', repo: slugRepo('loom') },
 ];
 
 const STATUS = {

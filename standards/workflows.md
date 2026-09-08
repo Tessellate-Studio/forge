@@ -456,16 +456,43 @@ parse it — keep the bold field names exactly):
   real-account sign-ins, iOS/TestFlight where there is no adb). Prefix those
   steps with `HUMAN:`; an item whose steps carry no `HUMAN:` prefix is fully
   agent-verifiable and gets tested and closed with zero user involvement.
+- **Steps are independent unless a step says otherwise.** The drain runs
+  every one and records each step's own outcome ("Every step gets its own
+  verdict", below); a failed step does not skip the rest. Where step N+1
+  genuinely needs step N's state — a tip that only shows on the first visit
+  after step 1 clears storage — prefix it `DEPENDS: step N`, and the drain
+  records it as *not run* when N fails. Both prefixes can sit on one step
+  (`DEPENDS: step 1 · HUMAN: …`); `DEPENDS:` says nothing about who runs it.
+  Don't mark a dependency that isn't one: an item whose every step "depends"
+  on the first is an item that gets one step of coverage.
 - **Needs runtime** is the field that saves the sitting: an OTA stranded by a
   runtime-fingerprint drift is untestable until a new store build is installed.
   Record what the phone must run, so the drain session skips-with-reason
   ("needs the v1.2.2 tag build — install first") instead of chasing a stale OTA.
+- **Every read of a queue issue's comments MUST pass `--paginate`.** The REST
+  API returns 30 comments per page, oldest first, so an unpaginated fetch
+  silently drops the **newest** items — precisely the ones a drain needs — and
+  returns 200 while doing it. A long-lived queue (alate#562 is well past 30)
+  then reads as quieter than it is, and a drain can report "nothing pending"
+  while real OPEN tests sit unseen below the page boundary:
+  ```bash
+  gh api repos/Tessellate-Studio/<repo>/issues/<queue-issue>/comments \
+    --paginate --jq '.[] | {id: .id, body: .body}'
+  ```
+  Use `gh api` for this, **not** `gh issue list --json` — the latter fails
+  outright on gh 2.98.0 ("invalid character '{' after object key") for every
+  field combination, taking the whole fetch down. The two failures are
+  opposites and both bite: one fetch dies loudly, the other lies quietly.
+  `skills/device-test/scripts/queue-lib.js` already paginates; it is
+  hand-rolled `gh api` calls inside a session that forget to.
 - Items are closed by **editing the comment's Status line and its heading
   glyph together** (`**Status:** ✅ done <date>` under a `⚪` heading, or
   `**Status:** ❌ failed → <link>` under a `🔴` one) — never by deleting the
   comment. A failed test's findings go to the app's regression log or a new
   issue; the Status line links there. The queue holds tests, not
-  investigations.
+  investigations. The Status line is one value for the whole item; the
+  per-step table in the note (below) is what says which steps that value
+  actually covers.
 - **A `✅` may not carry an unresolved caveat in prose.** Before writing one,
   re-read the result for hedge vocabulary — *unproven, unverified, still
   unobserved, never been run, inferred rather than observed, does not cover,
@@ -585,6 +612,44 @@ and it splits one test's history across the thread. Notes never carry a
 `**Status:**` line of their own; a note that changes where a test stands edits
 the item's Status and heading instead, then explains itself underneath.
 
+### Every step gets its own verdict
+
+A five-step item that reads `❌ failed → #694` looks tested. On alate #562
+(item 5526181662, 2026-09-07) it wasn't: step 1 failed, the drain stopped
+rather than "compound on a failed precondition", and nothing recorded that
+steps 2–5 were never run. Step 2 was a swipe, and every swipe on that screen
+had hard-crashed the app since its PR shipped four days earlier — found by
+accident, while verifying the fix for step 1 (forge #100). Steps are
+independent probes of the same PR unless marked `DEPENDS:`; a failed one is a
+finding, not a reason to stop probing. So a drain records **one row per
+step**, in the note under the rule, and the Status line summarises them:
+
+```markdown
+**Note — <date> · <session>:** <build/OTA confirmed how, then the table>
+
+| # | step | result |
+|---|---|---|
+| 1 | docked-on-launch | ❌ FAIL → #694 — opens at ~72% height, Expect was the bottom strip |
+| 2 | end-of-deck bounce | ✅ PASS — refuses to move past the first card; logcat clean |
+| 3 | gesture tip | ⏭ NOT RUN — depends on step 1 |
+| 4 | iOS edge-swipe-back | ⛔ N/A on Android — `HUMAN:`, needs a TestFlight pass |
+| 5 | docked-card legibility | ✅ PASS — text reads over the photo at 0.66 alpha |
+```
+
+| Row | Means |
+|---|---|
+| `✅ PASS — <what was seen>` | Expect met; the evidence sits in the same cell |
+| `❌ FAIL → <link>` | Expect not met; filed, and the link is where it lives now |
+| `⏭ NOT RUN — <why>` | Nobody ran it: `blocked by step N`, `depends on step N`, `needs human`, `app would not relaunch` |
+| `⛔ N/A — <why>` | Cannot exist on this platform or build; say where it *can* run |
+
+**The Status line is the worst row:** any ❌ → `❌ failed → <link>`; no ❌
+but any ⏭ → stays `OPEN`, and the next drain runs only the ⏭ rows; every row
+✅, or ⛔ with a named home → `✅ done`. A ⏭ row under a ✅ is exactly the
+"unresolved caveat in prose" a ✅ may not carry. `dtq` does not read the
+table — it is for the humans and the next drain, which is why it lives with
+the item and not in a wrap-up nobody re-reads.
+
 ### Format drift is the drain's job to fix, not yours
 
 A comment that *looks* like an item but cannot be parsed is an **invisible**
@@ -670,6 +735,24 @@ long a job takes is not evidence that it stopped.
   still alive → don't touch it; report who holds it, what it last touched, and
   what it's waiting on. Free, released, or silent past the window → post your
   own claim, and say in it that you took over a silent one.
+- **And before *spawning* something that will drive the device — read them
+  again, right then.** A claim only protects the window it is inside, and the
+  window that actually failed is between a session deciding to launch a drain
+  and that drain posting its claim. On 2026-09-07, with this lock in place, a
+  session read all-`RELEASED` claims, concluded nothing was running, and
+  launched a replacement drain; an already-running nested agent claimed
+  **16 seconds** ahead of it, and the two interleaved on the same handset and
+  destroyed the user's saved data. Three rules come out of that:
+  - **`RELEASED` everywhere means nobody has claimed yet, not that nobody is
+    running.** Re-read the claims immediately before the launch, and once more
+    after posting your own.
+  - **An agent's completion notification says nothing about its
+    descendants.** "No live background children" is about the agent you
+    spawned. Verify against the claim comments; they are the only record that
+    survives the process tree.
+  - **Two claims seconds apart are not simultaneous — the earlier
+    `**Claimed at:**` holds the phone**, and the later one releases and stands
+    down rather than racing.
 - **It is advisory.** Nothing can stop a raw `adb` command, and it is not
   trying to. It removes the ambiguity, which is the part that actually failed.
 - Claim comments are **not** queue items — the parser skips them, so they

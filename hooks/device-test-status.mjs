@@ -119,7 +119,7 @@ async function main() {
   await emit({
     systemMessage: `device-test queue: ${summary} — run \`dtq\` for details`,
     context:
-      `The device-test queue (across alate, mood-layer, badige) has pending items:\n` +
+      `The device-test queue (across alate, mood-layer, badige, loom) has pending items:\n` +
       `${lines.join('\n')}\n` +
       `This is informational only — don't act on it unless the user asks. Run \`dtq\` ` +
       `(or \`device-test-status\`) for the live board, or /forge:device-test to drain it.`,

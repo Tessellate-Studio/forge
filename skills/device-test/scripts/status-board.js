@@ -213,11 +213,11 @@ async function main() {
   program
     .name('device-test-status')
     .description(
-      'Read-only status board for the device-test queue (alate, mood-layer, badige)'
+      'Read-only status board for the device-test queue (alate, mood-layer, badige, loom)'
     )
     .option(
       '-r, --repo <name>',
-      'only show one repo (alate, mood-layer, badige)'
+      'only show one repo (alate, mood-layer, badige, loom)'
     )
     .option('-a, --all', 'include done/resolved items', false)
     .option(

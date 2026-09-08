@@ -107,7 +107,9 @@ when not.
 ### (e) Device-test queue items stranded
 
 - **Verify:** fetch the item's comment
-  (`gh api repos/<owner>/<repo>/issues/<n>/comments`) and parse the fixed
+  (`gh api repos/<owner>/<repo>/issues/<n>/comments --paginate` — without
+  `--paginate` you get only the first 30, oldest first, so a recently
+  enqueued item is invisible) and parse the fixed
   format (`${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Device-test
   queue"). Is the **PR** merged? Is **Delivery** satisfied (OTA published,
   build exists)?
