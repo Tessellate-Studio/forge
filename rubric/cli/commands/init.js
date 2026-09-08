@@ -16,7 +16,7 @@ const initCommand = new Command('init')
       
       console.log(chalk.blue('🚀 Initializing Rubric SDK Configuration\n'));
       
-      let initOptions = { force: options.force };
+      const initOptions = { force: options.force };
       
       // Interactive setup
       if (options.interactive) {

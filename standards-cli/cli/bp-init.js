@@ -17,8 +17,8 @@ module.exports = async function initProject(projectName, options) {
           name: 'projectName',
           message: 'What is your project name?',
           validate: (input) => {
-            if (!input.trim()) return 'Project name is required';
-            if (!/^[a-zA-Z0-9-_]+$/.test(input)) return 'Project name can only contain letters, numbers, hyphens, and underscores';
+            if (!input.trim()) {return 'Project name is required';}
+            if (!/^[a-zA-Z0-9-_]+$/.test(input)) {return 'Project name can only contain letters, numbers, hyphens, and underscores';}
             return true;
           }
         }

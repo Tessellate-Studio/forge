@@ -237,7 +237,7 @@ ${result.issues.length === 0 ? '✅ No issues found' : result.issues.map(issue =
 
 // Display summary in console
 function displaySummary(results) {
-    console.log('\n' + chalk.bold('📊 Audit Summary'));
+    console.log(`\n${  chalk.bold('📊 Audit Summary')}`);
     console.log('─'.repeat(50));
     
     // Overall score
@@ -254,13 +254,13 @@ function displaySummary(results) {
     console.log(chalk.yellow(`Warnings: ${results.summary.warnings}`));
     
     // Individual standard scores
-    console.log('\n' + chalk.bold('Standard Scores:'));
+    console.log(`\n${  chalk.bold('Standard Scores:')}`);
     Object.entries(results.results).forEach(([standard, result]) => {
         const color = result.score >= 80 ? 'green' : result.score >= 60 ? 'yellow' : 'red';
         console.log(chalk[color](`  ${standard}: ${result.score}/100`));
     });
     
-    console.log('\n' + chalk.gray(`Report saved to: ${options.output}`));
+    console.log(`\n${  chalk.gray(`Report saved to: ${options.output}`)}`);
 }
 
 // Run the audit

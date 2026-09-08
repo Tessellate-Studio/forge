@@ -77,7 +77,7 @@ class CodeValidator {
       '.git/**'
     ];
 
-    let files = [];
+    const files = [];
     for (const pattern of patterns) {
       // Use forward slashes for cross-platform compatibility
       const searchPattern = path.join(projectPath, pattern).replace(/\\/g, '/');
@@ -227,6 +227,7 @@ class CodeValidator {
     // Check the line above the function
     if (functionLine > 0) {
       const prevLine = lines[functionLine - 1].trim();
+
       // Look for single-line or multi-line comments
       if (prevLine.startsWith('//') || 
           prevLine.startsWith('/*') || 
@@ -248,7 +249,7 @@ class CodeValidator {
 
   // Calculate overall score based on metrics
   _calculateScore(metrics) {
-    if (metrics.totalFunctions === 0) return 100;
+    if (metrics.totalFunctions === 0) {return 100;}
 
     // Score components
     const commentRatio = metrics.commentedFunctions / metrics.totalFunctions;

@@ -60,6 +60,7 @@ async function loadProjectConfig(projectPath) {
       try {
         if (configPath.endsWith('.json')) {
           const content = await fs.readJson(configPath);
+
           // Extract BP config from package.json if it exists
           return content.bestPractices || content.bp || {};
         } else if (configPath.includes('.yml') || configPath.includes('.yaml')) {
@@ -96,12 +97,12 @@ async function displayValidationResults(result, options) {
     console.log(chalk.blue('\n📊 Scores:'));
     for (const [standard, score] of Object.entries(result.scores)) {
       const color = score >= 90 ? 'green' : score >= 70 ? 'yellow' : 'red';
-      console.log(`  ${standard.charAt(0).toUpperCase() + standard.slice(1)}: ${chalk[color](score + '/100')}`);
+      console.log(`  ${standard.charAt(0).toUpperCase() + standard.slice(1)}: ${chalk[color](`${score  }/100`)}`);
     }
     
     if (result.overallScore !== undefined) {
       const overallColor = result.overallScore >= 90 ? 'green' : result.overallScore >= 70 ? 'yellow' : 'red';
-      console.log(`  ${chalk.bold('Overall')}: ${chalk[overallColor](Math.round(result.overallScore) + '/100')}`);
+      console.log(`  ${chalk.bold('Overall')}: ${chalk[overallColor](`${Math.round(result.overallScore)  }/100`)}`);
     }
   }
 
@@ -118,7 +119,7 @@ async function displayValidationResults(result, options) {
     const issuesBySeverity = groupIssuesBySeverity(result.issues);
     
     for (const [severity, issues] of Object.entries(issuesBySeverity)) {
-      if (issues.length === 0) continue;
+      if (issues.length === 0) {continue;}
       
       const severityColor = getSeverityColor(severity);
       const icon = getSeverityIcon(severity);
@@ -160,7 +161,7 @@ async function displayValidationResults(result, options) {
 function groupIssuesBySeverity(issues) {
   return issues.reduce((groups, issue) => {
     const severity = issue.severity || 'info';
-    if (!groups[severity]) groups[severity] = [];
+    if (!groups[severity]) {groups[severity] = [];}
     groups[severity].push(issue);
     return groups;
   }, {});

@@ -160,6 +160,7 @@ class PerformanceValidator {
             const depMatch = match.match(/['"`]([^'"`]+)['"`]/);
             if (depMatch) {
               const depName = depMatch[1];
+
               // Handle scoped packages and relative imports
               if (!depName.startsWith('.') && !depName.startsWith('/')) {
                 const rootDep = depName.split('/')[0];
@@ -333,10 +334,11 @@ class PerformanceValidator {
       'build/**',
       'coverage/**',
       '.git/**'
+
       // Don't ignore test files here - we want to scan all files for bundle size
     ];
 
-    let files = [];
+    const files = [];
     for (const pattern of patterns) {
       // Use forward slashes for cross-platform compatibility
       const searchPattern = path.join(projectPath, pattern).replace(/\\/g, '/');
@@ -357,7 +359,7 @@ class PerformanceValidator {
     };
 
     const match = sizeStr.match(/^(\d+(?:\.\d+)?)\s*([KMGT]?B)$/i);
-    if (!match) return 500000; // Default 500KB
+    if (!match) {return 500000;} // Default 500KB
 
     const value = parseFloat(match[1]);
     const unit = match[2].toUpperCase();
@@ -374,7 +376,7 @@ class PerformanceValidator {
     };
 
     const match = timeStr.match(/^(\d+(?:\.\d+)?)\s*(ms|s|m)$/i);
-    if (!match) return 2000; // Default 2 seconds
+    if (!match) {return 2000;} // Default 2 seconds
 
     const value = parseFloat(match[1]);
     const unit = match[2].toLowerCase();

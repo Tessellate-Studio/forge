@@ -153,7 +153,7 @@ configCommand
       
       // Create update object
       const updates = {};
-      if (!updates[keyPath[0]]) updates[keyPath[0]] = {};
+      if (!updates[keyPath[0]]) {updates[keyPath[0]] = {};}
       updates[keyPath[0]][keyPath[1]] = parsedValue;
       
       // Update configuration

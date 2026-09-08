@@ -82,7 +82,7 @@ async function findSourceFiles(sourcePath) {
         '**/*.spec.js'
     ];
     
-    let files = [];
+    const files = [];
     for (const pattern of patterns) {
         const found = glob.sync(path.join(sourcePath, pattern), { ignore });
         files.push(...found);
@@ -165,7 +165,7 @@ function extractModuleDescription(lines) {
         
         if (inComment && trimmed.startsWith('*')) {
             const text = trimmed.substring(1).trim();
-            if (text) description.push(text);
+            if (text) {description.push(text);}
         }
         
         // Stop at first non-comment line
@@ -244,7 +244,7 @@ function extractFunctionDescription(lines, functionLine) {
 // Extract function parameters
 function extractParameters(functionLine) {
     const match = functionLine.match(/\(([^)]*)\)/);
-    if (!match) return [];
+    if (!match) {return [];}
     
     const params = match[1].split(',').map(p => p.trim()).filter(p => p);
     return params.map(param => {
@@ -272,6 +272,7 @@ function extractReturnType(lines, functionLine) {
 // Extract usage examples
 function extractExamples(lines, functionLine) {
     const examples = [];
+
     // Could implement example extraction from comments
     return examples;
 }
@@ -313,11 +314,11 @@ function extractClassMethods(lines, classLine) {
         const line = lines[i].trim();
         
         // Track brace levels to stay within class
-        if (line.includes('{')) braceLevel++;
-        if (line.includes('}')) braceLevel--;
+        if (line.includes('{')) {braceLevel++;}
+        if (line.includes('}')) {braceLevel--;}
         
-        if (braceLevel === 0 && inClass) break;
-        if (braceLevel > 0) inClass = true;
+        if (braceLevel === 0 && inClass) {break;}
+        if (braceLevel > 0) {inClass = true;}
         
         // Match method definitions
         const methodMatch = line.match(/(?:async\s+)?(\w+)\s*\(/);
@@ -546,7 +547,7 @@ async function generateDiagrams(docData, outputPath) {
 
 // Generate class diagram
 function generateClassDiagram(classes) {
-    if (classes.length === 0) return '# Class Diagram\n\nNo classes found.';
+    if (classes.length === 0) {return '# Class Diagram\n\nNo classes found.';}
     
     const diagram = `# Class Diagram
 
