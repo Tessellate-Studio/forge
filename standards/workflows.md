@@ -511,6 +511,22 @@ parse it — keep the bold field names exactly):
   runtime-fingerprint drift is untestable until a new store build is installed.
   Record what the phone must run, so the drain session skips-with-reason
   ("needs the v1.2.2 tag build — install first") instead of chasing a stale OTA.
+- **Every read of a queue issue's comments MUST pass `--paginate`.** The REST
+  API returns 30 comments per page, oldest first, so an unpaginated fetch
+  silently drops the **newest** items — precisely the ones a drain needs — and
+  returns 200 while doing it. A long-lived queue (alate#562 is well past 30)
+  then reads as quieter than it is, and a drain can report "nothing pending"
+  while real OPEN tests sit unseen below the page boundary:
+  ```bash
+  gh api repos/Tessellate-Studio/<repo>/issues/<queue-issue>/comments \
+    --paginate --jq '.[] | {id: .id, body: .body}'
+  ```
+  Use `gh api` for this, **not** `gh issue list --json` — the latter fails
+  outright on gh 2.98.0 ("invalid character '{' after object key") for every
+  field combination, taking the whole fetch down. The two failures are
+  opposites and both bite: one fetch dies loudly, the other lies quietly.
+  `skills/device-test/scripts/queue-lib.js` already paginates; it is
+  hand-rolled `gh api` calls inside a session that forget to.
 - Items are closed by **editing the comment's Status line and its heading
   glyph together** (`**Status:** ✅ done <date>` under a `⚪` heading, or
   `**Status:** ❌ failed → <link>` under a `🔴` one) — never by deleting the
@@ -761,6 +777,24 @@ long a job takes is not evidence that it stopped.
   still alive → don't touch it; report who holds it, what it last touched, and
   what it's waiting on. Free, released, or silent past the window → post your
   own claim, and say in it that you took over a silent one.
+- **And before *spawning* something that will drive the device — read them
+  again, right then.** A claim only protects the window it is inside, and the
+  window that actually failed is between a session deciding to launch a drain
+  and that drain posting its claim. On 2026-09-07, with this lock in place, a
+  session read all-`RELEASED` claims, concluded nothing was running, and
+  launched a replacement drain; an already-running nested agent claimed
+  **16 seconds** ahead of it, and the two interleaved on the same handset and
+  destroyed the user's saved data. Three rules come out of that:
+  - **`RELEASED` everywhere means nobody has claimed yet, not that nobody is
+    running.** Re-read the claims immediately before the launch, and once more
+    after posting your own.
+  - **An agent's completion notification says nothing about its
+    descendants.** "No live background children" is about the agent you
+    spawned. Verify against the claim comments; they are the only record that
+    survives the process tree.
+  - **Two claims seconds apart are not simultaneous — the earlier
+    `**Claimed at:**` holds the phone**, and the later one releases and stands
+    down rather than racing.
 - **It is advisory.** Nothing can stop a raw `adb` command, and it is not
   trying to. It removes the ambiguity, which is the part that actually failed.
 - Claim comments are **not** queue items — the parser skips them, so they
