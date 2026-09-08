@@ -1,7 +1,6 @@
 const fs = require('fs-extra');
 const path = require('path');
 const glob = require('glob');
-const { execSync } = require('child_process');
 
 class PerformanceValidator {
   constructor(config = {}) {
@@ -9,19 +8,19 @@ class PerformanceValidator {
       bundleSize: '500KB',
       loadTime: '2s',
       apiResponseTime: '500ms',
-      ...config
+      ...config,
     };
 
     // Convert config values to bytes/milliseconds
     this.limits = {
       bundleSize: this._parseSize(this.config.bundleSize),
       loadTime: this._parseTime(this.config.loadTime),
-      apiResponseTime: this._parseTime(this.config.apiResponseTime)
+      apiResponseTime: this._parseTime(this.config.apiResponseTime),
     };
   }
 
   // Main validation method
-  async validate(projectPath, options = {}) {
+  async validate(projectPath, _options = {}) {
     const results = {
       score: 100,
       issues: [],
@@ -31,8 +30,8 @@ class PerformanceValidator {
         totalFiles: 0,
         largeFiles: [],
         unusedDependencies: [],
-        performanceIssues: 0
-      }
+        performanceIssues: 0,
+      },
     };
 
     try {
@@ -62,7 +61,7 @@ class PerformanceValidator {
         score: 0,
         issues: [`Performance validation failed: ${error.message}`],
         fixed: [],
-        error
+        error,
       };
     }
   }
@@ -73,7 +72,7 @@ class PerformanceValidator {
       issues: [],
       bundleSize: 0,
       totalFiles: 0,
-      largeFiles: []
+      largeFiles: [],
     };
 
     // Find all JavaScript/TypeScript files
@@ -92,7 +91,7 @@ class PerformanceValidator {
         const fileSizeKB = Math.round(fileSize / 1024);
         results.largeFiles.push({
           file: path.relative(projectPath, file),
-          size: fileSizeKB
+          size: fileSizeKB,
         });
 
         results.issues.push({
@@ -101,7 +100,7 @@ class PerformanceValidator {
           type: 'large-file',
           severity: 'warning',
           message: `Large file detected: ${fileSizeKB}KB (consider splitting or optimizing)`,
-          rule: 'max-file-size'
+          rule: 'max-file-size',
         });
       }
     }
@@ -119,7 +118,7 @@ class PerformanceValidator {
         type: 'bundle-size',
         severity: 'high',
         message: `Bundle size ${bundleSizeKB}KB exceeds limit of ${limitKB}KB`,
-        rule: 'max-bundle-size'
+        rule: 'max-bundle-size',
       });
     }
 
@@ -130,7 +129,7 @@ class PerformanceValidator {
   async _checkUnusedDependencies(projectPath) {
     const results = {
       issues: [],
-      unused: []
+      unused: [],
     };
 
     const packageJsonPath = path.join(projectPath, 'package.json');
@@ -142,7 +141,7 @@ class PerformanceValidator {
       const packageJson = await fs.readJson(packageJsonPath);
       const dependencies = {
         ...packageJson.dependencies,
-        ...packageJson.devDependencies
+        ...packageJson.devDependencies,
       };
 
       // Find all code files to check for imports
@@ -151,10 +150,12 @@ class PerformanceValidator {
 
       for (const file of files) {
         const content = await fs.readFile(file, 'utf8');
-        
+
         // Find require/import statements
-        const importMatches = content.match(/(?:require\(['"`]([^'"`]+)['"`]\)|import.*?from\s+['"`]([^'"`]+)['"`])/g);
-        
+        const importMatches = content.match(
+          /(?:require\(['"`]([^'"`]+)['"`]\)|import.*?from\s+['"`]([^'"`]+)['"`])/g
+        );
+
         if (importMatches) {
           for (const match of importMatches) {
             const depMatch = match.match(/['"`]([^'"`]+)['"`]/);
@@ -185,11 +186,10 @@ class PerformanceValidator {
             type: 'unused-dependency',
             severity: 'warning',
             message: `Unused dependency detected: ${depName}`,
-            rule: 'no-unused-dependencies'
+            rule: 'no-unused-dependencies',
           });
         }
       }
-
     } catch (error) {
       // Ignore errors in dependency checking
     }
@@ -200,7 +200,7 @@ class PerformanceValidator {
   // Check for performance anti-patterns in code
   async _checkCodePerformance(projectPath) {
     const results = {
-      issues: []
+      issues: [],
     };
 
     const files = await this._findBundleFiles(projectPath);
@@ -208,15 +208,19 @@ class PerformanceValidator {
     for (const file of files) {
       const content = await fs.readFile(file, 'utf8');
       const lines = content.split('\n');
-      
+
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         const lineNumber = i + 1;
 
         // Check for performance anti-patterns
-        const issues = this._checkLineForPerformanceIssues(line, file, lineNumber);
+        const issues = this._checkLineForPerformanceIssues(
+          line,
+          file,
+          lineNumber
+        );
         results.issues.push(...issues);
-        
+
         // Check for nested loops by looking ahead
         if (line.includes('for (')) {
           const nestedLoopIssue = this._checkNestedLoop(lines, i, file);
@@ -238,28 +242,29 @@ class PerformanceValidator {
     const patterns = [
       {
         pattern: /console\.log\(/,
-        message: 'console.log() statements can impact performance in production',
+        message:
+          'console.log() statements can impact performance in production',
         severity: 'warning',
-        type: 'console-log'
+        type: 'console-log',
       },
       {
         pattern: /document\.getElementById\(.+\).*\.getElementById/,
         message: 'Multiple DOM queries should be cached',
         severity: 'warning',
-        type: 'dom-query'
+        type: 'dom-query',
       },
       {
         pattern: /\.forEach\(.+\.forEach/,
         message: 'Nested forEach can be performance-intensive',
         severity: 'info',
-        type: 'nested-foreach'
+        type: 'nested-foreach',
       },
       {
         pattern: /JSON\.parse\(JSON\.stringify\(/,
         message: 'Deep cloning with JSON is inefficient for large objects',
         severity: 'warning',
-        type: 'inefficient-clone'
-      }
+        type: 'inefficient-clone',
+      },
     ];
 
     for (const antiPattern of patterns) {
@@ -270,7 +275,7 @@ class PerformanceValidator {
           type: antiPattern.type,
           severity: antiPattern.severity,
           message: antiPattern.message,
-          rule: 'performance-optimization'
+          rule: 'performance-optimization',
         });
       }
     }
@@ -282,11 +287,15 @@ class PerformanceValidator {
   _checkNestedLoop(lines, startLineIndex, filePath) {
     let braceCount = 0;
     let foundOpenBrace = false;
-    
+
     // Look for the opening brace of the first for loop
-    for (let i = startLineIndex; i < Math.min(lines.length, startLineIndex + 10); i++) {
+    for (
+      let i = startLineIndex;
+      i < Math.min(lines.length, startLineIndex + 10);
+      i++
+    ) {
       const line = lines[i];
-      
+
       for (const char of line) {
         if (char === '{') {
           braceCount++;
@@ -299,7 +308,7 @@ class PerformanceValidator {
           }
         }
       }
-      
+
       // If we're inside the first loop and find another for loop
       if (foundOpenBrace && braceCount > 0 && line.trim().includes('for (')) {
         return {
@@ -307,12 +316,13 @@ class PerformanceValidator {
           line: i + 1,
           type: 'nested-loop',
           severity: 'info',
-          message: 'Nested loops can cause performance issues with large datasets',
-          rule: 'performance-optimization'
+          message:
+            'Nested loops can cause performance issues with large datasets',
+          rule: 'performance-optimization',
         };
       }
     }
-    
+
     return null;
   }
 
@@ -325,7 +335,7 @@ class PerformanceValidator {
       '**/*.tsx',
       '**/*.css',
       '**/*.scss',
-      '**/*.sass'
+      '**/*.sass',
     ];
 
     const ignore = [
@@ -333,7 +343,7 @@ class PerformanceValidator {
       'dist/**',
       'build/**',
       'coverage/**',
-      '.git/**'
+      '.git/**',
 
       // Don't ignore test files here - we want to scan all files for bundle size
     ];
@@ -352,35 +362,39 @@ class PerformanceValidator {
   // Parse size string (e.g., "500KB") to bytes
   _parseSize(sizeStr) {
     const units = {
-      'B': 1,
-      'KB': 1024,
-      'MB': 1024 * 1024,
-      'GB': 1024 * 1024 * 1024
+      B: 1,
+      KB: 1024,
+      MB: 1024 * 1024,
+      GB: 1024 * 1024 * 1024,
     };
 
     const match = sizeStr.match(/^(\d+(?:\.\d+)?)\s*([KMGT]?B)$/i);
-    if (!match) {return 500000;} // Default 500KB
+    if (!match) {
+      return 500000;
+    } // Default 500KB
 
     const value = parseFloat(match[1]);
     const unit = match[2].toUpperCase();
-    
+
     return Math.round(value * (units[unit] || 1));
   }
 
   // Parse time string (e.g., "2s") to milliseconds
   _parseTime(timeStr) {
     const units = {
-      'ms': 1,
-      's': 1000,
-      'm': 60000
+      ms: 1,
+      s: 1000,
+      m: 60000,
     };
 
     const match = timeStr.match(/^(\d+(?:\.\d+)?)\s*(ms|s|m)$/i);
-    if (!match) {return 2000;} // Default 2 seconds
+    if (!match) {
+      return 2000;
+    } // Default 2 seconds
 
     const value = parseFloat(match[1]);
     const unit = match[2].toLowerCase();
-    
+
     return Math.round(value * (units[unit] || 1));
   }
 

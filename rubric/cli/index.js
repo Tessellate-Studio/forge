@@ -15,7 +15,9 @@ const configCommand = require('./commands/config');
 // Set up the main program
 program
   .name('rubric')
-  .description('SDK for scoring, comparing, and prioritizing tasks before implementation')
+  .description(
+    'SDK for scoring, comparing, and prioritizing tasks before implementation'
+  )
   .version(packageInfo.version, '-v, --version', 'display version number');
 
 // Add commands
@@ -27,7 +29,7 @@ program
   .addCommand(configCommand);
 
 // Global error handler
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', error => {
   console.error(chalk.red('✖ Fatal Error:'), error.message);
   if (process.env.NODE_ENV === 'development') {
     console.error(error.stack);
@@ -35,7 +37,7 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason, _promise) => {
   console.error(chalk.red('✖ Unhandled Promise Rejection:'), reason);
   process.exit(1);
 });

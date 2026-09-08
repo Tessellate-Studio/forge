@@ -1,6 +1,5 @@
 const fs = require('fs-extra');
 const path = require('path');
-const { execSync } = require('child_process');
 const BestPracticesSDK = require('../../lib/index');
 
 describe('Integration Tests - Full Workflow', () => {
@@ -12,11 +11,11 @@ describe('Integration Tests - Full Workflow', () => {
     // Clean up any existing test project
     await fs.remove(testProjectPath);
     await fs.ensureDir(path.dirname(testProjectPath));
-    
+
     sdk = new BestPracticesSDK({
       code: { enforceComments: true, maxFunctionLines: 50 },
       security: { scanSecrets: true },
-      performance: { bundleSize: '500KB' }
+      performance: { bundleSize: '500KB' },
     });
   });
 
@@ -31,7 +30,7 @@ describe('Integration Tests - Full Workflow', () => {
         projectName: testProjectName,
         template: 'web-app',
         github: false, // Skip GitHub setup in tests
-        autoSetupCI: false
+        autoSetupCI: false,
       });
 
       expect(result.success).toBe(true);
@@ -57,7 +56,7 @@ describe('Integration Tests - Full Workflow', () => {
 
       // Check that standard files exist
       const standardFiles = ['README.md', '.bp-config.yml'];
-      
+
       for (const file of standardFiles) {
         const filePath = path.join(testProjectPath, file);
         expect(await fs.pathExists(filePath)).toBe(true);
@@ -95,7 +94,7 @@ module.exports = { calculateEngagement };`;
 
       const result = await sdk.validate({
         path: testProjectPath,
-        standards: ['code', 'security', 'performance']
+        standards: ['code', 'security', 'performance'],
       });
 
       expect(result.passed).toBe(true);
@@ -123,7 +122,7 @@ module.exports = { calculateEngagement };`;
 
       const result = await sdk.validate({
         path: testProjectPath,
-        standards: ['code', 'security', 'performance']
+        standards: ['code', 'security', 'performance'],
       });
 
       expect(result.passed).toBe(false);
@@ -151,7 +150,7 @@ function multiply(a, b) {
       const result = await sdk.validate({
         path: testProjectPath,
         standards: ['code'],
-        autoFix: true
+        autoFix: true,
       });
 
       expect(result.fixed.length).toBeGreaterThan(0);
@@ -172,7 +171,11 @@ function multiply(a, b) {
     });
 
     test('should detect various types of secrets', async () => {
-      const securityFile = path.join(testProjectPath, 'src', 'security-test.js');
+      const securityFile = path.join(
+        testProjectPath,
+        'src',
+        'security-test.js'
+      );
       const securityContent = `const config = {
   awsAccessKey: "AKIA1234567890123456",
   awsSecretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
@@ -184,14 +187,16 @@ function multiply(a, b) {
 
       const result = await sdk.validate({
         path: testProjectPath,
-        standards: ['security']
+        standards: ['security'],
       });
 
       expect(result.passed).toBe(false);
-      
-      const secretIssues = result.issues.filter(issue => issue.type === 'hardcoded-secret');
+
+      const secretIssues = result.issues.filter(
+        issue => issue.type === 'hardcoded-secret'
+      );
       expect(secretIssues.length).toBeGreaterThan(0);
-      
+
       // Check for different secret types
       const secretTypes = secretIssues.map(issue => issue.secretType);
       expect(secretTypes).toContain('AWS Access Key');
@@ -213,8 +218,8 @@ function multiply(a, b) {
       const perfFile = path.join(testProjectPath, 'src', 'performance.js');
 
       await fs.writeFile(smallFile, '// Small file\nconst x = 1;');
-      await fs.writeFile(largeFile, `// Large file\n${  'x'.repeat(120000)}`); // 120KB
-      
+      await fs.writeFile(largeFile, `// Large file\n${'x'.repeat(120000)}`); // 120KB
+
       const perfContent = `function performanceIssues() {
   console.log("This will be flagged");
   
@@ -228,19 +233,24 @@ function multiply(a, b) {
   // Inefficient cloning
   const clone = JSON.parse(JSON.stringify(largeObject));
 }`;
-      
+
       await fs.writeFile(perfFile, perfContent);
 
       const result = await sdk.validate({
         path: testProjectPath,
-        standards: ['performance']
+        standards: ['performance'],
       });
 
       expect(result.issues.length).toBeGreaterThan(0);
-      
+
       // Check for performance issues
-      const perfIssues = result.issues.filter(issue => 
-        ['large-file', 'console-log', 'nested-loop', 'inefficient-clone'].includes(issue.type)
+      const perfIssues = result.issues.filter(issue =>
+        [
+          'large-file',
+          'console-log',
+          'nested-loop',
+          'inefficient-clone',
+        ].includes(issue.type)
       );
       expect(perfIssues.length).toBeGreaterThan(0);
     });
@@ -280,11 +290,11 @@ module.exports = UserAPI;`;
       const result = await sdk.generateDocs({
         source: path.join(testProjectPath, 'src'),
         output: path.join(testProjectPath, 'docs'),
-        includeDiagrams: true
+        includeDiagrams: true,
       });
 
       expect(result.success).toBe(true);
-      
+
       // Check that docs directory was created
       const docsDir = path.join(testProjectPath, 'docs');
       expect(await fs.pathExists(docsDir)).toBe(true);
@@ -298,17 +308,24 @@ module.exports = UserAPI;`;
         projectName: `${testProjectName}-full`,
         template: 'web-app',
         github: false,
-        autoSetupCI: false
+        autoSetupCI: false,
       });
-      
+
       expect(initResult.success).toBe(true);
 
-      const fullProjectPath = path.join(path.dirname(testProjectPath), `${testProjectName}-full`);
-      
+      const fullProjectPath = path.join(
+        path.dirname(testProjectPath),
+        `${testProjectName}-full`
+      );
+
       // 2. Add some code with mixed quality
       await fs.ensureDir(path.join(fullProjectPath, 'src'));
-      
-      const mixedCodeFile = path.join(fullProjectPath, 'src', 'mixed-quality.js');
+
+      const mixedCodeFile = path.join(
+        fullProjectPath,
+        'src',
+        'mixed-quality.js'
+      );
       const mixedContent = `// Good function with proper comment
 function goodFunction(param) {
   return param * 2;
@@ -325,7 +342,7 @@ function badFunction(data) {
       // 3. Run validation
       const validationResult = await sdk.validate({
         path: fullProjectPath,
-        standards: ['code', 'security', 'performance']
+        standards: ['code', 'security', 'performance'],
       });
 
       expect(validationResult.passed).toBe(false);
@@ -336,7 +353,7 @@ function badFunction(data) {
       const autoFixResult = await sdk.validate({
         path: fullProjectPath,
         standards: ['code'],
-        autoFix: true
+        autoFix: true,
       });
 
       expect(autoFixResult.fixed.length).toBeGreaterThan(0);
@@ -344,7 +361,7 @@ function badFunction(data) {
       // 5. Generate documentation
       const docsResult = await sdk.generateDocs({
         source: path.join(fullProjectPath, 'src'),
-        output: path.join(fullProjectPath, 'docs')
+        output: path.join(fullProjectPath, 'docs'),
       });
 
       expect(docsResult.success).toBe(true);
