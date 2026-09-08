@@ -1,7 +1,7 @@
 # RFD 003: Device tests as issues; one global device lock
 
 **Date:** 2026-09-08
-**State:** discussion
+**State:** published
 **Author:** Saptami Ram (with Claude)
 **Tracking:** [forge#107](https://github.com/Tessellate-Studio/forge/issues/107)
 **Supersedes:** [ADR-003](./adr-003-device-test-queue.md) — the queue *medium* only. Its
@@ -315,19 +315,25 @@ check). No system found in research does better than a revalidation signal.
 
 ### 3. One lock, one device, outside every queue
 
-**Where.** A dedicated **private** repo, `Tessellate-Studio/devices`, holding
-one pinned issue per physical device, titled by serial (`804KPSL1724518 —
-Pixel, Android`). It is private because a claim names what is being tested;
-it is outside every app repo because the device is not an app's; it is not in
-forge because forge is public. Zero files anywhere. (Open question 1 offers
-an existing private repo as the alternative.)
+**Where.** `Tessellate-Studio/litmus` — the existing private "shared testing
+utilities for Tessellate mobile apps" repo — holds one pinned issue per
+physical device, titled by serial (`804KPSL1724518 — Pixel, Android`). It is
+private, so a claim may name what is being tested; it is outside every app
+repo, because the device is not an app's; it is not forge, which is public.
+Zero files anywhere. (Decided 2026-09-08: reuse litmus rather than stand up a
+new `devices` repo — the device lock is a testing utility shared across the
+mobile apps, which is exactly litmus's stated charter, and a device is closer
+to a shared test fixture than to a repo of its own.) A second pinned issue
+covers the iPhone (TestFlight, no adb); its claim sits permanently at
+`Waiting on: human`, which never expires — the honest description of how that
+device is driven. Item 5424307372 is the one iOS test today.
 
 **What.** The existing 🔒 variant of `createClaimProtocol`
 (`claim-lib.js:77`), posted on the device's issue instead of a queue issue.
 Same fields, same HELD/RELEASED, same `Waiting on: human` never-expires rule,
 same 30-minute silence rule — the semantics the standard already documents in
 "Claiming the device" are unchanged; only the subject moves. The `claimed`
-label goes on the device issue while held (so the devices repo's issue list
+label goes on the device issue while held (so litmus's issue list
 *is* the board), removed on release, swept by `wip sweep` when a claim goes
 silent — all existing behaviour of the work-claim tooling.
 
@@ -355,8 +361,8 @@ collision; forge PR #93 carries the skill-text change).
 
 **Escalation, stated now so it is not re-argued later.** If a collision
 recurs despite (1) and (2), the next layer is the one genuinely atomic
-primitive GitHub offers: a fast-forward-only push to a `lock` branch in the
-devices repo (`gh-action-mutex`'s mechanism), with the issue comment kept for
+primitive GitHub offers: a fast-forward-only push to a `lock` branch in
+litmus (`gh-action-mutex`'s mechanism), with the issue comment kept for
 human visibility. Not built now — enforcement before the guidance has failed
 is over-fitting to one bad day, the same judgement forge#94 records.
 
@@ -407,14 +413,14 @@ ids; those sessions find the new issue by the second lookup.
 | Surface | Change |
 |---|---|
 | `standards/workflows.md` → "Device-test queue" | Enqueue = `gh issue create`; body fields; label table; the amend-your-test rule; `**Status:**` and the glyph table retired |
-| `standards/workflows.md` → "Claiming the device" | Subject becomes the device issue in the devices repo; post-then-re-read and re-check-at-use rules; launch-time check |
+| `standards/workflows.md` → "Claiming the device" | Subject becomes the device issue in litmus; post-then-re-read and re-check-at-use rules; launch-time check |
 | `skills/device-test/SKILL.md` | Step 0 lists by label; Step 3 verdicts = close / label; drift repair collapses to "missing fields"; Scope table gains loom and real checkout paths |
 | `skills/device-test/scripts/queue-lib.js` | `collect()` from search-by-label; same return shape; `REPOS` + loom; comment parser retained only inside `migrate` |
 | `skills/device-test/scripts/status-board.js` (`dtq`) | Renders the same shape; item id is `repo#N`; gains `enqueue`, `claim/touch/release`, `migrate` subcommands (the last is removed after migration) |
 | `hooks/device-test-status.mjs` | Unchanged consumer |
-| `skills/device-test/scripts/claim-lib.js` | Points at the devices repo; adds the two race rules |
+| `skills/device-test/scripts/claim-lib.js` | Points at litmus's device issue; adds the two race rules |
 | App repos (alate, mood-layer, badige, loom) | Labels created on first use (self-healing, as today); `eas-update.yml` notice target (alate) |
-| `Tessellate-Studio/devices` | New private repo; one pinned issue per device |
+| `Tessellate-Studio/litmus` | Add one pinned issue per physical device (Android + iOS); no new repo |
 | Weekly build task | Reads `needs-build` label instead of the Status marker |
 
 ## Alternatives Considered
@@ -450,8 +456,7 @@ ids; those sessions find the new issue by the second lookup.
 Ordered by dependency; each is a PR that ships alone. Version bumps in
 `.claude-plugin/plugin.json` per forge convention.
 
-1. **Global device lock** — create `Tessellate-Studio/devices` (private) with
-   the pinned device issue; point `claim-lib.js` at it; add post-then-re-read
+1. **Global device lock** — add one pinned device issue per handset (Android + iOS) to `Tessellate-Studio/litmus`; point `claim-lib.js` at it; add post-then-re-read
    and re-check-at-use; `dtq claim/touch/release`; update "Claiming the
    device". Independent of the queue medium and the highest safety value —
    ships first. Effort: small.
@@ -477,22 +482,32 @@ Ordered by dependency; each is a PR that ships alone. Version bumps in
    past-failure rule lives there); the `dtq` bot-notice parser fix already
    chipped, which step 2 subsumes.
 
-## Open Questions
+## Decisions
 
-- [ ] **Where does the device lock live** — a new private `devices` repo (this
-  proposal), or an existing private repo (`litmus`?) with one pinned issue?
-  New repo is cleanest; reuse avoids a repo. — needs input from Saptami.
-- [ ] **Failed tests stay open** (this proposal, matching PR #93's re-check
-  rule) or close-and-reopen on fix? Open keeps them on the board; some prefer
-  a closed test to mean "this run ended". — needs input from Saptami.
-- [ ] **Label names** — `device-test`, `needs-human`, `needs-build`, `failed`,
-  `parked`; `needs-input` and `gate-blocked` already exist on alate with the
-  same red — confirm the taxonomy does not collide with them. — Saptami.
-- [ ] **iOS / human-held devices** — a second device issue for the iPhone
-  (TestFlight, no adb), permanently `Waiting on: human`? Item 5424307372 is
-  the one such test today. — Saptami.
-- [ ] **Sub-issue grouping** — none now, or group tests under a release
-  parent once the medium is issues? Deferred to implementation unless there
-  is a preference. — Saptami.
-- [ ] **Accept advisory lock + deterministic resolution now, branch-push CAS
-  only on recurrence** (this proposal)? — Saptami.
+Resolved with the user 2026-09-08; the four that were open are settled, and
+the design above reflects them. This moves the RFD to **published**.
+
+- [x] **Lock home — reuse `Tessellate-Studio/litmus`**, not a new `devices`
+  repo. litmus is already the private "shared testing utilities for Tessellate
+  mobile apps" repo; a device lock is a shared test fixture, which is its
+  charter exactly. One pinned issue per handset.
+- [x] **A failed test stays open**, labelled `failed`, until a later drain
+  re-runs it after the fix and it passes — matching PR #93's re-check rule. A
+  failure is open work, not a closed run.
+- [x] **iOS gets its own device issue** in litmus, its claim permanently at
+  `Waiting on: human` (never expires) — the true description of a TestFlight,
+  no-adb device. Item 5424307372 is the one iOS test today.
+- [x] **Advisory lock + deterministic resolution now** (post-then-re-read with
+  lowest-comment-id-wins, plus re-check before each device step); branch-push
+  CAS is the named escalation only if a collision recurs — matching the
+  standards' preference not to build enforcement before guidance has failed
+  (forge#94).
+
+Deferred to implementation, not blocking:
+
+- **Label-name collision check.** `device-test`, `needs-human`, `needs-build`,
+  `failed`, `parked` — confirm against alate's existing `needs-input` /
+  `gate-blocked` (same red) at the implementation PR; rename if any clash.
+- **Sub-issue grouping.** None at first. Once the medium is issues, tests may
+  optionally group under a per-release parent; decided when there is a reason,
+  not pre-emptively.
