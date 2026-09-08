@@ -6,20 +6,33 @@ module.exports = {
     node: true,
     jest: true,
   },
-  extends: ['eslint:recommended'],
+  // eslint-config-prettier MUST be last: it switches off every formatting rule
+  // prettier already owns (indent, quotes, semi, brace-style, …).
+  //
+  // Without it the two tools fight on every commit. lint-staged runs
+  // `eslint --fix` then `prettier --write`, so prettier reformats what eslint
+  // just "fixed" and the error comes straight back — 1081 errors across the
+  // repo, none of them about code quality, all of them noise that trained
+  // everyone to ignore `lint:check`. A rule nobody can satisfy is not a rule.
+  extends: ['eslint:recommended', 'prettier'],
   parserOptions: {
     ecmaVersion: 'latest',
   },
   rules: {
+    // FORMATTING RULES LIVE IN PRETTIER, NOT HERE. indent / quotes / semi /
+    // brace-style / no-trailing-spaces / eol-last were all declared in this
+    // block, which meant they overrode eslint-config-prettier above and the
+    // two tools fought on every commit — lint-staged runs `eslint --fix` then
+    // `prettier --write`, so prettier reformatted what eslint had just
+    // "fixed" and the error came straight back. 1081 errors repo-wide, none
+    // about code quality. A rule nobody can satisfy is not a rule; it is noise
+    // that teaches everyone to ignore the linter.
+    //
     // Code quality rules aligned with Best Practices SDK
-    indent: ['error', 2],
-
     // NOTE: no 'linebreak-style' rule on purpose. Line endings are owned by
     // .gitattributes (`* text=auto eol=lf`), which normalizes them in the index
     // and on checkout for every platform. Re-adding the eslint rule duplicates
     // that machinery and only ever fires on Windows checkouts.
-    quotes: ['error', 'single'],
-    semi: ['error', 'always'],
 
     // Enforce meaningful variable names
     'id-length': ['warn', { min: 2, exceptions: ['i', 'j', 'k', '_'] }],
@@ -48,9 +61,6 @@ module.exports = {
     // Best practices
     eqeqeq: ['error', 'always'],
     curly: ['error', 'all'],
-    'brace-style': ['error', '1tbs'],
-    'no-trailing-spaces': 'error',
-    'eol-last': 'error',
 
     // Async/await best practices
     'prefer-promise-reject-errors': 'error',

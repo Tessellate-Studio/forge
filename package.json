@@ -1,7 +1,7 @@
 {
   "name": "@tessellate-studio/forge",
   "version": "0.5.0",
-  "description": "Tessellate build platform: Claude Code plugin (skills + standards) plus the standards/bp and rubric CLIs \u2014 one repo, installed from GitHub.",
+  "description": "Tessellate build platform: Claude Code plugin (skills + standards) plus the standards/bp and rubric CLIs — one repo, installed from GitHub.",
   "main": "index.js",
   "bin": {
     "standards": "standards-cli/cli/index.js",
@@ -82,21 +82,22 @@
   "author": "Tessellate Studio",
   "license": "MIT",
   "dependencies": {
-    "commander": "^11.0.0",
     "chalk": "^4.1.2",
+    "commander": "^11.0.0",
     "fs-extra": "^11.0.0",
-    "inquirer": "^8.0.0",
-    "yaml": "^2.3.0",
     "glob": "^10.0.0",
-    "json2csv": "^5.0.7"
+    "inquirer": "^8.0.0",
+    "json2csv": "^5.0.7",
+    "yaml": "^2.3.0"
   },
   "devDependencies": {
-    "jest": "^29.0.0",
     "eslint": "^8.0.0",
+    "eslint-config-prettier": "^10.1.8",
     "eslint-config-standard": "^17.0.0",
-    "prettier": "^2.8.0",
     "husky": "^8.0.0",
-    "lint-staged": "^13.0.0"
+    "jest": "^29.0.0",
+    "lint-staged": "^13.0.0",
+    "prettier": "^2.8.0"
   },
   "engines": {
     "node": ">=16.0.0",
