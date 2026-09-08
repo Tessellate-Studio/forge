@@ -86,6 +86,19 @@ function humanIdle(minutes) {
   return `${Math.round(minutes / (24 * 60))}d`;
 }
 
+/**
+ * One line, clamped to `max` characters. Boards are built from text other
+ * people wrote, so a single long title must cost one truncated line and
+ * never a word wall.
+ */
+function clip(text, max) {
+  if (!text) {
+    return text;
+  }
+  const flat = String(text).replace(/\s+/g, ' ').trim();
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+}
+
 function minutesSince(iso) {
   const parsed = iso ? Date.parse(iso) : NaN;
   return Number.isNaN(parsed)
@@ -152,9 +165,7 @@ function createClaimProtocol(spec) {
       `- **Claimed by:** ${opts.heldBy}`,
     ];
     fields.forEach(f => {
-      lines.push(
-        `- **${f.name}:** ${f.render ? f.render(opts) : opts[f.from] || '—'}`
-      );
+      lines.push(`- **${f.name}:** ${f.render(opts)}`);
     });
     lines.push(
       `- **${startedField}:** ${at}`,
@@ -300,6 +311,7 @@ function createClaimProtocol(spec) {
 module.exports = {
   NOT_WAITING,
   humanIdle,
+  clip,
   stripCode,
   NOTICE_GLYPHS,
   noticeMarker,

@@ -40,10 +40,9 @@ const {
   leakedItems,
   failedRepos,
   mapWithLimit,
-  humanIdle,
   claimDetails,
 } = require('./lib/claim');
-const { stripCode, NOT_WAITING } = require('./lib/protocol');
+const { stripCode, NOT_WAITING, clip, humanIdle } = require('./lib/protocol');
 
 /**
  * Every "is this claim mine?" test compares session ids. Outside Claude Code
@@ -84,14 +83,6 @@ async function requireGh() {
     console.error(chalk.red(ready.message));
     process.exit(1);
   }
-}
-
-function clip(text, max) {
-  if (!text) {
-    return text;
-  }
-  const flat = String(text).replace(/\s+/g, ' ').trim();
-  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
 
 /** `alate#42`, `alate 42`, or a full GitHub URL — all name one item. */
@@ -222,6 +213,16 @@ function addLabel(repo, number) {
   ]);
 }
 
+/** True when the label attached; false on any failure. */
+async function tryLabel(repo, number) {
+  try {
+    await addLabel(repo, number);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function ensureLabel(repo) {
   try {
     await gh([
@@ -265,6 +266,7 @@ function renderRepo(result) {
   claimed.forEach(item => {
     const c = item.claim;
     const kind = item.isPr ? chalk.magenta('PR ') : chalk.cyan('ISS');
+
     // Idle is reported in the largest honest unit, and QUIET is not a
     // warning — multi-day work is normal, so only real silence is yellow.
     const tint = c.quiet ? chalk.yellow : chalk.gray;
@@ -594,17 +596,18 @@ async function claim(target, opts) {
   // Add first, create only on failure: the label exists after the first
   // claim in a repo, so `gh label create` was a guaranteed-wasted subprocess
   // on every claim after that one.
-  try {
-    await addLabel(repo, number);
-  } catch {
-    try {
-      await ensureLabel(repo);
-      await addLabel(repo, number);
-    } catch (error) {
-    console.error(
-      chalk.yellow(
-          `Claim posted, but adding the "${CLAIM_LABEL}" label to ${repo}#${number} failed: ` +
-            `${error.message}. The board will not list it until the label is added.`
+  // Add first, create only on failure: the label exists after the first
+  // claim in a repo, so `gh label create` was a guaranteed-wasted subprocess
+  // on every claim after that one.
+  const labelled = await tryLabel(repo, number);
+  if (!labelled) {
+    await ensureLabel(repo);
+    const retried = await tryLabel(repo, number);
+    if (!retried) {
+      console.error(
+        chalk.yellow(
+          `Claim posted, but the "${CLAIM_LABEL}" label would not attach to ` +
+            `${repo}#${number}. The board will not list it until it does.`
         )
       );
     }

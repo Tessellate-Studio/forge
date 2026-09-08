@@ -80,7 +80,8 @@ const LOCK_STALE_MS = 15 * 60 * 1000;
 const GIT_TIMEOUT_MS = 20_000;
 const CLI_TIMEOUT_MS = 180_000;
 
-const root = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+const root =
+  process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
 const manifestPath = path.join(root, 'plugins', 'installed_plugins.json');
 const clonePath = path.join(root, 'plugins', 'marketplaces', MARKETPLACE);
 const hooksDir = path.join(root, 'hooks');
@@ -105,7 +106,10 @@ function writeState(patch) {
   try {
     fs.mkdirSync(hooksDir, { recursive: true });
     // Merge rather than overwrite: hook mode and worker mode both own different fields.
-    fs.writeFileSync(statePath, JSON.stringify({ ...readState(), ...patch }, null, 2));
+    fs.writeFileSync(
+      statePath,
+      JSON.stringify({ ...readState(), ...patch }, null, 2)
+    );
     return true;
   } catch {
     /* a read-only state file must never break session start */
@@ -153,7 +157,7 @@ function installedEntry() {
     return null;
   }
   const entries = manifest?.plugins?.[`${PLUGIN}@${MARKETPLACE}`] ?? [];
-  return entries.find((e) => e.scope === 'user') ?? entries[0] ?? null;
+  return entries.find(e => e.scope === 'user') ?? entries[0] ?? null;
 }
 
 /** Clone HEAD sha, or null when it can't be read. Part of the version-pin block fingerprint. */
@@ -192,7 +196,10 @@ function acquireLock() {
       if (Date.now() - (held.ts ?? 0) < LOCK_STALE_MS) return false; // another repair in flight
       log(`breaking stale lock from pid ${held.pid}`);
     }
-    fs.writeFileSync(lockPath, JSON.stringify({ pid: process.pid, ts: Date.now() }));
+    fs.writeFileSync(
+      lockPath,
+      JSON.stringify({ pid: process.pid, ts: Date.now() })
+    );
     return true;
   } catch {
     return false;
@@ -214,7 +221,8 @@ function resolveClaudeBin() {
     'bin',
     process.platform === 'win32' ? 'claude.exe' : 'claude'
   );
-  if (process.env.CLAUDE_BIN && fs.existsSync(process.env.CLAUDE_BIN)) return process.env.CLAUDE_BIN;
+  if (process.env.CLAUDE_BIN && fs.existsSync(process.env.CLAUDE_BIN))
+    return process.env.CLAUDE_BIN;
   if (fs.existsSync(local)) return local;
   return 'claude'; // fall back to PATH resolution
 }
@@ -268,7 +276,11 @@ function repair() {
     }
 
     const bin = resolveClaudeBin();
-    log(`drift detected (behind=${behindBefore ?? 'n/a'}, cacheStale=${cacheStaleBefore}) — repairing with ${bin}`);
+    log(
+      `drift detected (behind=${
+        behindBefore ?? 'n/a'
+      }, cacheStale=${cacheStaleBefore}) — repairing with ${bin}`
+    );
 
     // Marketplace FIRST. The clone is what goes stale; updating the plugin alone no-ops.
     if (behindBefore) {
@@ -276,7 +288,12 @@ function repair() {
         runCli(bin, ['plugin', 'marketplace', 'update', MARKETPLACE]);
         log('ran: claude plugin marketplace update');
       } catch (err) {
-        log(`marketplace update FAILED: ${String(err?.message ?? err).slice(0, 300)}`);
+        log(
+          `marketplace update FAILED: ${String(err?.message ?? err).slice(
+            0,
+            300
+          )}`
+        );
       }
     }
 
@@ -293,7 +310,11 @@ function repair() {
     const behindAfter = behindCount();
     const cacheStaleAfter = entryAfter ? cacheBehindClone(entryAfter) : true;
     const versionAfter = entryAfter?.version ?? 'unknown';
-    const healthy = !behindAfter && !cacheStaleAfter && !!entryAfter && fs.existsSync(entryAfter.installPath);
+    const healthy =
+      !behindAfter &&
+      !cacheStaleAfter &&
+      !!entryAfter &&
+      fs.existsSync(entryAfter.installPath);
 
     // Distinguish two very different failures:
     //
@@ -314,7 +335,8 @@ function repair() {
     //                                          unattended.
     const versionPinned = !healthy && !behindAfter && cacheStaleAfter;
     const state = readState();
-    const failures = healthy || versionPinned ? 0 : (state.consecutiveFailures ?? 0) + 1;
+    const failures =
+      healthy || versionPinned ? 0 : (state.consecutiveFailures ?? 0) + 1;
 
     writeState({
       consecutiveFailures: failures,
@@ -333,11 +355,13 @@ function repair() {
         detail: healthy
           ? `updated forge ${versionBefore} -> ${versionAfter}`
           : versionPinned
-            ? `the clone is current but the cached copy of v${versionAfter} was never re-extracted — ` +
-              `forge changed standards without bumping its version, so 'claude plugin update' no-ops. ` +
-              `This needs a forced reinstall: claude plugin uninstall ${PLUGIN}@${MARKETPLACE} && ` +
-              `claude plugin install ${PLUGIN}@${MARKETPLACE}`
-            : `repair ran but drift remains (behind=${behindAfter ?? 'n/a'}, cacheStale=${cacheStaleAfter})`,
+          ? `the clone is current but the cached copy of v${versionAfter} was never re-extracted — ` +
+            `forge changed standards without bumping its version, so 'claude plugin update' no-ops. ` +
+            `This needs a forced reinstall: claude plugin uninstall ${PLUGIN}@${MARKETPLACE} && ` +
+            `claude plugin install ${PLUGIN}@${MARKETPLACE}`
+          : `repair ran but drift remains (behind=${
+              behindAfter ?? 'n/a'
+            }, cacheStale=${cacheStaleAfter})`,
       },
     });
 
@@ -345,8 +369,10 @@ function repair() {
       healthy
         ? `repair OK: ${versionBefore} -> ${versionAfter}`
         : versionPinned
-          ? `repair BLOCKED: version-pinned staleness at v${versionAfter} — needs forced reinstall (not attempted unattended)`
-          : `repair INCOMPLETE (failure #${failures}): behind=${behindAfter ?? 'n/a'} cacheStale=${cacheStaleAfter}`
+        ? `repair BLOCKED: version-pinned staleness at v${versionAfter} — needs forced reinstall (not attempted unattended)`
+        : `repair INCOMPLETE (failure #${failures}): behind=${
+            behindAfter ?? 'n/a'
+          } cacheStale=${cacheStaleAfter}`
     );
   } catch (err) {
     log(`repair threw: ${String(err?.message ?? err).slice(0, 300)}`);
@@ -417,7 +443,8 @@ function hook() {
 
   // Is anything actually wrong RIGHT NOW? Decided before replaying any repair history, so
   // a resolved-but-still-recorded failure is never announced to a healthy session.
-  const installMissing = !entry.installPath || !fs.existsSync(entry.installPath);
+  const installMissing =
+    !entry.installPath || !fs.existsSync(entry.installPath);
   const cloneExists = fs.existsSync(clonePath);
   const cacheStale = !installMissing && cloneExists && cacheBehindClone(entry);
   const behind = !installMissing && cloneExists ? behindCount() : null;
@@ -427,7 +454,11 @@ function hook() {
   const state = readState();
   const last = state.lastRepair;
   const sessionId = readSessionId();
-  if (last?.ts && (last.ok || liveProblem) && shouldReportRepair(state, last, sessionId)) {
+  if (
+    last?.ts &&
+    (last.ok || liveProblem) &&
+    shouldReportRepair(state, last, sessionId)
+  ) {
     recordRepairReported(state, last, sessionId);
     if (last.ok) {
       notes.push(
@@ -463,7 +494,11 @@ function hook() {
   // and then not queueing one is how a user ends up waiting on a fix that is never coming.
   const failures = state.consecutiveFailures ?? 0;
   const backedOff = failures >= MAX_FAILURES_BEFORE_BACKOFF;
-  const pinBlocked = isVersionPinBlocked(last, entry, { cacheStale, behind, head: cloneHead() });
+  const pinBlocked = isVersionPinBlocked(last, entry, {
+    cacheStale,
+    behind,
+    head: cloneHead(),
+  });
 
   // Throttle on lastATTEMPT, not lastFetch. lastFetch only advances when a fetch SUCCEEDS
   // (deliberately — see the fetch handler in repair()), so gating on it meant any persistent
@@ -567,7 +602,7 @@ try {
 
 const { problems, notes } = result;
 if (problems.length > 0 || notes.length > 0) {
-  const lines = [...problems, ...notes].map((p) => `- ${p}`).join('\n');
+  const lines = [...problems, ...notes].map(p => `- ${p}`).join('\n');
   const stale = problems.length > 0;
   // additionalContext MUST be nested under hookSpecificOutput with a
   // hookEventName — a top-level additionalContext key is silently ignored
@@ -575,7 +610,9 @@ if (problems.length > 0 || notes.length > 0) {
   // warnings. Verified against the debug log of a live session, 2026-08-26.
   process.stdout.write(
     JSON.stringify({
-      systemMessage: `forge plugin: ${stale ? 'stale' : 'updated in background'}\n${lines}`,
+      systemMessage: `forge plugin: ${
+        stale ? 'stale' : 'updated in background'
+      }\n${lines}`,
       hookSpecificOutput: {
         hookEventName: 'SessionStart',
         additionalContext: stale

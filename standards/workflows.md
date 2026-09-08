@@ -279,7 +279,9 @@ That posts:
 ### 🚧 Work claim
 - **Claimed by:** <branch (session-id tail)>
 - **Session:** `claude --resume <session id>` on <host>
+      <or: session not identified — reconstructed from the live worktree>
 - **Worktree:** `<absolute path>` (branch `<branch>`)
+      <or: — no local worktree (branch `<branch>`), for a branch only on origin>
 - **Started at:** <ISO 8601 UTC>
 - **Last touch:** <ISO 8601 UTC — rewritten at each checkpoint>
 - **Related:** <the issue a PR implements, the PRs carrying an issue, or —>
@@ -339,15 +341,21 @@ claim it.
 - **The label is swept, not trusted.** Releasing is a rule a session has to
   still be alive to follow, and the two cases where it is not are the common
   ones: a crashed session cannot release its own claim, and a session that
-  ends with the merge never gets to. So `wip sweep` drops the label from any
-  item where nothing live holds it — the item **closed** (nothing legitimately
-  holds a claim on finished work, and this is the common case), or every claim
-  silent past the seven-day window. **It never sweeps an open item that is
-  merely quiet** — stripping the label mid-job is the collision it exists to
-  prevent. It
-  never touches a live claim, never touches an item it could not read, and
-  never edits a comment body: the claim stays as the record of who held it
-  and when they went quiet.
+  ends with the merge never gets to. So `wip sweep` drops the label wherever
+  **nothing live holds the item**, which is two cases and only two:
+  - the item is **closed and a claim on it is still HELD** — the work is
+    over and nobody closed the claim (the common case, since the merge ends
+    the work and the session together). A closed item whose claims were all
+    released is the system working, not a leak, and is left alone.
+  - the item is **open and every claim on it has gone silent** past the
+    seven-day window.
+
+  **It never sweeps an open item that is merely quiet** — stripping the label
+  mid-job is the collision it exists to prevent. It never touches a live
+  claim, never touches an item it could not read (an unread repo is not a
+  clean repo, and the sweep says which repos it could not check rather than
+  issuing a clean bill that covers them), and never edits a comment body:
+  the claim stays as the record of who held it and when they went quiet.
   - `status-check` sweeps as part of closing a session, and `wip` names the
     leak count so a human sees it without being asked.
   - **Precedent, 2026-09-07:** forge #95 merged still carrying `claimed`,

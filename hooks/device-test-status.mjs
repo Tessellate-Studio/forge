@@ -31,16 +31,25 @@ const TIMEOUT_MS = 12_000;
 
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
-const { STATUS, checkGhReady, collect } = require(
-  path.join(here, '..', 'skills', 'device-test', 'scripts', 'queue-lib.js')
-);
+const { STATUS, checkGhReady, collect } = require(path.join(
+  here,
+  '..',
+  'skills',
+  'device-test',
+  'scripts',
+  'queue-lib.js'
+));
 
 function timeout(ms) {
   return new Promise(resolve => setTimeout(() => resolve(null), ms));
 }
 
 async function main() {
-  if (/^(1|true|yes|on)$/i.test(process.env.FORGE_DEVICE_TEST_STATUS_DISABLE ?? '')) {
+  if (
+    /^(1|true|yes|on)$/i.test(
+      process.env.FORGE_DEVICE_TEST_STATUS_DISABLE ?? ''
+    )
+  ) {
     return;
   }
 
@@ -79,7 +88,9 @@ async function main() {
     if (open.length || failed.length || needsBuild.length || unparsed.length) {
       const parts = [];
       if (open.length) {
-        parts.push(`${open.length} open${human ? ` (${human} needs-human)` : ''}`);
+        parts.push(
+          `${open.length} open${human ? ` (${human} needs-human)` : ''}`
+        );
       }
       if (failed.length) {
         parts.push(`${failed.length} failed`);

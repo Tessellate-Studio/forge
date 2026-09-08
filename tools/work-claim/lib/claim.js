@@ -33,7 +33,6 @@ const os = require('os');
 
 const {
   NOT_WAITING,
-  humanIdle,
   field,
   setField,
   minutesSince,
@@ -557,7 +556,6 @@ module.exports = {
   releaseBody,
   describeClaim,
   claimDetails,
-  humanIdle,
   gh,
   mapWithLimit,
   checkGhReady,

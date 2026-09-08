@@ -15,11 +15,42 @@ const {
   activeClaim,
 } = require('./claim-lib');
 
-// Scope table — keep in sync with skills/device-test/SKILL.md.
+// gh() and checkGhReady() come from the work-claim lib rather than being
+// declared again here. The copy that used to live in this file was
+// character-identical EXCEPT that it never passed `timeout` — and this
+// tree is exactly where that matters: hooks/device-test-status.mjs races
+// collect() against a deadline, and Promise.race does not cancel the
+// loser, so a slow fetch left gh children running after the hook exited.
+// The reasoning was written down once, in the module that did not need it.
+const { gh, checkGhReady, slugRepo } = require(path.join(
+  __dirname,
+  '..',
+  '..',
+  '..',
+  'tools',
+  'work-claim',
+  'lib',
+  'claim.js'
+));
+const { minutesSince } = require(path.join(
+  __dirname,
+  '..',
+  '..',
+  '..',
+  'tools',
+  'work-claim',
+  'lib',
+  'protocol.js'
+));
+
+// Scope table — keep in sync with skills/device-test/SKILL.md. The scope is
+// deliberately NARROWER than the work-claim board (mobile apps only, because
+// this queue is about a phone); the owner string is not, so it comes from
+// slugRepo rather than being spelled out a fourth time.
 const REPOS = [
-  { key: 'alate', repo: 'Tessellate-Studio/alate' },
-  { key: 'mood-layer', repo: 'Tessellate-Studio/mood-layer' },
-  { key: 'badige', repo: 'Tessellate-Studio/badige' },
+  { key: 'alate', repo: slugRepo('alate') },
+  { key: 'mood-layer', repo: slugRepo('mood-layer') },
+  { key: 'badige', repo: slugRepo('badige') },
 ];
 
 const STATUS = {
@@ -100,24 +131,6 @@ function splitNotes(body) {
       .filter(Boolean),
   };
 }
-
-// gh() and checkGhReady() come from the work-claim lib rather than being
-// declared again here. The copy that used to live in this file was
-// character-identical EXCEPT that it never passed `timeout` — and this
-// tree is exactly where that matters: hooks/device-test-status.mjs races
-// collect() against a deadline, and Promise.race does not cancel the
-// loser, so a slow fetch left gh children running after the hook exited.
-// The reasoning was written down once, in the module that did not need it.
-const { gh, checkGhReady } = require(path.join(
-  __dirname,
-  '..',
-  '..',
-  '..',
-  'tools',
-  'work-claim',
-  'lib',
-  'claim.js'
-));
 
 function parseComment(comment) {
   const body = comment.body || '';
@@ -348,12 +361,17 @@ async function collect(repoFilter) {
   return Promise.all(targets.map(fetchRepoQueue));
 }
 
+/**
+ * Days since an ISO timestamp, or null when it cannot be read.
+ *
+ * Built on protocol.js `minutesSince` so the unreadable-timestamp policy is
+ * decided in one place. The hand-rolled version returned NaN for a garbage
+ * date where minutesSince returns null, and status-board renders
+ * `age === null ? '' : …` — so a bad created_at printed `(NaNd)`.
+ */
 function daysSince(iso) {
-  if (!iso) {
-    return null;
-  }
-  const ms = Date.now() - new Date(iso).getTime();
-  return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
+  const minutes = minutesSince(iso);
+  return minutes === null ? null : Math.floor(minutes / (60 * 24));
 }
 
 module.exports = {

@@ -19,7 +19,13 @@ function summarizeOutput(text, opts = {}) {
   const maxBytes = opts.maxBytes || DEFAULT_MAX_BYTES;
 
   if (!text) {
-    return { truncated: false, text: '', totalLines: 0, totalBytes: 0, omitted: 0 };
+    return {
+      truncated: false,
+      text: '',
+      totalLines: 0,
+      totalBytes: 0,
+      omitted: 0,
+    };
   }
 
   const lines = text.split('\n');

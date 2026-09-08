@@ -28,9 +28,12 @@ const TIMEOUT_MS = 12_000;
 
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
-const { STALE_MINUTES, collect, describeClaim, claimDetails } = require(
-  path.join(here, '..', 'tools', 'work-claim', 'lib', 'claim.js')
-);
+const {
+  STALE_MINUTES,
+  collect,
+  describeClaim,
+  claimDetails,
+} = require(path.join(here, '..', 'tools', 'work-claim', 'lib', 'claim.js'));
 
 function timeout(ms) {
   return new Promise(resolve => setTimeout(() => resolve(null), ms));
@@ -77,7 +80,9 @@ async function main() {
         parts.push(`  ${item.url}`);
         live.push(parts.join('\n'));
       } else if (item.claims.some(c => c.held)) {
-        stale.push(`- ${where} ${item.title} — claim silent >${STALE_MINUTES} min, free to take over: ${item.url}`);
+        stale.push(
+          `- ${where} ${item.title} — claim silent >${STALE_MINUTES} min, free to take over: ${item.url}`
+        );
       }
     });
   });
