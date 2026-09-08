@@ -62,6 +62,14 @@ you actually use to the user.
   The same trap [`workflows.md` → "Merge on green"](./workflows.md) names for
   `gh pr checks | tail && merge`, and it takes the same fix:
   `cmd >/dev/null && next`.
+- **A claim that something CANNOT be done is a behaviour claim too, and the
+  most expensive one to get wrong.** *This is untestable · there is no way in ·
+  we would need to buy the paid tier.* A wrong "can" produces a wrong answer
+  someone eventually catches; a wrong "cannot" closes the work off permanently
+  and nobody goes looking again. Probe it exactly as hard as you would probe a
+  positive claim — and treat an inherited "cannot" (a runbook line, a
+  regression-log row, your own earlier turn) as a hypothesis you have not
+  tested yet, not as a finding you may build on.
 
 **Why:** the failure is invisible from the inside — the reasoning is sound, the
 citation is real, and nothing contradicts you until a human pays for it.
@@ -78,7 +86,14 @@ Both passed against the unfixed code: the case is unreachable, because a blank
 label only enters the list from a purchasable variant, and the sold-out branch
 is then already false. One test was deleted for proving nothing. (3) A clean
 typecheck claimed from `tsc --noEmit | head; echo $?` — the tree happened to be
-clean, so the claim happened to be true, and it was still not evidence. By
+clean, so the claim happened to be true, and it was still not evidence. (4) The
+same session then concluded a change was "unverifiable on any store we have"
+and put the paid Shopify tier on the table — resting on a regression-log line,
+never re-measured, that a dev store's password cannot be lifted. The line was
+true and the conclusion was wrong: POSTing the storefront password to
+`/password` returns a cookie that admits the session past the gate, which the
+USER found by asking, not the agent by probing. Twenty minutes of work replaced
+a purchase. By
 contrast: the same session's two adversarial reviews found six real defects
 between them, including a P0 that told shoppers of ordinary boutiques "they
 make S, M and L — not Medium" — and every one came from executing a probe and
