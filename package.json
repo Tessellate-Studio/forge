@@ -61,14 +61,17 @@
     "test:safe-merge": "jest --config tools/safe-merge/jest.config.js",
     "test:work-claim": "jest --config tools/work-claim/jest.config.js",
     "test:coverage": "jest --config standards-cli/jest.config.js --coverage && jest --config rubric/jest.config.js --coverage",
-    "lint": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/brief/lib/ tools/brief/cli/ tools/work-claim/lib/ tools/work-claim/cli.js --fix",
-    "lint:check": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/brief/lib/ tools/brief/cli/ tools/work-claim/lib/ tools/work-claim/cli.js",
+    "lint": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/ hooks/ skills/ --fix",
+    "lint:check": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/ hooks/ skills/",
     "audit": "npm audit --audit-level=high",
     "validate": "node standards-cli/cli/bp-validate.js",
     "init": "node standards-cli/cli/bp-init.js",
     "docs": "node standards-cli/cli/bp-docs.js",
     "prepare": "husky install || true",
-    "pre-commit": "lint-staged"
+    "pre-commit": "lint-staged",
+    "format": "prettier --write \"**/*.js\" \"**/*.mjs\"",
+    "format:check": "prettier --check \"**/*.js\" \"**/*.mjs\"",
+    "lint:ci": "npm run lint:check && npm run format:check"
   },
   "keywords": [
     "tessellate",

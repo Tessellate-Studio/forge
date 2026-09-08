@@ -31,6 +31,29 @@ jobs:
       - name: Self-inspect (advisory)
         run: node standards-cli/cli/index.js inspect --standards security --path . || true
 
+  # Lint + format, BLOCKING. Advisory until 2026-09-08, when the eslint rules
+  # prettier also owns were removed from .eslintrc.js and the residual 25
+  # errors were cleared (#108, #111) — before that the gate reported 1081
+  # errors nobody could act on, so enforcing it would only have taught people
+  # to bypass it.
+  #
+  # Both halves run: eslint for code quality, prettier for formatting. Checking
+  # only eslint would leave formatting unenforced, because eslint-config-prettier
+  # deliberately switches those rules off.
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: ESLint + Prettier
+        run: npm run lint:ci
+
   # All three test suites: standards-cli + rubric (each with its own 80% gate)
   # and the workflow-payload suite (prompt-builder behaviour + the parse check
   # for references/workflows/*.js, which nothing else covers).

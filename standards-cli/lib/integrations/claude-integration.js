@@ -7,7 +7,7 @@ class ClaudeIntegration {
     this.config = {
       autoReview: true,
       reviewComments: true,
-      ...config.claude
+      ...config.claude,
     };
   }
 
@@ -16,19 +16,16 @@ class ClaudeIntegration {
     try {
       // Create .claude.json configuration
       const claudeConfig = {
-        "name": path.basename(projectPath),
-        "description": "Best Practices SDK managed project",
-        "auto_review": this.config.autoReview,
-        "review_triggers": [
-          "pull_request",
-          "push"
-        ],
-        "standards": {
-          "enforce_comments": true,
-          "max_function_lines": 50,
-          "security_scan": true,
-          "performance_check": true
-        }
+        name: path.basename(projectPath),
+        description: 'Best Practices SDK managed project',
+        auto_review: this.config.autoReview,
+        review_triggers: ['pull_request', 'push'],
+        standards: {
+          enforce_comments: true,
+          max_function_lines: 50,
+          security_scan: true,
+          performance_check: true,
+        },
       };
 
       const configPath = path.join(projectPath, '.claude.json');
@@ -38,14 +35,13 @@ class ClaudeIntegration {
       return {
         success: true,
         message: 'Claude integration configured successfully',
-        configPath
+        configPath,
       };
-
     } catch (error) {
       return {
         success: false,
         message: `Failed to setup Claude integration: ${error.message}`,
-        error
+        error,
       };
     }
   }
@@ -54,7 +50,7 @@ class ClaudeIntegration {
   async requestReview(prNumber, repositoryPath) {
     try {
       const cwd = repositoryPath || process.cwd();
-      
+
       // Use GitHub CLI to request Claude review
       const reviewMessage = `@claude-code Please review this PR for:
 
@@ -84,22 +80,21 @@ Please provide feedback and approve if all standards are met.`;
       // Comment on the PR with review request
       execSync(`gh pr comment ${prNumber} --body "${reviewMessage}"`, {
         cwd,
-        encoding: 'utf8'
+        encoding: 'utf8',
       });
 
       console.log(`✅ Claude review requested for PR #${prNumber}`);
-      
+
       return {
         success: true,
         message: `Review requested for PR #${prNumber}`,
-        prNumber
+        prNumber,
       };
-
     } catch (error) {
       return {
         success: false,
         message: `Failed to request Claude review: ${error.message}`,
-        error
+        error,
       };
     }
   }
@@ -113,27 +108,31 @@ Please provide feedback and approve if all standards are met.`;
         case 'missing-comment':
           suggestions.push({
             line: issue.line,
-            suggestion: `// Add descriptive comment for ${issue.functionName || 'this function'}`,
+            suggestion: `// Add descriptive comment for ${
+              issue.functionName || 'this function'
+            }`,
             type: 'add-comment',
-            priority: 'medium'
+            priority: 'medium',
           });
           break;
 
         case 'long-function':
           suggestions.push({
             line: issue.line,
-            suggestion: 'Consider breaking this function into smaller, more focused functions',
+            suggestion:
+              'Consider breaking this function into smaller, more focused functions',
             type: 'refactor-function',
-            priority: 'high'
+            priority: 'high',
           });
           break;
 
         case 'hardcoded-secret':
           suggestions.push({
             line: issue.line,
-            suggestion: 'Move this sensitive data to environment variables or secure configuration',
+            suggestion:
+              'Move this sensitive data to environment variables or secure configuration',
             type: 'security-fix',
-            priority: 'critical'
+            priority: 'critical',
           });
           break;
 
@@ -142,7 +141,7 @@ Please provide feedback and approve if all standards are met.`;
             line: issue.line,
             suggestion: this._getPerformanceSuggestion(issue),
             type: 'performance-optimization',
-            priority: 'medium'
+            priority: 'medium',
           });
           break;
 
@@ -151,7 +150,7 @@ Please provide feedback and approve if all standards are met.`;
             line: issue.line,
             suggestion: `Address ${issue.type}: ${issue.message}`,
             type: 'general',
-            priority: 'low'
+            priority: 'low',
           });
       }
     }
@@ -174,7 +173,7 @@ This code meets all Best Practices SDK standards. Ready for merge! 🚀`;
 
         execSync(`gh pr comment ${prNumber} --body "${approvalComment}"`, {
           cwd: repositoryPath || process.cwd(),
-          encoding: 'utf8'
+          encoding: 'utf8',
         });
 
         return { success: true, approved: true };
@@ -224,20 +223,19 @@ This code meets all Best Practices SDK standards. Ready for merge! 🚀`;
 
       execSync(`gh pr comment ${prNumber} --body "${comment}"`, {
         cwd: repositoryPath || process.cwd(),
-        encoding: 'utf8'
+        encoding: 'utf8',
       });
 
-      return { 
-        success: true, 
+      return {
+        success: true,
         approved: critical.length === 0 && high.length === 0,
-        suggestions: suggestions.length 
+        suggestions: suggestions.length,
       };
-
     } catch (error) {
       return {
         success: false,
         message: `Failed to create review comment: ${error.message}`,
-        error
+        error,
       };
     }
   }
@@ -245,14 +243,20 @@ This code meets all Best Practices SDK standards. Ready for merge! 🚀`;
   // Generate performance-specific suggestions
   _getPerformanceSuggestion(issue) {
     const suggestions = {
-      'console-log': 'Remove console.log statements before production deployment',
+      'console-log':
+        'Remove console.log statements before production deployment',
       'dom-query': 'Cache DOM queries in variables to avoid repeated lookups',
-      'nested-loop': 'Consider using more efficient algorithms or data structures',
+      'nested-loop':
+        'Consider using more efficient algorithms or data structures',
       'nested-foreach': 'Use map/reduce or flatten the data structure first',
-      'inefficient-clone': 'Use structured cloning or a dedicated library like lodash'
+      'inefficient-clone':
+        'Use structured cloning or a dedicated library like lodash',
     };
 
-    return suggestions[issue.subtype] || 'Consider optimizing this code pattern for better performance';
+    return (
+      suggestions[issue.subtype] ||
+      'Consider optimizing this code pattern for better performance'
+    );
   }
 
   // Check if Claude is available and configured
@@ -260,22 +264,21 @@ This code meets all Best Practices SDK standards. Ready for merge! 🚀`;
     try {
       // Check if GitHub CLI is available
       execSync('gh --version', { encoding: 'utf8' });
-      
+
       // Check if user is authenticated
       const authStatus = execSync('gh auth status', { encoding: 'utf8' });
-      
+
       return {
         available: true,
         authenticated: authStatus.includes('Logged in'),
-        message: 'Claude integration ready'
+        message: 'Claude integration ready',
       };
-
     } catch (error) {
       return {
         available: false,
         authenticated: false,
         message: 'GitHub CLI not available or not authenticated',
-        error: error.message
+        error: error.message,
       };
     }
   }

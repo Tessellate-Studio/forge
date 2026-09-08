@@ -8,27 +8,27 @@ const WorkflowStandards = {
       naming: 'feature/feature-name',
       shortLived: true,
       reviewRequired: true,
-      testsRequired: true
+      testsRequired: true,
     },
     pullRequests: {
       template: true,
       description: {
         required: true,
-        sections: ['Summary', 'Changes', 'Testing', 'Checklist']
+        sections: ['Summary', 'Changes', 'Testing', 'Checklist'],
       },
       reviews: {
         required: 1,
         codeOwners: false,
-        dismissStale: true
+        dismissStale: true,
       },
       checks: {
         ci: true,
         tests: true,
         lint: true,
         security: true,
-        coverage: true
-      }
-    }
+        coverage: true,
+      },
+    },
   },
 
   // Continuous Integration standards
@@ -37,37 +37,37 @@ const WorkflowStandards = {
     triggers: {
       push: ['main', 'develop'],
       pullRequest: ['main'],
-      schedule: true
+      schedule: true,
     },
     jobs: {
       test: {
         required: true,
         matrix: ['node16', 'node18', 'node20'],
         coverage: true,
-        artifacts: true
+        artifacts: true,
       },
       lint: {
         required: true,
         autofix: false,
-        fail: true
+        fail: true,
       },
       security: {
         required: true,
         auditLevel: 'high',
         secretScan: true,
-        dependencyScan: true
+        dependencyScan: true,
       },
       build: {
         required: true,
         artifacts: true,
-        cache: true
-      }
+        cache: true,
+      },
     },
     notifications: {
       slack: false,
       email: false,
-      github: true
-    }
+      github: true,
+    },
   },
 
   // Code review standards
@@ -79,19 +79,19 @@ const WorkflowStandards = {
       'No security vulnerabilities',
       'Performance impact considered',
       'Documentation updated',
-      'Breaking changes noted'
+      'Breaking changes noted',
     ],
     automation: {
       claudeReview: true,
       staticAnalysis: true,
       securityScan: true,
-      performanceCheck: true
+      performanceCheck: true,
     },
     response: {
       timeLimit: '24 hours',
       autoApprove: false,
-      requireManual: true
-    }
+      requireManual: true,
+    },
   },
 
   // Release management standards
@@ -101,21 +101,21 @@ const WorkflowStandards = {
       versionBump: true,
       changelog: true,
       tagging: true,
-      publishing: true
+      publishing: true,
     },
     approval: {
       required: false,
-      maintainers: true
+      maintainers: true,
     },
     testing: {
       fullSuite: true,
       stagingDeploy: false,
-      smokeTest: true
+      smokeTest: true,
     },
     rollback: {
       automated: false,
-      plan: true
-    }
+      plan: true,
+    },
   },
 
   // Quality gates standards
@@ -125,18 +125,18 @@ const WorkflowStandards = {
       lintPassing: true,
       coverageThreshold: 80,
       securityScanPassing: true,
-      reviewApproved: true
+      reviewApproved: true,
     },
     deployment: {
       allChecks: true,
       manualApproval: false,
-      stagingFirst: false
+      stagingFirst: false,
     },
     hotfix: {
       fastTrack: true,
       reducedChecks: false,
-      postDeployVerification: true
-    }
+      postDeployVerification: true,
+    },
   },
 
   // Documentation standards
@@ -145,20 +145,20 @@ const WorkflowStandards = {
       functions: true,
       complexLogic: true,
       businessRules: true,
-      apis: true
+      apis: true,
     },
     external: {
       readme: true,
       apiDocs: true,
       examples: true,
       changelog: true,
-      contributingGuide: true
+      contributingGuide: true,
     },
     maintenance: {
       keepUpdated: true,
       reviewWithCode: true,
-      versionSync: true
-    }
+      versionSync: true,
+    },
   },
 
   // Testing standards
@@ -168,33 +168,33 @@ const WorkflowStandards = {
         required: true,
         coverage: 80,
         fast: true,
-        isolated: true
+        isolated: true,
       },
       integration: {
         required: true,
         coverage: 70,
         realistic: true,
-        external: false
+        external: false,
       },
       e2e: {
         required: false,
         coverage: 50,
         critical: true,
-        slow: true
-      }
+        slow: true,
+      },
     },
     automation: {
       preCommit: false,
       preBuild: true,
       schedule: false,
-      onDeploy: true
+      onDeploy: true,
     },
     reporting: {
       coverage: true,
       results: true,
       trends: true,
-      artifacts: true
-    }
+      artifacts: true,
+    },
   },
 
   // Environment standards
@@ -203,22 +203,22 @@ const WorkflowStandards = {
       required: true,
       hotReload: true,
       debugging: true,
-      mockServices: true
+      mockServices: true,
     },
     staging: {
       required: false,
       production: false,
       testing: true,
-      deployment: true
+      deployment: true,
     },
     production: {
       required: true,
       monitoring: true,
       logging: true,
       backup: true,
-      security: true
-    }
-  }
+      security: true,
+    },
+  },
 };
 
 module.exports = WorkflowStandards;

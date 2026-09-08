@@ -9,5 +9,5 @@ module.exports = {
   CodeValidator,
   SecurityValidator,
   PerformanceValidator,
-  MaintenanceValidator
+  MaintenanceValidator,
 };
