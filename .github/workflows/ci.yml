@@ -1,3 +1,4 @@
+# CI — SUBJECT: the PR diff — lint, the test suites, and the npm audit gate. This is the merge gate.
 # forge — this repo's own CI (self-inspect + both test suites + security).
 # Consumer apps do NOT copy this; they call only the reusable
 # code-inspection.yml gate from their existing CI (see README).

@@ -1,3 +1,4 @@
+# Code Inspection — SUBJECT: a CALLER's diff — this is the reusable workflow_call target the app repos invoke. It inspects nothing in forge itself.
 # Reusable Code Inspection workflow.
 # Other repos call this to scan their code with the Code Standards SDK
 # (committed secrets, vulnerable deps, performance smells, code + a11y rules).
