@@ -47,6 +47,24 @@ const { minutesSince, maskCode } = require(path.join(
   'protocol.js'
 ));
 
+/**
+ * Parse a `gh api` response, refusing to read SILENCE as an empty list.
+ *
+ * `JSON.parse(out || '[]')` — which every fetch here used to do — turns a
+ * call that returned nothing into a queue with nothing in it. On 2026-09-09,
+ * with the GitHub API degraded, that printed `alate  nothing pending` while
+ * alate held 17 open tests: no error, no warning, just a confident lie in the
+ * one direction that matters. An empty queue and an unanswered question must
+ * never render the same way — the same rule the device lock follows when it
+ * prints `? UNREADABLE` rather than `free`.
+ */
+function parseGh(out, what) {
+  if (!out || !out.trim()) {
+    throw new Error(`empty response from gh (${what}) — treating as unknown`);
+  }
+  return JSON.parse(out);
+}
+
 /** The `**Status:**` field regex — one definition, three callers. */
 const STATUS_FIELD = /\*\*Status:\*\*\s*(.+?)\s*$/m;
 
@@ -88,7 +106,35 @@ const STATUS = {
   DONE: 'done',
   FAILED: 'failed',
   NEEDS_BUILD: 'needs_build',
+
+  // Open, but deliberately not drained — the user parked it. Distinct from
+  // OPEN so the daily drain can skip it without a human re-deciding daily,
+  // and distinct from DONE because nothing was verified.
+  PARKED: 'parked',
+
+  // Closed as not-planned: superseded, invalid, withdrawn. Distinct from DONE
+  // because reporting it as done would claim a verification nobody performed.
+  WITHDRAWN: 'withdrawn',
+
   UNPARSEABLE: 'unparseable',
+};
+
+/**
+ * The labels that carry a test's situation (RFD-003 §1, forge#107).
+ *
+ * `device-test` says "this issue is a test"; the rest say what kind of
+ * trouble it is in. GitHub's own open/closed state and close reason carry the
+ * verdict, so nothing here is parsed out of prose — which is the entire point
+ * of the medium change. Five parser repairs (#79, #80, #81, #102, #117) were
+ * all the same defect: prose has no state, so state had to be simulated, and
+ * a simulation drifts.
+ */
+const LABELS = {
+  ITEM: 'device-test',
+  NEEDS_HUMAN: 'needs-human',
+  NEEDS_BUILD: 'needs-build',
+  PARKED: 'parked',
+  FAILED: 'failed',
 };
 
 /**
@@ -435,57 +481,126 @@ function parseComment(comment) {
   return item;
 }
 
+/**
+ * One repo's queue, read from BOTH media for the length of the migration.
+ *
+ * The two halves are fetched independently and neither can take the other
+ * down. That is not defensiveness for its own sake: the first version gated
+ * the issue fetch behind finding the legacy queue issue, and badige — whose
+ * legacy queue had already gone — showed an empty board while carrying a real
+ * `device-test` issue. The same coupling would have blanked every board the
+ * moment step 6 retires the legacy queues.
+ *
+ * A half that fails is NAMED, never silently dropped. Showing the surviving
+ * half as if it were the whole queue is the one outcome worse than an error,
+ * because a missing test looks exactly like a queue with nothing in it.
+ */
 async function fetchRepoQueue(repoDef) {
   const { repo } = repoDef;
-  let issueNumber = null;
-  let issueUrl = null;
-  try {
+
+  const issues = fetchLabelledIssues(repoDef).then(
+    items => ({ items }),
+    error => ({ items: [], error: error.message || String(error) })
+  );
+
+  const legacy = (async () => {
     // `gh api`, not `gh issue list --json`. The latter fails outright on
     // gh 2.98.0 ("invalid character '{' after object key") for every field
     // combination, which took the whole board down — the tool that is
     // supposed to answer "what is pending" printed only an error. The REST
     // endpoint returns the same data and is unaffected.
-    const out = await gh([
+    const found = await gh([
       'api',
       `repos/${repo}/issues?labels=device-test-queue&state=open`,
     ]);
 
     // /issues also returns pull requests; they carry a `pull_request` key.
-    const issues = JSON.parse(out || '[]')
-      .filter(i => !i.pull_request)
-      .map(i => ({ number: i.number, url: i.html_url }));
-    if (issues.length === 0) {
-      return { ...repoDef, issueNumber: null, issueUrl: null, items: [] };
+    const queues = parseGh(found, `${repo} legacy queue lookup`).filter(
+      i => !i.pull_request
+    );
+    if (queues.length === 0) {
+      // Retired or never created. Not an error — it is the END STATE of this
+      // migration, and it must not read as a failure once every repo reaches
+      // it.
+      return { items: [], issueNumber: null, issueUrl: null };
     }
-    issueNumber = issues[0].number;
-    issueUrl = issues[0].url;
-  } catch (error) {
-    return { ...repoDef, error: error.message || String(error) };
-  }
-
-  try {
     const out = await gh([
       'api',
-      `repos/${repo}/issues/${issueNumber}/comments`,
+      `repos/${repo}/issues/${queues[0].number}/comments`,
       '--paginate',
     ]);
-    const comments = JSON.parse(out || '[]');
-    const items = comments.map(parseComment).filter(Boolean);
-
-    // No `claim` here any more. The device lock moved out of the app queues
-    // to one issue per handset in litmus (RFD-003 §3), because the device is
-    // not any one app's: a lock read off alate's queue was invisible to a
-    // drain working mood-layer's, and every queue reported the phone free
-    // while a fourth held it. `fetchDeviceClaims` answers it once, globally.
-    return { ...repoDef, issueNumber, issueUrl, items };
-  } catch (error) {
     return {
-      ...repoDef,
-      issueNumber,
-      issueUrl,
-      error: error.message || String(error),
+      items: parseGh(out, `${repo} queue comments`)
+        .map(parseComment)
+        .filter(Boolean),
+      issueNumber: queues[0].number,
+      issueUrl: queues[0].html_url,
     };
+  })().then(
+    result => result,
+    error => ({
+      items: [],
+      issueNumber: null,
+      issueUrl: null,
+      error: error.message || String(error),
+    })
+  );
+
+  const [fromIssues, fromComments] = await Promise.all([issues, legacy]);
+
+  // Both halves unreadable means we know nothing about this repo — that is a
+  // genuine error. One half down is a partial, reported as such.
+  if (fromIssues.error && fromComments.error) {
+    return { ...repoDef, error: fromIssues.error };
   }
+
+  const partial = fromIssues.error
+    ? `device-test issues unreadable (${fromIssues.error})`
+    : fromComments.error
+    ? `legacy queue unreadable (${fromComments.error})`
+    : null;
+
+  // No `claim` here any more. The device lock moved out of the app queues to
+  // one issue per handset in litmus (RFD-003 §3), because the device is not
+  // any one app's: a lock read off alate's queue was invisible to a drain
+  // working mood-layer's, and every queue reported the phone free while a
+  // fourth held it. `fetchDeviceClaims` answers it once, globally.
+  return {
+    ...repoDef,
+    issueNumber: fromComments.issueNumber,
+    issueUrl: fromComments.issueUrl,
+    items: [...fromIssues.items, ...fromComments.items],
+    issueCount: fromIssues.items.length,
+    legacyCount: fromComments.items.length,
+    partial,
+  };
+}
+
+/**
+ * Every `device-test` issue in one repo, open and closed.
+ *
+ * The REST issues endpoint with `labels=`, NOT the search API that RFD-003 §1
+ * sketched. Search is indexed asynchronously, so an issue created seconds ago
+ * is routinely missing from its results — and "enqueue a test, then read the
+ * board" is the single most common thing anyone does here. A queue that can
+ * fail to list what you just put in it is worse than a slow one. The REST
+ * endpoint filters server-side on the label with no index in the path.
+ *
+ * `state=all` because a closed test is still the record of a pass, and `dtq
+ * --all` shows them.
+ */
+async function fetchLabelledIssues(repoDef) {
+  const out = await gh([
+    'api',
+    `repos/${repoDef.repo}/issues?labels=${LABELS.ITEM}&state=all&per_page=100`,
+    '--paginate',
+  ]);
+
+  // /issues returns pull requests too; they carry a `pull_request` key. A PR
+  // that happened to wear the label would otherwise render as a test.
+  return parseGh(out, `${repoDef.repo} device-test issues`)
+    .filter(i => !i.pull_request)
+    .map(i => itemFromIssue(i, repoDef.key));
 }
 
 /**
@@ -510,7 +625,7 @@ async function fetchDeviceClaims() {
           `repos/${device.repo}/issues/${device.issue}/comments`,
           '--paginate',
         ]);
-        const comments = JSON.parse(out || '[]');
+        const comments = parseGh(out, `${device.repo}#${device.issue} claims`);
         const claims = comments.map(parseClaim).filter(Boolean);
         return { device, claim: activeClaim(claims), claims };
       } catch (error) {
@@ -518,6 +633,96 @@ async function fetchDeviceClaims() {
       }
     })
   );
+}
+
+/**
+ * One queue item, read off a GitHub issue instead of a comment.
+ *
+ * Everything the old parser had to infer from prose is now either a label or
+ * GitHub's own state, so this function has no regexes for state at all — only
+ * for the three free-text body fields that genuinely are prose. Compare
+ * `parseComment`, which needs ~120 lines to reach the same answer less
+ * reliably.
+ *
+ * The return shape matches `parseComment`'s deliberately: `dtq`, the
+ * SessionStart hook and the drain skill consume items without caring which
+ * medium produced them, which is what lets the two run side by side through
+ * the migration.
+ */
+function itemFromIssue(issue, repoKey) {
+  const body = issue.body || '';
+  const names = (issue.labels || []).map(l => (l.name || l).toLowerCase());
+  const has = name => names.includes(name);
+  const open = issue.state !== 'closed';
+
+  let state;
+  if (!open) {
+    // `not_planned` is withdrawn; anything else — including a null reason on
+    // issues closed before GitHub recorded one — is a pass. Defaulting the
+    // other way would silently downgrade every historical pass to withdrawn.
+    state =
+      issue.state_reason === 'not_planned' ? STATUS.WITHDRAWN : STATUS.DONE;
+  } else if (has(LABELS.FAILED)) {
+    // A failed test stays OPEN and is re-checked by every later drain until a
+    // fix makes it pass (RFD-003 §1). Closing on failure is how a bug stops
+    // being looked at.
+    state = STATUS.FAILED;
+  } else if (has(LABELS.NEEDS_BUILD)) {
+    state = STATUS.NEEDS_BUILD;
+  } else if (has(LABELS.PARKED)) {
+    state = STATUS.PARKED;
+  } else {
+    state = STATUS.OPEN;
+  }
+
+  const field = name => {
+    const match = body.match(
+      new RegExp(`\\*\\*${name}:\\*\\*\\s*(.+?)(?=\\s*·\\s*\\*\\*|\\s*$)`, 'm')
+    );
+    return match ? match[1].trim() : null;
+  };
+
+  // `Verifies:` never `closes:` — a test must not be closed by the very PR it
+  // exists to verify (RFD-003 §2).
+  const verifies = field('Verifies');
+  const prMatch = verifies && verifies.match(/#(\d+)/);
+
+  return {
+    state,
+    open,
+
+    // The id exists at creation and never changes — the thing a comment id
+    // could not be, since a comment had to be posted before it had one.
+    testId: `${repoKey}#${issue.number}`,
+
+    // The `[device-test]` prefix is for skimming notification lists; it is
+    // noise once you are already looking at the queue.
+    title: (issue.title || '').replace(/^\s*\[device-test\]\s*/i, ''),
+    pr: prMatch ? prMatch[1] : null,
+    delivery: field('Delivery'),
+    needsRuntime: field('Needs runtime'),
+    needsHuman: has(LABELS.NEEDS_HUMAN),
+
+    // An issue body can stack two `### <glyph>` headings exactly as a comment
+    // could, so forge #117's detection moves here rather than dying with the
+    // comment medium.
+    itemHeadings: itemHeadingCount(body),
+
+    // Nothing left to drift: there is no glyph mirroring a Status line,
+    // because there is no Status line. Kept on the shape so the board's
+    // existing drift counter reads zero rather than undefined.
+    headingDrift: false,
+    glyph: null,
+    statusText: '',
+
+    // Notes are ordinary issue comments now. They are NOT fetched here: the
+    // list endpoint returns bodies only, and a per-issue comment fetch would
+    // turn one request per repo into one per test. The drain fetches them for
+    // the item it is actually running.
+    notes: [],
+    commentUrl: issue.html_url,
+    createdAt: issue.created_at,
+  };
 }
 
 async function collect(repoFilter) {
@@ -548,6 +753,8 @@ function daysSince(iso) {
 module.exports = {
   REPOS,
   STATUS,
+  LABELS,
+  itemFromIssue,
   GLYPHS,
   ITEM_GLYPHS,
   expectedGlyph,
