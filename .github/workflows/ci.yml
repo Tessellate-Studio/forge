@@ -10,6 +10,18 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  # Manual dispatch against any ref. Two uses, both real:
+  #
+  #   1. Re-run the gate against a branch without opening a PR.
+  #   2. PROVE THE ALERT CAN GO RED. `alert-on-failure` fires on any non-PR
+  #      event, so dispatching this against a branch with a deliberately broken
+  #      test is the only way to exercise it end to end WITHOUT pushing a
+  #      failing commit to master. forge's own standard requires it: "A monitor
+  #      must be proven to go RED, not merely green today." A check that cannot
+  #      fail is worse than no check — it reads as coverage.
+  #
+  # alate and loom already carry this hatch on their own gates.
+  workflow_dispatch:
 
 env:
   NODE_VERSION: '18'
