@@ -78,6 +78,15 @@ For each repo:
 2. Filter to actionable issues:
    - **Include:** labeled `bug`, `build-failure`, `crash-monitor`, `auto-generated`, or **unlabeled** (newly filed)
    - **Skip:** labeled `needs-input`, `wont-fix`, `discussion`, `enhancement`, `planned`
+   - **Skip:** labeled **`device-test`** — these are pending on-device tests, not
+     crashes. Since 2026-09-10 every device test is its own open issue in the
+     app's repo (`standards/workflows.md` → "Device-test queue", RFD-003 /
+     forge#107), so this scan sees 20+ of them per run and would triage a test
+     someone is waiting to *run* as a bug someone reported. They have their own
+     tool (`dtq`) and their own drain (`/forge:device-test`); a `device-test`
+     issue reaching crash triage means one of the two is looking at the wrong
+     list. A test that *found* a crash is filed separately as its own bug —
+     that filed issue is what belongs here.
    - **Skip:** older than 30 days — comment `"Stale (>30 days). Flagging for manual review."` and label `stale` if not already
 3. Add survivors to the investigation queue alongside Sentry issues. Carry the issue URL and number forward for Step 3 dedup and Step 4 action.
 
