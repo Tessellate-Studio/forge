@@ -23,6 +23,7 @@ const {
 } = require('./queue-lib');
 const { clip } = require('../../../tools/work-claim/lib/protocol.js');
 const { enqueue } = require('./enqueue');
+const { migrate } = require('./migrate');
 
 // clip lives in the shared claim protocol module: this copy and the `wip`
 // board's had already drifted — one coerced with String(), this one called
@@ -370,7 +371,72 @@ async function runEnqueue(argv) {
   );
 }
 
+/**
+ * `dtq migrate <repo> [--apply]` — move one legacy queue into issues.
+ *
+ * Dry by default. The only way to write is to say --apply, because this is
+ * the one command here that cannot be undone by editing a comment back.
+ */
+async function runMigrate(argv) {
+  const repoKey = argv.find(a => !a.startsWith('--'));
+  if (!repoKey) {
+    console.error(chalk.red('usage: dtq migrate <repo> [--apply]'));
+    process.exit(1);
+  }
+  const result = await migrate(repoKey, { dryRun: !argv.includes('--apply') });
+
+  if (!result.queue) {
+    console.log(
+      chalk.gray(`${repoKey}: no legacy queue issue — nothing to migrate`)
+    );
+    return;
+  }
+  console.log(
+    chalk.bold(
+      `${repoKey}: ${result.moves.length} to move, ${result.stays.length} done items stay as the archive`
+    )
+  );
+  result.moves.forEach(m =>
+    console.log(
+      `  ${chalk.dim(String(m.comment.id))}  ${clip(m.title, 70)}  ${chalk.cyan(
+        m.labels.join(',')
+      )}`
+    )
+  );
+  if (result.aborted) {
+    console.log(
+      chalk.red(`
+ABORTED: ${result.aborted}`)
+    );
+    console.log(chalk.red(`  unmigrated: ${result.stillOpen.join(', ')}`));
+    process.exitCode = 1;
+    return;
+  }
+  if (result.migrated.length) {
+    console.log(
+      chalk.green(
+        `
+migrated ${result.migrated.length}; legacy issue ${
+          result.closed ? 'closed' : 'LEFT OPEN'
+        }`
+      )
+    );
+    result.migrated.forEach(m => console.log(`  ${m.from} -> #${m.to}`));
+  } else {
+    console.log(chalk.dim('\ndry run — nothing written. Re-run with --apply.'));
+  }
+}
+
 async function main() {
+  if (process.argv[2] === 'migrate') {
+    const ok = await checkGhReady();
+    if (!ok.ok) {
+      console.error(chalk.red(ok.message));
+      process.exit(1);
+    }
+    return runMigrate(process.argv.slice(3));
+  }
+
   if (process.argv[2] === 'enqueue') {
     const ready = await checkGhReady();
     if (!ready.ok) {

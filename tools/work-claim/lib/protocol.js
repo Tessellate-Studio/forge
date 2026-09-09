@@ -44,7 +44,12 @@ const NOT_WAITING = /^(?:—|–|-|none|nothing|n\/a)$/i;
  * every item carrying it invisible to the board, the worst failure the queue
  * parser has.
  */
-const NOTICE_GLYPHS = new Set(['📦']);
+// ➡️ marks a legacy queue comment whose test has MOVED to its own issue
+// (RFD-003 §4). It is a notice rather than an item so the old parser skips it
+// outright: a migrated comment is a signpost, and leaving it parseable would
+// have every migrated test counted twice — once as a comment, once as the
+// issue it became — for the whole window before the legacy queues are retired.
+const NOTICE_GLYPHS = new Set(['📦', '➡️']);
 
 /** The live notice pattern. Recomputed on registration, never hand-written. */
 function noticeMarker() {
