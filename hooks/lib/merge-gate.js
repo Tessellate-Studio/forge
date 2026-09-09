@@ -49,6 +49,46 @@ const GRAPHQL_MERGE_MUTATION = /\bmergePullRequest\b/;
 const SAFE_MERGE_INVOCATION = /safe-merge[/\\]cli\.js/;
 
 /**
+ * Blank the CONTENTS of heredoc bodies, keeping the delimiters.
+ *
+ * A heredoc body is DATA, never command position — it is a commit message, a PR
+ * body, a file being written. Without this, writing *about* a banned command
+ * blocks the very commit that bans it: this function exists because
+ * `git commit -F - <<'EOF' … gh pr merge --squash --auto … EOF` was refused by
+ * this hook on 2026-09-09, and that commit's whole purpose was removing that
+ * flag from four skills.
+ *
+ * Handles `<<DELIM`, `<<'DELIM'`, `<<"DELIM"` and `<<-DELIM`. The terminator
+ * must be alone on its line, which is what the shell requires anyway.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+function stripHeredocBodies(text) {
+  // Two passes, because the two forms terminate differently and the shell is
+  // strict about it. `<<-DELIM` strips leading TABS, so its terminator may be
+  // indented; plain `<<DELIM` requires the terminator at column 0. Matching the
+  // shell's own rule keeps this from blanking text the shell would execute.
+  return (
+    text
+
+      // `<<-DELIM` … indented terminator permitted
+      .replace(
+        /(<<-\s*)(['"]?)([A-Za-z_][A-Za-z0-9_]*)\2[\s\S]*?^[ \t]*\3$/gm,
+        (_m, opener, quote, delim) =>
+          `${opener}${quote}${delim}${quote}\n${delim}`
+      )
+
+      // `<<DELIM` … terminator must start the line
+      .replace(
+        /(<<\s*)(['"]?)([A-Za-z_][A-Za-z0-9_]*)\2[\s\S]*?^\3$/gm,
+        (_m, opener, quote, delim) =>
+          `${opener}${quote}${delim}${quote}\n${delim}`
+      )
+  );
+}
+
+/**
  * Blank the CONTENTS of quoted spans, keeping the quotes so token structure
  * survives. Command words are then whatever sits outside quotes.
  *
@@ -56,6 +96,10 @@ const SAFE_MERGE_INVOCATION = /safe-merge[/\\]cli\.js/;
  * text `gh pr merge` — this very hook's PR does — and blocking those would make
  * the gate something to route around rather than something to satisfy. Matching
  * command position instead of raw substring is what keeps it credible.
+ *
+ * Heredocs are stripped FIRST: their bodies routinely contain unbalanced quotes
+ * (an apostrophe in prose), which would otherwise desynchronise the quote
+ * scanner for the rest of the command.
  *
  * Deliberately blunt about escaped quotes: over-stripping hides a merge only
  * when the whole command is quoted, which is not runnable anyway, whereas
@@ -65,7 +109,9 @@ const SAFE_MERGE_INVOCATION = /safe-merge[/\\]cli\.js/;
  * @returns {string}
  */
 function stripQuotedSpans(text) {
-  return text.replace(/'[^']*'/g, "''").replace(/"[^"]*"/g, '""');
+  return stripHeredocBodies(text)
+    .replace(/'[^']*'/g, "''")
+    .replace(/"[^"]*"/g, '""');
 }
 
 /**

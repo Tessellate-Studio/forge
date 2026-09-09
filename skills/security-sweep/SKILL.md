@@ -9,7 +9,7 @@ You are a security scanner and auto-fixer for Tessellate apps. Find vulnerabilit
 
 The bar is an honest disposition, not a zero on a dashboard. Most findings in an Expo/React Native tree are build tooling that never ships; saying so with evidence is the deliverable. Claiming "fixed" what isn't, or dismissing something you haven't traced, is the failure mode this skill exists to prevent.
 
-Follow the triage policy in `Tessellate-Studio/forge` → `standards/security-triage.md` for all classification decisions. This file is the *procedure*; that one is the *policy*; each app's disposition log is the *current state*.
+Follow the triage policy in `Tessellate-Studio/forge` → `standards/security-triage.md` for all classification decisions. This file is the _procedure_; that one is the _policy_; each app's disposition log is the _current state_.
 
 ## Apps in scope
 
@@ -17,13 +17,13 @@ Follow the triage policy in `Tessellate-Studio/forge` → `standards/security-tr
 out locally, come from the invoking prompt or scheduled task — not from this
 file. Machine-specific paths do not belong in a versioned, public skill.
 
-Package roots per app, which *are* stable and worth recording here:
+Package roots per app, which _are_ stable and worth recording here:
 
-| App | Repo | Package roots |
-|---|---|---|
-| alate | `Tessellate-Studio/alate` (private) | `mobile/` **and** `backend/` |
-| badige | `Tessellate-Studio/badige` (private) | `.` |
-| mood-layer | `Tessellate-Studio/mood-layer` (public) | `.` |
+| App        | Repo                                    | Package roots                |
+| ---------- | --------------------------------------- | ---------------------------- |
+| alate      | `Tessellate-Studio/alate` (private)     | `mobile/` **and** `backend/` |
+| badige     | `Tessellate-Studio/badige` (private)    | `.`                          |
+| mood-layer | `Tessellate-Studio/mood-layer` (public) | `.`                          |
 
 Shared audit log: `Tessellate-Studio/litmus` → `auto-ship-log.md` (default branch `main`).
 
@@ -47,7 +47,7 @@ repo root has its own lockfile too, but it audits clean; don't stop there.
   isn't bootstrapped. Switch the main checkout's branch, do the work, then
   restore the original branch when finished.
 - **Record the starting ref before you touch anything** — `git rev-parse
-  --abbrev-ref HEAD`, and `git rev-parse HEAD` as well when it prints `HEAD`
+--abbrev-ref HEAD`, and `git rev-parse HEAD` as well when it prints `HEAD`
   (alate is routinely left on a detached commit). Step 6 restores it, and there
   is no way to recover it once you have switched away.
 - **Every branch you create is yours to delete** — see Step 6. The sweep opens
@@ -67,6 +67,7 @@ npm audit --json
 ```
 
 Parse the JSON output. For each advisory, extract:
+
 - Package name, severity (critical/high/moderate/low), vulnerability type
 - Whether it's a direct or transitive dependency
 - Whether a fix is available and if it's semver-compatible
@@ -75,7 +76,7 @@ Parse the JSON output. For each advisory, extract:
 ### 1a-i. Separate real findings from chain noise — do this FIRST
 
 `npm audit`'s headline count is badly misleading on RN/Expo projects. A package
-appears in `vulnerabilities` either because it *has* an advisory, or merely
+appears in `vulnerabilities` either because it _has_ an advisory, or merely
 because something it depends on does. Only the first kind is a real finding.
 
 In the JSON, each entry's `via` array holds **objects** for real advisories and
@@ -85,9 +86,9 @@ least one object in `via`. Typical result: 53 reported → 3 real. Triage the 3.
 Consequences worth internalising:
 
 - **A fix can raise the headline count while lowering real exposure.** Adding
-  packages to the tree adds more *dependents* of an already-known unpatchable
+  packages to the tree adds more _dependents_ of an already-known unpatchable
   leaf, each counted separately. Seen twice in the 2026-07-28 sweep: alate
-  mobile 23→53 and badige 11→58, both while distinct advisories went *down*.
+  mobile 23→53 and badige 11→58, both while distinct advisories went _down_.
   Always report distinct-vulnerable-package counts, and explain the raw number
   in the PR body so it doesn't read as a regression.
 - Never treat a rising count as a reason to abandon a fix that tests green.
@@ -95,7 +96,7 @@ Consequences worth internalising:
 ### 1a-ii. "No patch exists" — verify, don't infer
 
 An advisory range written `<=X` does **not** mean X is the newest release. It
-usually means X was newest *when the advisory was published*. Getting this wrong
+usually means X was newest _when the advisory was published_. Getting this wrong
 produces confidently false disposition logs (it happened on 2026-07-28 and
 needed three follow-up correction PRs).
 
@@ -107,12 +108,12 @@ npm view <package> version
 
 Compare that to the advisory range. Real examples from 2026-07-28:
 
-| Package | Advisory range | Latest published | Patch exists? |
-|---|---|---|---|
-| `brace-expansion` | `<=5.0.7` | 5.0.8 | yes — capped by `glob`/`minimatch` pins |
-| `tar` | `<=7.5.20` | 7.5.22 | yes — capped by `@expo/cli`'s `^6.0.5` |
-| `postcss` | `<=8.5.17` | 8.5.24 | yes |
-| `ip` | `<=2.0.1` | 2.0.1 | **no** — genuinely unpatched |
+| Package           | Advisory range | Latest published | Patch exists?                           |
+| ----------------- | -------------- | ---------------- | --------------------------------------- |
+| `brace-expansion` | `<=5.0.7`      | 5.0.8            | yes — capped by `glob`/`minimatch` pins |
+| `tar`             | `<=7.5.20`     | 7.5.22           | yes — capped by `@expo/cli`'s `^6.0.5`  |
+| `postcss`         | `<=8.5.17`     | 8.5.24           | yes                                     |
+| `ip`              | `<=2.0.1`      | 2.0.1            | **no** — genuinely unpatched            |
 
 The correct phrasing when a patch exists but is unreachable is "patched in X,
 capped by <parent>'s pin" — not "no fix available". The distinction changes the
@@ -159,6 +160,7 @@ Per the `security-triage.md` standard, classify into one of four buckets:
 ### 2a. RUNTIME + PATCH AVAILABLE + SEMVER-COMPATIBLE → auto-fix
 
 These are safe to fix automatically:
+
 1. **Capture a baseline FIRST** — run the test suite before touching anything,
    on the same branch you'll be committing to. Without it you can't tell a
    fix-caused failure from a pre-existing one. (mood-layer's suite also fails
@@ -179,17 +181,18 @@ These are safe to fix automatically:
    - Create branch: `security-sweep/<app>-deps-<date>`
    - Commit with message: `fix(deps): patch <package> — <CVE or advisory ID>`
    - Open PR with labels: `security-sweep`, `auto-generated`
-   - Auto-merge: `gh pr merge --squash --auto <pr-number>` — but only after
-     confirming this repo has a real merge gate for `--auto` to wait on; see
-     `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Merge on green"
-     before the first run against a new repo. No gate → gated watch instead,
-     every time (never assume `--auto`'s success means it waited — this skill
-     runs unattended, so a silent instant-merge here ships unverified code
-     with nobody watching).
+   - Merge on the gated watch:
+     `gh pr checks <pr-number> --watch >/dev/null && gh pr merge <pr-number> --squash`.
+     **Never `--auto`** — `hooks/merge-gate.mjs` denies it, and it never
+     waited here anyway (auto-merge blocks only on REQUIRED checks; no repo in
+     this org has any). That matters most in this skill, which runs
+     unattended: a silent instant-merge ships an unreviewed dependency bump
+     with nobody watching. See
+     `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Merge on green".
    - Log to `Tessellate-Studio/litmus` auto-ship-log.md:
      `| <date> | security-sweep | <repo> | PR #<n> | patch <package> | <CVE/advisory> |`
 7. If tests regress vs baseline: **discard the lockfile change** (`git checkout
-   -- package-lock.json`) and route to 2b. Do not ship a red suite to patch a
+-- package-lock.json`) and route to 2b. Do not ship a red suite to patch a
    build-time-only finding — that trade is never worth it.
 
 **Heredocs:** this environment's Bash tool is POSIX sh, not PowerShell. Use
@@ -199,6 +202,7 @@ commit message.
 ### 2b. RUNTIME + PATCH REQUIRES MAJOR BUMP → tracked issue
 
 These can't be auto-fixed safely:
+
 1. Open a GitHub issue in the **app repo** (not litmus):
    - Title: `[security-sweep] Upgrade <package> to <version> — <severity> vuln`
    - Body: advisory details, what breaks on upgrade, suggested migration path
@@ -209,6 +213,7 @@ These can't be auto-fixed safely:
 ### 2c. BUILD-TIME-ONLY + NOT REACHABLE → accepted residual
 
 These run only on dev/build machines, not in the shipped binary:
+
 1. Log as accepted-residual in the app's disposition log:
    ```
    | <date> | <package> | <severity> | <advisory-id> | Accepted: build-time-only. <1-line reason, incl. whether a patch exists but is capped> |
@@ -220,6 +225,7 @@ These run only on dev/build machines, not in the shipped binary:
 ### 2d. BUILD-TIME-ONLY + PATCH AVAILABLE → auto-fix (lower priority)
 
 Same flow as 2a but with lower urgency label:
+
 - Labels: `security-sweep`, `auto-generated`, `build-time`
 - No push notification regardless of severity
 
@@ -239,15 +245,16 @@ gh api -X PATCH repos/Tessellate-Studio/<repo>/dependabot/alerts/<n> \
 
 Valid `dismissed_reason` values, and when each applies here:
 
-| Reason | Use for |
-|---|---|
+| Reason           | Use for                                                                                                                                               |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tolerable_risk` | Build-time tooling — the code runs, but only on a dev machine or build runner, never in the shipped artifact. This is the default for this ecosystem. |
-| `not_used` | The vulnerable code path is genuinely never invoked (e.g. an iOS-only plist parser in an Android-only project). |
-| `fix_started` | A tracked issue or PR exists and is the agreed path. |
-| `inaccurate` | The advisory doesn't apply to how the package is used here. |
-| `no_bandwidth` | Avoid — it records nothing useful for the next sweep. |
+| `not_used`       | The vulnerable code path is genuinely never invoked (e.g. an iOS-only plist parser in an Android-only project).                                       |
+| `fix_started`    | A tracked issue or PR exists and is the agreed path.                                                                                                  |
+| `inaccurate`     | The advisory doesn't apply to how the package is used here.                                                                                           |
+| `no_bandwidth`   | Avoid — it records nothing useful for the next sweep.                                                                                                 |
 
 **Never dismiss:**
+
 - Anything runtime-reachable, whatever the severity.
 - Anything with a **reachable** fix that was merely deferred — that belongs in a
   2b tracked issue and the alert stays OPEN so it isn't forgotten. (Example:
@@ -280,7 +287,7 @@ These can't wait for the bi-weekly cycle — the notification ensures the user s
 
 ## Step 3.5: Claim the tracked issues you pick up
 
-A sweep that only *files* issues has nothing to claim — filing is not working.
+A sweep that only _files_ issues has nothing to claim — filing is not working.
 But the moment this sweep starts actually fixing an issue that already exists
 (a tracked vuln from a prior cycle, an open Dependabot alert someone else may
 also be on), claim it first: `wip claim <repo>#<n>`, and
@@ -294,11 +301,11 @@ opening a second bump PR against the same package. Full rule:
 Each app already has a log — **use the existing file and its conventions, don't
 create a parallel one**:
 
-| App | Disposition log |
-|---|---|
-| alate | `docs/DEPENDENCY_ALERTS.md` (**not** `docs/SECURITY.md`, which doesn't exist there; `backend/SECURITY.md` is architecture, not alerts) |
-| badige | `docs/SECURITY.md` |
-| mood-layer | `docs/SECURITY.md` |
+| App        | Disposition log                                                                                                                        |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| alate      | `docs/DEPENDENCY_ALERTS.md` (**not** `docs/SECURITY.md`, which doesn't exist there; `backend/SECURITY.md` is architecture, not alerts) |
+| badige     | `docs/SECURITY.md`                                                                                                                     |
+| mood-layer | `docs/SECURITY.md`                                                                                                                     |
 
 Read the existing file before writing. These logs carry prior triage decisions
 with real reasoning — check whether a finding is already dispositioned and say
@@ -310,19 +317,22 @@ Update each with dated entries:
 ## Security sweep — <date>
 
 ### Fixed
-| Package | Severity | Advisory | PR |
-|---|---|---|---|
-| <package> | <severity> | <id> | #<n> |
+
+| Package   | Severity   | Advisory | PR   |
+| --------- | ---------- | -------- | ---- |
+| <package> | <severity> | <id>     | #<n> |
 
 ### Needs upgrade (tracked)
-| Package | Severity | Advisory | Issue | Current → Required |
-|---|---|---|---|---|
-| <package> | <severity> | <id> | #<n> | <current> → <required> |
+
+| Package   | Severity   | Advisory | Issue | Current → Required     |
+| --------- | ---------- | -------- | ----- | ---------------------- |
+| <package> | <severity> | <id>     | #<n>  | <current> → <required> |
 
 ### Accepted residual
-| Package | Severity | Advisory | Reason |
-|---|---|---|---|
-| <package> | <severity> | <id> | <reason> |
+
+| Package   | Severity   | Advisory | Reason   |
+| --------- | ---------- | -------- | -------- |
+| <package> | <severity> | <id>     | <reason> |
 ```
 
 If `docs/SECURITY.md` doesn't exist, create it with a header explaining its purpose.
@@ -412,8 +422,8 @@ it on, and record that ref at the very start of the sweep
 detached) because you cannot recover it afterwards.
 
 > **Watch for the base moving under you.** `git checkout -b <branch>
-> origin/master` pins the branch to whatever `origin/master` was *at that
-> moment*. On a long sweep another automation can advance the default branch,
+origin/master` pins the branch to whatever `origin/master` was _at that
+> moment_. On a long sweep another automation can advance the default branch,
 > and a later `git fetch` will not move your branch. On 2026-08-03 this put a
 > loom commit on a branch created from a two-day-old base while the real work
 > sat on local `main`. Before opening the PR, confirm the branch actually

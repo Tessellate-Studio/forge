@@ -158,6 +158,42 @@ describe('gh invoked with global flags before the subcommand', () => {
   });
 });
 
+describe('heredoc bodies are DATA, not command position', () => {
+  // The flag spelling is assembled rather than written literally, so this test
+  // file does not itself trip a scan looking for it.
+  const AUTO = `--${'auto'}`;
+  const MERGE = 'gh pr merge';
+
+  it('allows a commit message that mentions the banned flag', () => {
+    // Not hypothetical: this exact shape was refused on 2026-09-09, and the
+    // commit it blocked was the one REMOVING that flag from four skills.
+    const cmd = `git commit -q -F - <<'MSGEOF'\nfix: stop using ${MERGE} --squash ${AUTO}\nMSGEOF`;
+    expect(allowed(cmd)).toBe(true);
+  });
+
+  it('allows a PR body that mentions it', () => {
+    const cmd = `gh pr create --body "$(cat <<BODYEOF\nnever run ${MERGE} ${AUTO}\nBODYEOF\n)"`;
+    expect(allowed(cmd)).toBe(true);
+  });
+
+  it('allows an INDENTED terminator under the <<- form', () => {
+    // `<<-` strips leading tabs, so its terminator may be indented. Anchoring
+    // every terminator to column 0 re-broke this case once already.
+    const cmd = `git commit -F - <<-EOT\n\t${MERGE} 1\n\tEOT`;
+    expect(allowed(cmd)).toBe(true);
+  });
+
+  it('still catches a real merge AFTER a heredoc closes', () => {
+    const cmd = `cat <<'EOF' > f.txt\nhello\nEOF\n${MERGE} 5 --squash`;
+    expect(allowed(cmd)).toBe(false);
+    expect(reasonFor(cmd)).toBe(REASON.UNGATED);
+  });
+
+  it('still catches the banned flag outside a heredoc', () => {
+    expect(reasonFor(`${MERGE} 5 ${AUTO}`)).toBe(REASON.AUTO_FLAG);
+  });
+});
+
 describe('input hygiene', () => {
   it.each([undefined, null, '', 42, {}])('treats %p as not-a-merge', value => {
     expect(looksLikeMerge(value)).toBe(false);

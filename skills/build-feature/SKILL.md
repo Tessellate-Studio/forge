@@ -22,7 +22,7 @@ description: >-
 ## Why this skill exists
 
 The expensive failure mode when building UI is declaring "done" on a change you
-*believe* works but haven't actually looked at — so the user has to run the app,
+_believe_ works but haven't actually looked at — so the user has to run the app,
 spot the defect, screenshot it, and prompt you again. That round-trip is pure
 waste, and it erodes trust. The whole job of this skill is to flip that: **you**
 look at the rendered result on the real device, **you** measure it against what
@@ -89,15 +89,15 @@ exit it by verifying yourself.
    - **Other repos** whose code or contract this touches (shared types, testID
      contracts, composed endpoints)
    - **Breaking changes** to anything an existing consumer reads
-   Then confirm how many real accounts/stores/devices you can test against, and
-   which flow ships *instantly* vs which needs a release/OTA/deploy. Build and
-   verify that smallest end-to-end slice against the real external system
-   before stacking the rest — it reshapes the phasing (lead with the path that
-   works today) and surfaces the "it no-ops because a var is unset" failures
-   before they cost a full build cycle. *Precedent: a two-phase size-finder
-   built in full before confirming the quiz path shipped instantly while the
-   app-handoff path needed an OTA + a deep-link scheme in the installed binary —
-   knowing that up front would have led with the cheap path.*
+     Then confirm how many real accounts/stores/devices you can test against, and
+     which flow ships _instantly_ vs which needs a release/OTA/deploy. Build and
+     verify that smallest end-to-end slice against the real external system
+     before stacking the rest — it reshapes the phasing (lead with the path that
+     works today) and surfaces the "it no-ops because a var is unset" failures
+     before they cost a full build cycle. _Precedent: a two-phase size-finder
+     built in full before confirming the quiz path shipped instantly while the
+     app-handoff path needed an OTA + a deep-link scheme in the installed binary —
+     knowing that up front would have led with the cheap path._
 8. **Planning gate — size the decision, document it if non-trivial.** Run
    the sizing guide (`${CLAUDE_PLUGIN_ROOT}/skills/plan/references/sizing-guide.md`).
    Tactical → skip or quick ADR. Feature-scope → Shape Up Pitch with research.
@@ -181,7 +181,7 @@ context: {
 Every repo's differ — alate's are the EAS/adb loop in
 `references/device-loop.md`, loom's are the Shopify ones above. `apply` and
 `confirm` are optional but are the two people leave out, and leaving them out is
-how a run measures the *previous* build and reports it as a verdict on this one
+how a run measures the _previous_ build and reports it as a verdict on this one
 — supply them when you know them. A step can be a list of commands, not just
 one. Full contract:
 `${CLAUDE_PLUGIN_ROOT}/references/agents/verifier-prompt.md`.
@@ -239,7 +239,7 @@ Work in `mobile/`.
    screen size, prefer proportional flex over fixed pixels (it's the whole point
    of flex). For empty/variable states, decide where leftover space goes
    deliberately — a single flex region, not eyeballed margins.
-   - *Recommended once the screen renders:* run `/design-system` to catch
+   - _Recommended once the screen renders:_ run `/design-system` to catch
      hardcoded colours/fonts/alphas and naming drift against the design system
      before you burn an OTA cycle — far cheaper to fix pre-device. Reinforces the
      "theme tokens, not literals" rule above. Skip with a one-line note for a
@@ -260,7 +260,7 @@ caveat, and recovery steps. The essentials:
    (run `npx tsc --noEmit && npx jest --no-coverage` first — the script
    `npm run ota:preflight` bundles those gates).
 2. **Apply on device** — expo-updates downloads in the background and swaps in on
-   the *next* launch, so it's a **double-relaunch**: force-stop → launch (wait
+   the _next_ launch, so it's a **double-relaunch**: force-stop → launch (wait
    ~22s for the download) → force-stop → launch (now running the new bundle).
 3. **Screenshot** with `adb exec-out screencap -p` and **Read** the PNG. Confirm
    the running update is yours (logcat shows the `branchName: preview` +
@@ -285,12 +285,12 @@ This is the heart of the skill. With the screenshot open:
    the gap is still there; you should, because you measured it.
 3. **Watch for repeating the same miss.** If two iterations don't move a
    criterion, your model of the cause is wrong — step back and diagnose from the
-   actual layout (e.g. "the flex spacer is *between* the two elements, so it
-   *creates* the gap"), don't nudge the same knob again.
+   actual layout (e.g. "the flex spacer is _between_ the two elements, so it
+   _creates_ the gap"), don't nudge the same knob again.
 4. **Only report done when every criterion passes**, and include the final
    screenshot + the measured verdicts so the user can confirm against their own
    eyes. "Done, verified on device: wordmark at ~10%, button at ~50%, no band
-   >8%, content fills ~85%" — that's the shape of a trustworthy report.
+   > 8%, content fills ~85%" — that's the shape of a trustworthy report.
 
 ## Step 5 — Be honest about structural limits
 
@@ -315,7 +315,7 @@ tooling included);** skip with a one-line note for a true one-liner:
      did NOT already go through `researched-build` (which reviews internally),
      run the deeper **adversarial-review** workflow instead: invoke the Workflow
      tool with `scriptPath:
-     "${CLAUDE_PLUGIN_ROOT}/references/workflows/adversarial-review.js"` and
+"${CLAUDE_PLUGIN_ROOT}/references/workflows/adversarial-review.js"` and
      `args: { diffPath, files, criteria, crossRepo }` — write the diff to a temp
      file and pass its absolute path as `diffPath` (re-encoding a large diff
      inline risks corrupting it), plus the changed-file list as `files` so
@@ -350,7 +350,7 @@ For a change that touches a **user-facing flow** (skip for backend/config/
 copy-only diffs), gate the merge on fast, reliable checks — **never** the full
 E2E suite. This is the industry standard, not a cost shortcut: Google's 70/20/10
 test pyramid and merge-queue practice both hold that a flaky full suite blocks
-good PRs and destroys feedback speed, so the bulk of E2E runs *post*-merge.
+good PRs and destroys feedback speed, so the bulk of E2E runs _post_-merge.
 
 1. **testID contract** is already enforced by the reviewer (Step 5.5, or the
    `researched-build` review phase): a renamed/removed testID that litmus depends
@@ -368,18 +368,17 @@ good PRs and destroys feedback speed, so the bulk of E2E runs *post*-merge.
    `master` directly.
 2. **Open the PR ready (not draft) and arm the merge IMMEDIATELY — this is a
    standing directive, never a question.** Right after `gh pr create`, run
-   `gh pr merge <n> --squash --auto` — but only once you've confirmed THIS repo
-   has a real merge gate for `--auto` to wait on
-   (`gh api repos/<owner>/<repo>/branches/<default-branch>/protection` — a
-   403/404 means it doesn't, most commonly a private repo on GitHub's free
-   tier, which can never have one). No gate (or auto-merge outright disabled)
-   → use the gated watch for every merge in this repo instead:
+   the gated watch:
    `gh pr checks <n> --watch >/dev/null && gh pr merge <n> --squash` — the
    exit-status gate, never a pipe (`| tail && ...` reports tail's exit code,
-   not the checks'). `--auto` reports the same success whether it actually
-   waited or merged instantly with nothing to gate on, so this check is the
-   only way to tell those apart — don't infer it from the command's exit
-   code. Do not ask the user whether to merge, do not park a green PR waiting
+   not the checks'). **Do not use `--auto`.** `hooks/merge-gate.mjs` denies it
+   at `PreToolUse`, so the call fails rather than merging; and it would be
+   wrong even unblocked, because auto-merge waits only on REQUIRED checks and
+   no repo in this org has any (the private ones cannot, on Free), so it
+   merges instantly while reporting the same success it gives when it genuinely
+   waited. There is no repo-capability probe to run any more — the branch that
+   check used to select is unreachable.
+   Do not ask the user whether to merge, do not park a green PR waiting
    for a manual look, do not report "PR open, awaiting merge" as an end
    state. Hold only for the carve-outs (outward-facing / hard-to-reverse, or
    an explicit user hold), and say which carve-out applies when you do. Full
@@ -395,28 +394,28 @@ good PRs and destroys feedback speed, so the bulk of E2E runs *post*-merge.
    "can this ship?" after a fully-verified fix; the user's answer was "I
    don't see why this needs to be an explicit instruction.")
    a. **Confirm the diff is OTA-safe first.** An OTA carries JS + assets
-      only. If the merge touched anything native-relevant (dependency
-      versions, native config fields, build-tool env, platform native
-      directories, config plugins), that part needs a fresh binary build —
-      say so plainly and route to the app's release workflow instead of
-      publishing an OTA that silently can't carry it.
+   only. If the merge touched anything native-relevant (dependency
+   versions, native config fields, build-tool env, platform native
+   directories, config plugins), that part needs a fresh binary build —
+   say so plainly and route to the app's release workflow instead of
+   publishing an OTA that silently can't carry it.
    b. **Verify the local branch is current with the default branch BEFORE
-      publishing** — the publish tooling bundles and ships whatever is on
-      disk with no warning if the branch is stale.
-      `git log --oneline HEAD..origin/<default>`; if non-empty and
-      `git merge-base --is-ancestor HEAD origin/<default>` succeeds,
-      fast-forward (`git merge --ff-only origin/<default>`) first. A stale
-      worktree branch has shipped a stale OTA silently — no error, just the
-      wrong bundle (alate, 2026-08-30).
+   publishing** — the publish tooling bundles and ships whatever is on
+   disk with no warning if the branch is stale.
+   `git log --oneline HEAD..origin/<default>`; if non-empty and
+   `git merge-base --is-ancestor HEAD origin/<default>` succeeds,
+   fast-forward (`git merge --ff-only origin/<default>`) first. A stale
+   worktree branch has shipped a stale OTA silently — no error, just the
+   wrong bundle (alate, 2026-08-30).
    c. **Publish to the channel/runtime the CURRENTLY INSTALLED production
-      build(s) actually read** — the channel name and runtime-version policy
-      are app-specific and change between releases; check the app's own
-      `CLAUDE.md`/memory for the current values rather than assuming this
-      skill's example below still holds.
+   build(s) actually read** — the channel name and runtime-version policy
+   are app-specific and change between releases; check the app's own
+   `CLAUDE.md`/memory for the current values rather than assuming this
+   skill's example below still holds.
    d. **Confirm the publish shipped the right commit** — read the publish
-      output's commit/build-id line against the actual merge SHA before
-      reporting done. A publish that "succeeds" from the wrong commit is a
-      silent miss, not an error the tooling will surface.
+   output's commit/build-id line against the actual merge SHA before
+   reporting done. A publish that "succeeds" from the wrong commit is a
+   silent miss, not an error the tooling will surface.
 4. **Update the source doc in the SAME PR.** If this feature/fix originated
    from a tracked item — a BACKLOG.md entry, a regression-log row, a RELEASE
    checklist line, a runbook TODO — update that entry before reporting done:
@@ -426,7 +425,7 @@ good PRs and destroys feedback speed, so the bulk of E2E runs *post*-merge.
    "Status update on completion".
 5. **Post-merge full E2E (litmus) — advisory.** After the merge lands on
    `master`, trigger the FULL litmus suite (`gh workflow run <litmus-e2e> --ref
-   master`). It does NOT block (the change already merged): on red, log a
+master`). It does NOT block (the change already merged): on red, log a
    regression-log entry, open an implementer fix PR, and bisect — don't revert
    reflexively. This is where the bulk of E2E coverage runs, per the pyramid.
    Skip only for changes that touch no user-facing flow.
@@ -446,7 +445,7 @@ good PRs and destroys feedback speed, so the bulk of E2E runs *post*-merge.
    is no longer needed gets `git worktree remove --force <path>`. Then
    `git worktree prune` to clear dangling refs. On Windows, deeply-nested
    React Native build caches may exceed MAX_PATH — use `subst Z: <parent>;
-   cmd /c "rmdir /s /q Z:\<dir>"; subst Z: /d` as a fallback for orphaned
+cmd /c "rmdir /s /q Z:\<dir>"; subst Z: /d` as a fallback for orphaned
    directories that `git worktree remove` can't delete. Don't leave worktree
    directories cluttering the project's parent folder.
 
@@ -506,7 +505,7 @@ promote into the relevant skill or standard so the next build inherits it.
 - **researched-build workflow** — Step 1.5, BEFORE building, whenever the
   planning gate sized the change as **Pitch or RFD tier** (i.e. you just wrote a
   `memory/decisions/pitch-*.md` or `rfd-*.md`): Workflow tool, `scriptPath:
-  "${CLAUDE_PLUGIN_ROOT}/references/workflows/researched-build.js"`, `args` a
+"${CLAUDE_PLUGIN_ROOT}/references/workflows/researched-build.js"`, `args` a
   JSON **object** `{ tier, criteria, rendersUI, task, context, reviewScriptPath }`.
   It is the ONLY step that makes the test's author independent of the code's
   author (the tester writes failing tests without seeing implementation code).
@@ -523,7 +522,7 @@ promote into the relevant skill or standard so the next build inherits it.
   caught as its top finding (alate #662 → #664).
 - **adversarial-review workflow** — before commit (Step 5.5), for a >~50-line
   diff from a SINGLE-AGENT build: Workflow tool, `scriptPath:
-  "${CLAUDE_PLUGIN_ROOT}/references/workflows/adversarial-review.js"`, `args` a
+"${CLAUDE_PLUGIN_ROOT}/references/workflows/adversarial-review.js"`, `args` a
   JSON **object** `{ diffPath, files, criteria, crossRepo }` — never a JSON
   string. Skip when the build already went through `researched-build` (it
   reviews internally). If the script is unreachable, `/code-review` is the

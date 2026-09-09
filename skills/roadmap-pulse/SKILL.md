@@ -7,14 +7,14 @@ description: Weekly project-management skill that scans planning docs (BACKLOG, 
 
 Planning docs drift. Priorities drift. Dependencies hide. Goals shift week-to-week. By the time you sit down on Sunday to plan the week, the BACKLOG says one thing, RELEASE_V2 says another, and you're back to re-deriving priorities from scratch.
 
-This skill is a weekly project-management pulse. It does six things in sequence — none of them new individually, but doing them *together*, *consistently*, and *with sourced reasoning* is the value:
+This skill is a weekly project-management pulse. It does six things in sequence — none of them new individually, but doing them _together_, _consistently_, and _with sourced reasoning_ is the value:
 
-1. **Honesty pass** — strip the ghosts in *both* directions: items still listed as open that actually shipped, items marked shipped from orphan branches that never merged, and items claiming pending external work (env, cron, endpoint, table) that is already live — probed against the running system, not re-read from the doc.
+1. **Honesty pass** — strip the ghosts in _both_ directions: items still listed as open that actually shipped, items marked shipped from orphan branches that never merged, and items claiming pending external work (env, cron, endpoint, table) that is already live — probed against the running system, not re-read from the doc.
 2. **Context pull** — read `RELEASE_V2.md` for current launch-state signals; surface inferred urgencies; accept user overrides.
 3. **Dependency inference** — spot which open tasks block which; confirm with user; persist confirmed dependencies back into the BACKLOG entries.
 4. **RICE scoring** — invoke rubric-sdk per open task using the RICE framework (Reach × Impact × Confidence / Effort); adjust with reusability, strategic fit, and dependency-unblock multiplier overlays.
 5. **Output** — a prioritized top-5-to-10 list inline + append a dated section to `WEEKLY_DIGEST.md` so the history of weekly decisions accumulates.
-5.5. **Auto-build** (autonomous runs only) — for the top P0 "Must" items, invoke `forge:build-feature` to implement end-to-end, ship to preview, and auto-merge on green. Cap: 2 per run.
+   5.5. **Auto-build** (autonomous runs only) — for the top P0 "Must" items, invoke `forge:build-feature` to implement end-to-end, ship to preview, and auto-merge on green. Cap: 2 per run.
 6. **Self-schedule** — first-run only: set up a weekly cron via the `schedule` skill. Default cadence Sunday 16:00 IST, override at first run.
 
 The point is not "produce a pretty list." The point is **align action with current goals, supported by sourced reasoning, weekly, without re-deriving from scratch each time.**
@@ -32,6 +32,7 @@ test of this skill, eval-1 with-skill (2026-05-23), leaked 414 lines
 of doc edits to the main checkout.
 
 To stay inside the worktree:
+
 - Resolve paths RELATIVE to the worktree root (e.g. `BACKLOG.md`,
   not the absolute path). `cwd` defaults to the worktree.
 - For commit messages, scripts, etc., use relative paths.
@@ -47,15 +48,15 @@ fix the path resolution before continuing.
 
 When invoked, scan **all of these that exist in the project**. Always start by inventorying — never assume a single doc is in scope. If the user named a specific doc only, restrict to that one.
 
-| Doc | Default path | What it claims state about |
-|---|---|---|
-| BACKLOG.md | `<repo-root>/BACKLOG.md` | Open work; shipped/landed/deferred items, P0–P4 sections |
-| RELEASE_V2.md | `<repo-root>/RELEASE_V2.md` | Launch state: what's built, what's pending, what flips at launch. **Primary input for Step 2 (current goals).** |
-| USER_PATHS.md | `<repo-root>/USER_PATHS.md` | Happy + edge + still-uncovered user flows |
-| `backlog/*.md` (sub-docs) | `<repo-root>/backlog/<name>.md` | Long-form planning docs for items parked from BACKLOG.md |
-| Regression log | `<repo-root>/memory/project_regression_log.md` | Bug rows with date / root-cause / fix / test columns |
-| Anti-patterns (domain) | `<repo-root>/memory/project_anti_patterns.md` | App-specific rules; shared guardrails are in `forge/standards/` |
-| User-named markdown | Whatever the user passes | Apply same workflow |
+| Doc                       | Default path                                   | What it claims state about                                                                                      |
+| ------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| BACKLOG.md                | `<repo-root>/BACKLOG.md`                       | Open work; shipped/landed/deferred items, P0–P4 sections                                                        |
+| RELEASE_V2.md             | `<repo-root>/RELEASE_V2.md`                    | Launch state: what's built, what's pending, what flips at launch. **Primary input for Step 2 (current goals).** |
+| USER_PATHS.md             | `<repo-root>/USER_PATHS.md`                    | Happy + edge + still-uncovered user flows                                                                       |
+| `backlog/*.md` (sub-docs) | `<repo-root>/backlog/<name>.md`                | Long-form planning docs for items parked from BACKLOG.md                                                        |
+| Regression log            | `<repo-root>/memory/project_regression_log.md` | Bug rows with date / root-cause / fix / test columns                                                            |
+| Anti-patterns (domain)    | `<repo-root>/memory/project_anti_patterns.md`  | App-specific rules; shared guardrails are in `forge/standards/`                                                 |
+| User-named markdown       | Whatever the user passes                       | Apply same workflow                                                                                             |
 
 **Inventory step at the start of every invocation:**
 
@@ -118,13 +119,13 @@ For each in-scope doc, scan for state-claims and verify each against the source 
 
 Quick summary of the five failure modes:
 
-| Failure mode | The check |
-|---|---|
-| **Already-shipped-but-still-open** | `git log master --oneline --grep="<distinctive phrase from entry>"` finds a squash merge |
-| **Shipped-from-orphan-branch** | `git branch --contains <cited-sha>` does NOT list `master` |
-| **Deferred-without-source** | Entry body contains `parked` / `v2` / `deferred` but no `because` / link / rationale |
-| **Stale file:line citations** | Cited file moved or symbol drifted to a different line |
-| **Still-pending-but-actually-live** | Entry claims outstanding *external* state (env var, cron, table, endpoint, DNS, runner) — **probe the live system**; run the entry's own `**Verify:**` block instead of quoting it |
+| Failure mode                        | The check                                                                                                                                                                          |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Already-shipped-but-still-open**  | `git log master --oneline --grep="<distinctive phrase from entry>"` finds a squash merge                                                                                           |
+| **Shipped-from-orphan-branch**      | `git branch --contains <cited-sha>` does NOT list `master`                                                                                                                         |
+| **Deferred-without-source**         | Entry body contains `parked` / `v2` / `deferred` but no `because` / link / rationale                                                                                               |
+| **Stale file:line citations**       | Cited file moved or symbol drifted to a different line                                                                                                                             |
+| **Still-pending-but-actually-live** | Entry claims outstanding _external_ state (env var, cron, table, endpoint, DNS, runner) — **probe the live system**; run the entry's own `**Verify:**` block instead of quoting it |
 
 **The last one hunts in the opposite direction from the others and is easy to
 forget.** The first four ask "claims done — is it?". The fifth asks "claims
@@ -138,7 +139,7 @@ Rewrites use the templates in [`references/rewrite-patterns.md`](references/rewr
 
 **Also check the checkouts themselves, not just their logs.** The honesty pass
 runs `git log` against each scoped repo's local checkout — but a checkout can
-lie by *state* while its log reads fine: parked on a branch whose PR merged
+lie by _state_ while its log reads fine: parked on a branch whose PR merged
 weeks ago, N commits behind origin, or carrying uncommitted changes nobody
 remembers. (Found in practice, 2026-07-31: one tool repo parked 23-behind on a
 long-merged branch — which made a session read its standards as missing rules
@@ -153,11 +154,12 @@ git -C <checkout> status --porcelain | wc -l           # dirty count
 ```
 
 Fix only what is provably safe, report the rest:
+
 - Parked on a branch whose PR is **MERGED** → rename to `done/<branch>`,
   checkout the default branch, `git pull --ff-only`.
 - Clean checkout behind origin → `git pull --ff-only`.
 - Dirty files or unpushed commits → **never discard; report** with the file
-  list. They may be another live session's work. Unstaged *deletions* of
+  list. They may be another live session's work. Unstaged _deletions_ of
   committed files may be restored (content is in git; nothing is lost).
 
 **Critical:** Step 2 onward operates ONLY on items confirmed truly-open by Step 1. A ghost item shouldn't get scored.
@@ -236,8 +238,8 @@ every run — never mint a new artifact**:
    BACKLOG line / PR) | Why — plus the run date and a small "changed since
    last run" strip. Checkboxes persist in the page via `localStorage` only:
    they are the user's visual scratchpad. State the canonical rule on the page
-   footer: *checking a box here doesn't edit the docs — tell Claude "mark N
-   done" or let the next pulse pick it up from git*.
+   footer: _checking a box here doesn't edit the docs — tell Claude "mark N
+   done" or let the next pulse pick it up from git_.
 4. Load the `artifact-design` skill before writing the page (required by the
    Artifact tool); keep it theme-aware and self-contained.
 
@@ -255,12 +257,13 @@ Everything built here ships to **test/preview** (OTA to the `preview` channel), 
    - Title: `feat(<scope>): <task title>`
    - Body: standard build-feature output — TLDR, what changed, test coverage, acceptance criteria verdicts
    - Labels: `pulse-auto-build`, `auto-generated`
-4. **Auto-merge:** enable auto-merge via `gh pr merge --squash --auto <pr-number>` —
-   but only after confirming this repo has a real merge gate for `--auto` to
-   wait on; see `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Merge on
-   green" before the first run against a new repo. No gate → gated watch
-   instead, every time (this skill runs unattended, so a silent instant-merge
-   here ships unverified code with nobody watching).
+4. **Merge on the gated watch:**
+   `gh pr checks <pr-number> --watch >/dev/null && gh pr merge <pr-number> --squash`.
+   **Never `--auto`** — `hooks/merge-gate.mjs` denies it, and it never waited
+   here anyway (auto-merge blocks only on REQUIRED checks; no repo in this org
+   has any). That matters most in this skill, which runs unattended: a silent
+   instant-merge ships unverified code with nobody watching. See
+   `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Merge on green".
 5. **Update BACKLOG:** mark the entry with status `DONE — <date>, PR #<n>` and the merged SHA once it lands. Collapse to a one-line tombstone per the "Docs stay lean" standard.
 6. **Log:** append to `Tessellate-Studio/litmus` auto-ship-log.md (default branch `main`):
    `| <date> | roadmap-pulse | <repo> | PR #<n> | <1-line what> | P0 auto-build |`
@@ -268,6 +271,7 @@ Everything built here ships to **test/preview** (OTA to the `preview` channel), 
 **Cap at 2 items per run.** If more than 2 items qualify, build the top 2 by score. The rest stay in the priority list for next week (or the user picks them up manually).
 
 **Skip conditions** (don't auto-build even if the item qualifies):
+
 - The item's BACKLOG entry contains `**Needs input:**` or `**Decision needed:**` — it has an unresolved human decision
 - The item requires changes to multiple repos (cross-repo coordination is too complex for autonomous builds)
 - The item's description mentions "breaking change", "migration", or "schema change" — these need human oversight
@@ -291,7 +295,7 @@ Confirm the next scheduled run is on the calendar; surface the next-run timestam
 ## What this skill does NOT do
 
 - It does not silently delete open entries. Confirmed-SHIPPED items get **collapsed to a one-line tombstone** (title + PR link + ship date — the implementation detail lives in the PR, not the docs; see `standards/workflows.md` → "Docs stay lean").
-- It does not collapse **what no diff can give back** (rejected alternatives and why they lost, investigations that corrected a false belief, external research) or **test artefacts** (coverage maps, user-path audits, E2E contracts, regression tables — a shipped fix keeps its full `Was` / `Now` split). Shipped-ness alone is not grounds to collapse; what the text is *for* decides. Both carve-outs are stated in `standards/workflows.md` → "Docs stay lean".
+- It does not collapse **what no diff can give back** (rejected alternatives and why they lost, investigations that corrected a false belief, external research) or **test artefacts** (coverage maps, user-path audits, E2E contracts, regression tables — a shipped fix keeps its full `Was` / `Now` split). Shipped-ness alone is not grounds to collapse; what the text is _for_ decides. Both carve-outs are stated in `standards/workflows.md` → "Docs stay lean".
 - It does not invent SHAs or RICE scores. If rubric-sdk fails to return a score, the entry is surfaced as "unscored, manual review needed" — never fabricated.
 - It does not re-sort BACKLOG.md's P-tier sections or write inline scores into entries. (Both are opt-in extensions you can add later — for now, the digest + inline list is the visibility layer.)
 - It does not run on docs the user didn't include in the inventory's confirmed scope.

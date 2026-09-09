@@ -44,13 +44,13 @@ when not.
 
 - **Verify:** `gh pr view <n> -R <owner>/<repo> --json state,isDraft,mergeable,autoMergeRequest,statusCheckRollup`
 - **Auto-act:** follow `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` →
-  "Merge on green" exactly. Once per repo, probe branch protection
-  (`gh api repos/<owner>/<repo>/branches/<default>/protection`); a real gate →
-  `gh pr merge <n> --squash --auto`; 403/404 (no gate — private free-tier repos
-  never have one) → the gated watch
+  "Merge on green" exactly. Always the gated watch:
   `gh pr checks <n> --watch >/dev/null && gh pr merge <n> --squash` — never
-  through a pipe. A draft PR whose work the transcript shows finished: mark
-  ready first (`gh pr ready <n>`).
+  through a pipe. **Never `--auto`**: `hooks/merge-gate.mjs` denies it, and the
+  branch-protection probe that used to select between them is pointless — no
+  repo in this org has required checks, so `--auto` could never wait. A draft
+  PR whose work the transcript shows finished: mark ready first
+  (`gh pr ready <n>`).
 - **Escalate when:** a merge-on-green carve-out applies
   (`${CLAUDE_PLUGIN_ROOT}/standards/anti-patterns.md` → "Merge on green by
   default"): outward-facing, hard-to-reverse, needs judgment CI can't give, or
@@ -188,13 +188,13 @@ One table, two buckets, then the counts:
 ```markdown
 ## Status check — <date>
 
-| Loop | Repo | Type | Verdict |
-|---|---|---|---|
-| PR #42 auto-fix | alate | (b) failing PR | ✅ fixed + merged (safe-merge exit 0) |
-| Issue #17 | badige | (c) unclosed issue | ✅ closed, linked PR #40 |
-| branch fix/foo | alate | (d) branch | ✅ deleted (PR MERGED) |
-| OTA for queue item | alate | (e) stranded | 🙋 manual — publish OTA, then drainable |
-| dirty tree (3 files) | badige | (h) | 🙋 manual — not this session's edits |
+| Loop                 | Repo   | Type               | Verdict                                 |
+| -------------------- | ------ | ------------------ | --------------------------------------- |
+| PR #42 auto-fix      | alate  | (b) failing PR     | ✅ fixed + merged (safe-merge exit 0)   |
+| Issue #17            | badige | (c) unclosed issue | ✅ closed, linked PR #40                |
+| branch fix/foo       | alate  | (d) branch         | ✅ deleted (PR MERGED)                  |
+| OTA for queue item   | alate  | (e) stranded       | 🙋 manual — publish OTA, then drainable |
+| dirty tree (3 files) | badige | (h)                | 🙋 manual — not this session's edits    |
 
 **Closed automatically:** <n> · **Manual for you:** <n>
 ```
