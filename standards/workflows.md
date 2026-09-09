@@ -139,10 +139,27 @@ awaiting merge" is not an end state; either the merge is armed or a named
 carve-out applies (outward-facing / hard-to-reverse / explicit user hold —
 full list: [`anti-patterns.md` → "Merge on green by default"](./anti-patterns.md)).
 
-**Arm it at PR-open, don't babysit it:** right after `gh pr create`, run
-`gh pr merge <n> --squash --auto` — GitHub merges the moment checks pass, with
-no watcher process to time out or die with the session. If the repo rejects
-`--auto` (auto-merge disabled in settings), fall back to the gated watch below.
+**Merge through a route that actually waits.** There are exactly two, and the
+`[enforced]` hook below refuses everything else:
+
+```bash
+# A merge you were asked for:
+gh pr checks <n> --watch >/dev/null && gh pr merge <n> --squash
+
+# An automated fix (crash-monitor, status-check, security-sweep):
+node "${CLAUDE_PLUGIN_ROOT}/tools/safe-merge/cli.js" --repo <owner/name> --pr <n> \
+  --source <skill> --what "<one line>" --declare guard|rewrite
+```
+
+**`gh pr merge --auto` is banned outright**, and this paragraph used to
+recommend it — "arm it at PR-open, don't babysit it". That advice was wrong and
+shipped unverified merges for months. GitHub's auto-merge blocks only on
+REQUIRED status checks; no repo in this org has any (the private ones cannot,
+on Free), so `--auto` merges immediately, before CI starts, returning the
+identical success message it gives when it genuinely waited. Measured on alate,
+2026-08-24: five PRs each merged 1-2 seconds after the call with CI still
+queued. `hooks/merge-gate.mjs` now denies the flag, so the old advice is not
+merely stale — it is unrunnable.
 
 **`--auto` succeeding is not proof it will wait — verify the repo actually has
 a merge gate before trusting it.** GitHub's auto-merge only blocks on required
