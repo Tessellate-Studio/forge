@@ -778,7 +778,7 @@ comment `` is describing the absence, not supplying the field. Matched
   this template still read correctly, and what's missing surfaces as a
   restamp, not a disappearance.
 
-### Claiming the device — the queue carries the lock
+### Claiming the device — one lock per handset, in litmus
 
 `dtq` is read-only. It answers _what is pending_; it never answered **is
 anyone on the device right now**. Nothing did. On 2026-09-01 two sessions
@@ -788,9 +788,45 @@ claiming the device. Neither announced, and because every session commits
 under the same GitHub account the byline reveals nothing, so the collision had
 to be reconstructed afterwards by one session messaging the other.
 
-**The lock is a comment on the same queue issue.** No new service, no local
-state file a second machine cannot read — any session, on any machine, and any
-human sees it with the tools they already use.
+**The lock is a comment on the device's own issue in
+`Tessellate-Studio/litmus`** — one pinned issue per physical handset
+([#43](https://github.com/Tessellate-Studio/litmus/issues/43) the Pixel,
+[#44](https://github.com/Tessellate-Studio/litmus/issues/44) the iPhone). No
+new service, no local state file a second machine cannot read — any session,
+on any machine, and any human sees it with the tools they already use.
+
+**Why not the app's queue, where it used to live** (changed 2026-09-09,
+RFD-003 / forge#107): the device is not any one app's. alate, mood-layer and
+badige all drive the same handset, so a lock posted on alate's queue was
+invisible to a drain reading mood-layer's — every other queue reported the
+phone free while someone held it. litmus is the private shared
+testing-utilities repo for the mobile apps, which is a device's charter
+exactly; it is private, so a claim may name what is being tested; and it is
+not forge, which is public.
+
+**One issue per DEVICE, not per app**, because they are claimed
+independently: a drain can hold the Pixel over adb while a human is mid-way
+through a TestFlight pass on the iPhone, and neither should block the other.
+The iPhone's claim sits permanently at `**Waiting on:** human`, which never
+expires — the honest description of a device with no adb path, not a way
+around the staleness rule.
+
+**Two rules make a race resolve without a lease or a clock:**
+
+1. **Post, then re-read.** After posting, wait ~5s and re-read every HELD
+   claim on that device's issue. If another HELD claim has a **lower comment
+   id**, release yours and stand down. Ids are server-assigned and monotonic,
+   so both racers reach the same verdict independently — the 16-second
+   collision on 2026-09-07 resolves in one round trip. (`losesRaceTo` in
+   `skills/device-test/scripts/claim-lib.js`.)
+2. **Re-check at the point of use.** Before each device-driving step, re-read
+   the lock and abort if you no longer hold the lowest live claim. This is the
+   nearest thing to a fencing token available over adb.
+
+**An unreadable lock is not a free device.** If the device issue cannot be
+read, `dtq` prints `? UNREADABLE` rather than `free`, and that is a reason to
+stop — "nobody is on the phone" and "I could not find out" are opposite
+instructions to a session about to drive it.
 
 ```markdown
 ### 🔒 Device claim

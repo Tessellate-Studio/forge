@@ -10,10 +10,16 @@
 // account, authorship is not readable from the byline either — the collision
 // had to be reconstructed afterwards by one session messaging the other.
 //
-// The lock lives as a comment on the SAME queue issue the drain already
-// reads, so the queue itself carries it: any session, on any machine, and
-// any human, can read and release it with the tools they already use. No new
-// service, no local state file that a second machine cannot see.
+// The lock lives as a comment on a GitHub issue, so any session, on any
+// machine, and any human can read and release it with the tools they already
+// use. No new service, no local state file that a second machine cannot see.
+//
+// WHICH issue changed on 2026-09-09 (RFD-003, forge#107). It used to be the
+// app's own device-test queue issue — which was wrong in a way that only
+// showed once there were four queues: the device is not any one app's, so a
+// lock on alate's queue was invisible to a drain working mood-layer's, and
+// the queue medium itself is being retired. It is now one pinned issue per
+// PHYSICAL DEVICE in Tessellate-Studio/litmus. See LOCK_REPO below.
 //
 // It is advisory, not enforced — nothing can stop a raw `adb` command. It
 // removes the ambiguity, which is what actually went wrong.
@@ -58,6 +64,88 @@ const { NOT_WAITING, isNotice, createClaimProtocol } = require(path.join(
  *  enough to cover an OTA double-relaunch, a cloud-build download, or a human
  *  reading a step; short enough to clear within one sitting. */
 const HEARTBEAT_STALE_MINUTES = 30;
+
+/**
+ * WHERE THE LOCK LIVES (RFD-003 §3, forge#107).
+ *
+ * Not in an app repo, because the device is not any one app's — alate,
+ * mood-layer and badige all drive the same handset, and a lock that lived on
+ * one of their queues would be invisible to a drain working another. Not in
+ * forge, which is public, while a claim may legitimately name the unreleased
+ * thing being tested. litmus is the private "shared testing utilities for
+ * Tessellate mobile apps" repo, and a device is a shared test fixture — its
+ * charter exactly. Zero files anywhere, as ADR-003 required.
+ */
+const LOCK_REPO = 'Tessellate-Studio/litmus';
+
+/**
+ * One pinned issue per PHYSICAL device, because they are claimed
+ * independently: a drain can hold the Pixel over adb while a human is
+ * mid-sitting on the iPhone, and neither should block the other.
+ */
+const DEVICES = [
+  {
+    serial: '804KPSL1724518',
+    label: 'Pixel, Android',
+    repo: LOCK_REPO,
+    issue: 43,
+    adb: true,
+    waitsOnHuman: false,
+  },
+  {
+    serial: 'iphone',
+    label: 'iPhone — TestFlight, no adb',
+    repo: LOCK_REPO,
+    issue: 44,
+    adb: false,
+
+    // Every step on this device is someone's hands, so its claim sits
+    // permanently at `Waiting on: human` — and a claim parked on a human
+    // never expires. That is the honest description of a TestFlight device,
+    // not a way around the staleness rule.
+    waitsOnHuman: true,
+  },
+];
+
+/**
+ * The device a serial names, defaulting to the adb handset.
+ *
+ * An unregistered serial is far likelier to be the Pixel re-flashed or
+ * re-paired than a second phone nobody told the queue about, and guessing the
+ * iPhone would park an agent-runnable drain on a human indefinitely — the
+ * expensive direction to be wrong in.
+ */
+function deviceFor(serial) {
+  return DEVICES.find(d => d.serial === serial) || DEVICES.find(d => d.adb);
+}
+
+/**
+ * The claim that beats mine, or null when mine stands — half of the
+ * post-then-re-read rule (RFD-003 §3).
+ *
+ * LOWEST comment id wins, not the latest. Ids are server-assigned and
+ * monotonic, so two racers re-reading the same issue reach the SAME verdict
+ * with no clock, no lease and no coordination: the earlier poster keeps the
+ * device and the later one releases and stands down. The 16-second collision
+ * on 2026-09-07 resolves in one round trip.
+ *
+ * This does not contradict `activeClaim`'s latest-wins rule. That one groups
+ * by holder first and answers "who holds it now" for display; this one
+ * arbitrates between DIFFERENT holders during the race window, after which
+ * only one HELD claim remains and the two agree again.
+ *
+ * Released and stale claims are skipped, so a crashed session that posted
+ * first cannot wedge the device forever.
+ */
+function losesRaceTo(claims, myCommentId) {
+  const rivals = (claims || []).filter(
+    c => c && c.held && !c.stale && c.commentId && c.commentId < myCommentId
+  );
+  if (rivals.length === 0) {
+    return null;
+  }
+  return rivals.reduce((a, b) => (b.commentId < a.commentId ? b : a));
+}
 
 const PROTOCOL = createClaimProtocol({
   heading: 'Device claim',
@@ -129,6 +217,10 @@ const describeClaim = PROTOCOL.describe;
 
 module.exports = {
   HEARTBEAT_STALE_MINUTES,
+  LOCK_REPO,
+  DEVICES,
+  deviceFor,
+  losesRaceTo,
   PROTOCOL,
   CLAIM_MARKER,
   isNotice,

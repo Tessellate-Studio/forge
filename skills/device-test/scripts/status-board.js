@@ -18,6 +18,7 @@ const {
   collect,
   daysSince,
   describeClaim,
+  fetchDeviceClaims,
 } = require('./queue-lib');
 const { clip } = require('../../../tools/work-claim/lib/protocol.js');
 
@@ -74,12 +75,10 @@ function renderRepo(result, opts) {
   ].join(' · ');
   lines.push(`${header}  ${chalk.gray(counts)}  ${chalk.dim(result.issueUrl)}`);
 
-  // Who holds the phone, if anyone. This is the question the board could not
-  // answer before — "what is pending" never told a second session that a
-  // first one was already driving the device.
-  if (result.claim) {
-    lines.push(chalk.yellow(`  ${describeClaim(result.claim)}`));
-  }
+  // The device line used to sit here, once per repo. It moved to the foot of
+  // the board (renderDevices): the lock is one per handset, not one per app,
+  // so printing it inside each repo's block said the same thing up to four
+  // times and implied a per-app lock that never existed.
 
   if (unparsed.length > 0) {
     lines.push(
@@ -188,7 +187,34 @@ function renderRepo(result, opts) {
   return lines;
 }
 
-function render(results, opts) {
+/**
+ * Who holds each physical device — once for the whole board, not once per app.
+ *
+ * An UNREADABLE lock prints as unreadable, never as free. "Nobody is on the
+ * phone" and "I could not find out" are opposite instructions to a session
+ * about to drive it, and collapsing them is how you get the 2026-09-01
+ * collision back with a clean conscience.
+ */
+function renderDevices(devices) {
+  const lines = [chalk.bold('Devices')];
+  (devices || []).forEach(({ device, claim, error }) => {
+    const name = `${device.serial} (${device.label})`;
+    if (error) {
+      lines.push(
+        `  ${chalk.red('? UNREADABLE')} ${name} — ${chalk.dim(
+          clip(error, 60)
+        )} ${chalk.red('· do not drive it until this reads')}`
+      );
+    } else if (claim) {
+      lines.push(`  ${chalk.yellow(describeClaim(claim))}`);
+    } else {
+      lines.push(`  ${chalk.green('free')} ${chalk.dim(name)}`);
+    }
+  });
+  return lines;
+}
+
+function render(results, opts, devices) {
   const out = [];
   out.push(chalk.bold(`Device Test Queue — ${new Date().toLocaleString()}`));
   out.push('');
@@ -196,6 +222,10 @@ function render(results, opts) {
     out.push(...renderRepo(r, opts));
     out.push('');
   });
+  if (devices) {
+    out.push(...renderDevices(devices));
+    out.push('');
+  }
 
   const totals = results.reduce(
     (acc, r) => {
@@ -270,22 +300,29 @@ async function main() {
 
   async function tick() {
     let results;
+    let devices;
     try {
-      results = await collect(opts.repo);
+      // Both in flight together: the device lock lives in a different repo
+      // from every queue, so serialising them would add a round trip to the
+      // one line a session reads before touching the phone.
+      [results, devices] = await Promise.all([
+        collect(opts.repo),
+        fetchDeviceClaims(),
+      ]);
     } catch (error) {
       console.error(chalk.red(error.message));
       process.exit(1);
     }
 
     if (opts.json) {
-      console.log(JSON.stringify(results, null, 2));
+      console.log(JSON.stringify({ repos: results, devices }, null, 2));
       return;
     }
 
     if (opts.watch) {
       process.stdout.write('\x1Bc'); // clear screen, keep scrollback intact
     }
-    console.log(render(results, opts));
+    console.log(render(results, opts, devices));
   }
 
   await tick();

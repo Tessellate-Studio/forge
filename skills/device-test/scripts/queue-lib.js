@@ -13,6 +13,7 @@ const {
   isNotice,
   parseClaim,
   activeClaim,
+  DEVICES,
 } = require('./claim-lib');
 
 // gh() and checkGhReady() come from the work-claim lib rather than being
@@ -470,16 +471,13 @@ async function fetchRepoQueue(repoDef) {
     ]);
     const comments = JSON.parse(out || '[]');
     const items = comments.map(parseComment).filter(Boolean);
-    const claims = comments.map(parseClaim).filter(Boolean);
-    return {
-      ...repoDef,
-      issueNumber,
-      issueUrl,
-      items,
 
-      // null when the device is free (never claimed, released, or stale).
-      claim: activeClaim(claims),
-    };
+    // No `claim` here any more. The device lock moved out of the app queues
+    // to one issue per handset in litmus (RFD-003 §3), because the device is
+    // not any one app's: a lock read off alate's queue was invisible to a
+    // drain working mood-layer's, and every queue reported the phone free
+    // while a fourth held it. `fetchDeviceClaims` answers it once, globally.
+    return { ...repoDef, issueNumber, issueUrl, items };
   } catch (error) {
     return {
       ...repoDef,
@@ -488,6 +486,38 @@ async function fetchRepoQueue(repoDef) {
       error: error.message || String(error),
     };
   }
+}
+
+/**
+ * Who holds each physical device right now, across every app.
+ *
+ * One fetch per device issue in litmus, not one per app queue — the lock is
+ * global, so asking each queue separately was both wasteful and wrong: four
+ * repos could each report the phone free while a drain on a fifth held it.
+ *
+ * A device whose issue cannot be read comes back with `error` rather than a
+ * null claim. "Free" and "I could not tell" must never render the same way:
+ * the whole point of the lock is that a session about to drive the handset
+ * can distinguish them, and an unreadable lock is a reason to stop, not to
+ * proceed.
+ */
+async function fetchDeviceClaims() {
+  return Promise.all(
+    DEVICES.map(async device => {
+      try {
+        const out = await gh([
+          'api',
+          `repos/${device.repo}/issues/${device.issue}/comments`,
+          '--paginate',
+        ]);
+        const comments = JSON.parse(out || '[]');
+        const claims = comments.map(parseClaim).filter(Boolean);
+        return { device, claim: activeClaim(claims), claims };
+      } catch (error) {
+        return { device, error: error.message || String(error) };
+      }
+    })
+  );
 }
 
 async function collect(repoFilter) {
@@ -530,6 +560,7 @@ module.exports = {
   checkGhReady,
   parseComment,
   fetchRepoQueue,
+  fetchDeviceClaims,
   collect,
   daysSince,
 };
