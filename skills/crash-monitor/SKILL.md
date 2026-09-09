@@ -40,30 +40,33 @@ You will see a lot of noise. NEVER act on it. Hard skip rules:
 - Skip titles matching `Tried to register two views with the same name RNSVG*` — react-native-svg dev-time double-registration.
 - Skip titles starting with `io.sentry.sample.` — SDK init events.
 - Skip issues already resolved (`status:resolved`) or tagged `dev-noise` / `wont-fix`.
-- Skip issues with `times_seen` < 3 **and** `user_count` < 2 — single-event blips are usually transient. Read both numbers off the issue before applying it, and check the carve-outs below, which override it.
+
+Every rule above keys on a **structural marker** — a dev path, an SDK prefix, a tag, an environment — that a real production defect cannot accidentally match. That is the whole test for belonging on this list. A rule that infers severity from a number is not a triage filter, and there isn't one here any more.
 
 If applying these filters leaves zero issues, **do nothing**. No PR, no issue, no announcement. Silence is the correct signal when the app is healthy; the scheduled-task run record proves you ran.
 
-### The volume filter is the one that has actually failed — four guards on it
+### There is no volume filter — every surviving issue gets attended to
 
-Every other Step 0 rule keys on a structural marker (a dev path, an SDK prefix, a tag) that a real production defect cannot accidentally match. The volume rule is different: it keys on a *judgement about severity inferred from a count*, and it is the only filter here that can silently discard a real bug.
+Until 2026-09-09 this step also skipped issues with `times_seen` < 3 **and** `user_count` < 2, hedged with four carve-outs. It is gone. Do not reintroduce it, and do not reimplement it by judgement — "only one user, probably transient" is the same rule wearing different clothes.
 
-It already has. On 2026-09-03 `ALATE-1G` was dropped as a "low-volume blip" on counts reported as 1 event / ≤1 user; Sentry showed **3 events across 3 distinct users, 2 platforms and 3 releases over 3 weeks**. Underneath it sat a defect that silently disabled cloud sync for entire app sessions with no user-visible signal — the precondition for the app's two prior silent-data-loss incidents (alate#669). So:
+It was removed because it never earned its keep and twice cost real bugs:
 
-1. **Never drop an issue without quoting its numbers.** Report every filtered issue as `<SHORT-ID> — skipped: times_seen=<n>, user_count=<n>, <rule>`. A filter decision stated without the counts beside it is an assertion, not a decision — and that is exactly how the miss above stayed invisible: the run reported a conclusion ("low-volume blips") that nothing in the output could be checked against.
-2. **`user_count` ≥ 2 is a hard floor — never filtered, whatever `times_seen` says.** Two or more distinct users is reproducible by definition, which is the opposite of a transient blip.
-3. **Never volume-filter a data-integrity class.** If the `feature` tag, culprit or message involves **sync, auth/session, storage or persistence, migration, payment, or deletion**, it goes to Step 2 regardless of counts. One user silently losing data outranks fifty users seeing a cosmetic glitch — judge these on blast radius, never on volume.
-4. **Spread beats volume.** If `last_seen − first_seen` > 7 days the issue is chronic, not transient, and the rule's own premise does not hold. Investigate it.
+- On 2026-09-03 `ALATE-1G` was dropped as a "low-volume blip" on counts reported as 1 event / ≤1 user; Sentry showed **3 events across 3 distinct users, 2 platforms and 3 releases over 3 weeks**. Underneath it sat a defect that silently disabled cloud sync for entire app sessions with no user-visible signal — the precondition for the app's two prior silent-data-loss incidents (alate#669).
+- The carve-outs meant to prevent that then had to fire constantly to do their job. On 2026-09-09 `ALATE-1S` — 1 event, 1 user, and a straight skip under the rule — survived only because it was a sync failure, i.e. the data-integrity carve-out. A filter whose exemptions are load-bearing is a filter that is wrong by default.
 
-When a carve-out and the volume rule disagree, **the carve-out wins**. This filter is cheap to get wrong in one direction (a few minutes reading a stack trace) and expensive in the other.
+The cost asymmetry settles it. Reading a stack trace for a genuinely transient blip costs a few minutes. Discarding a one-user data-loss bug costs the user's data. **One user silently losing data outranks fifty users seeing a cosmetic glitch** — blast radius is the judgement that matters, and it is made in Step 2 with the stack trace in hand, not in Step 0 from a count.
+
+Counts are still worth *reading* — they tell you what to look at first, and a chronic issue (`last_seen − first_seen` > 7 days) is worth more attention than a fresh one, not less. They are prioritisation input, never a reason to skip.
 
 ## Step 1: Query Sentry for new crashes
 
 - Organization and region URL come from the caller.
 - Check every project in the scope table.
-- Use `mcp__sentry__search_issues` with naturalLanguageQuery: `"unresolved issues in production from the last 24 hours"`
-- **Do not put an event-count floor in the query.** The clause `with at least 3 events` used to live here, and it filtered server-side — *before* Step 0 could apply its carve-outs, so a 2-event/2-user sync failure never reached the results at all and the `user_count` floor could never rescue it. A filter that runs ahead of its own exemptions is not a filter, it is a blind spot. Volume is judged in Step 0, where the exemptions live.
-- Record `times_seen`, `user_count`, `first_seen` and `last_seen` for every issue returned, before filtering. Step 0's guards need all four, and the run output has to show them.
+- Use `mcp__sentry__search_issues` with naturalLanguageQuery: `"unresolved issues in production"`
+- **Do not put an event-count floor in the query.** The clause `with at least 3 events` used to live here and filtered server-side, so a 2-event/2-user sync failure never reached the results at all. There is no volume filter anywhere in this skill now (Step 0) — reintroducing one in the query is the same mistake at a layer where it is even harder to see.
+- **Do not put a time window in the query either.** It used to read `from the last 24 hours`. That is a query about *this run's news*, not about the app's health, and it silently made the whole backlog invisible: an issue nobody resolved on the day it appeared was never looked at again by any subsequent run. On 2026-09-09 that had left **9 unresolved alate issues, 5 of which were already fixed days earlier** and simply never closed. The daily cadence belongs in how often you run, not in what you are allowed to see.
+- **Unresolved is the scope, and closing what is fixed is part of the job.** Every run therefore sees the standing backlog, not just the last day. An issue whose fix has already shipped is resolved in Step 4 with the PR named — see "Closing what is already fixed". A backlog that only grows means the run is not finishing.
+- Record `times_seen`, `user_count`, `first_seen` and `last_seen` for every issue returned. They are prioritisation input and belong in the run output; they are never grounds for skipping one.
 - Apply the Step 0 filters to each result. Drop anything that fails.
 
 If no surviving issues, proceed to Step 1.5 — Sentry silence does not mean the run is over.
@@ -131,6 +134,20 @@ gh pr list -R <github-repo> --search "{issue-id-or-title}" --state all
 Skip if a matching open OR merged PR, or an open issue, already exists. For GitHub Issues already fixed by a merged PR, close the issue with a comment linking to it.
 
 ## Step 4: Take action
+
+### Closing what is already fixed
+
+Now that the query returns the standing backlog rather than one day of it, most of what you see on a healthy app is **already fixed and never closed**. Resolve those. It is the cheapest real work in this skill and the reason the backlog stops growing.
+
+An issue qualifies when you can name the thing that fixed it:
+
+- a **merged PR** whose change covers this exact failure — read the code on the default branch and confirm the path actually changed, do not trust the PR title;
+- the fix **shipped before the issue last fired**, or it has **not recurred since the merge**. Verify the second one by querying rather than assuming: `lastSeen:>` the merge timestamp, and check this issue is absent from the result;
+- or the report was **downgraded on purpose** (an expected third-party failure moved from `captureError` to a breadcrumb), which means it cannot recur by design.
+
+Resolve it with `mcp__sentry__update_issue` (`status='resolved'`), and **always pass `reason`** — it posts to the issue's activity feed, so the next person sees why it was closed instead of finding a bare status change. Name the PR, and say how you verified.
+
+Do **not** resolve an issue because it is old, because it is quiet, or because nobody has complained. "Has not fired lately" is not a fix — that is the volume rule again, applied to time instead of counts. If nothing shipped that would stop it, it stays open. An issue that is a symptom of a *tracked but unfixed* gap also stays open: closing it hides a known problem, and the tracking issue is not a fix either.
 
 ### Confidence gate — determines 4a vs 4b
 
@@ -286,9 +303,10 @@ Push-notify: `"Config issue needs manual action — <repo>: <short description>.
 
 - Sentry issues queried (per project)
 - GitHub Issues scanned (per repo)
-- Issues filtered out — count plus reason buckets (dev-env, dev-path, low-volume, dev-noise tag, stale, already-addressed)
-- **Every issue dropped by the VOLUME rule, listed individually** as `<SHORT-ID> — times_seen=<n>, user_count=<n>, first_seen=<date>, last_seen=<date>`. The structural buckets can stay as counts; this one cannot. It is the filter that has actually discarded a real bug, and listing its casualties with their numbers is what makes a wrong call visible to the reader instead of arriving as a conclusion nobody can check.
+- Issues filtered out — count plus reason buckets (dev-env, dev-path, dev-noise tag, stale, already-addressed). Every bucket is structural, so counts are enough; if you ever find yourself writing a "low-volume" bucket, you have reinvented the filter Step 0 removed.
+- **The unresolved count, before and after this run** (e.g. `alate: 9 unresolved → 4`). The backlog is the number this skill exists to drive down, and a run that leaves it unchanged should say so plainly rather than let it pass unremarked.
 - Real issues investigated (count)
+- **Issues resolved as already-fixed** (with the short ID and the PR that fixed each) — see Step 4
 - PRs opened and auto-merged (with links)
 - PRs needing input (with links + **inline 1-2 sentence explanation of what needs deciding** — the reader should understand the ask without clicking through)
 - Issues filed (with links + **inline explanation of the manual action needed**)
