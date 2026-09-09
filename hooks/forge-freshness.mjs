@@ -13,10 +13,26 @@
  *               the last background repair. Spawns the worker detached when a network
  *               check is due. Never blocks session start, never waits on the network.
  *
- *   --repair    Worker mode. Fetches, detects drift, and RUNS the two update commands.
- *               Verifies the result against the filesystem rather than trusting exit
- *               codes — the whole reason this exists is that the CLI reports success
- *               while doing nothing.
+ *   --repair    Worker mode. Fetches, detects drift, and fixes it in three steps:
+ *
+ *                 1. `claude plugin marketplace update`  — pulls the clone.
+ *                 2. `claude plugin update`               — when the clone's version string
+ *                                                            moved, so the CLI extracts a new
+ *                                                            version directory the way it means to.
+ *                 3. copy the clone over every installed  — the backstop. Step 2 keys off the
+ *                    directory that still differs           version string, and `install`
+ *                                                            reuses an existing version dir,
+ *                                                            so a change shipped WITHOUT a bump
+ *                                                            is unreachable by any CLI command
+ *                                                            (proven 2026-09-09: uninstall +
+ *                                                            install left 0.12.9/ five commits
+ *                                                            stale). Step 2 also only touches the
+ *                                                            user scope; every per-project and
+ *                                                            per-worktree install drifts until
+ *                                                            something copies into it. This does.
+ *
+ *               Verifies the result against the filesystem rather than trusting exit codes —
+ *               the whole reason this exists is that the CLI reports success while doing nothing.
  *
  * A repair cannot fix the session that triggered it: the plugin is already loaded by the
  * time the hook runs. It makes the NEXT session correct. That limit is inherent, not a
@@ -26,20 +42,23 @@
  *
  * RATE CEILING. This hook spawns a process on session start, so a repair that cannot succeed
  * is a repair that runs forever — observed 2026-07-29, one console window per session for a
- * whole working day. Three independent limits, deliberately layered, because the first two
- * require correctly diagnosing the failure and the third does not:
+ * whole working day. Two layered limits:
  *
- *   1. isVersionPinBlocked()  — latches off the one drift a retry provably cannot fix.
- *   2. consecutiveFailures    — backs repeated genuine failures down to daily.
- *   3. MIN_SPAWN_INTERVAL_MS  — a floor on ANY spawn, whatever the reason. This is the one
+ *   1. consecutiveFailures    — backs repeated genuine failures down to daily.
+ *   2. MIN_SPAWN_INTERVAL_MS  — a floor on ANY spawn, whatever the reason. This is the one
  *                               that covers failure modes nobody has characterised yet, so
  *                               nothing is allowed to bypass it. When adding a new "but we
  *                               should really check now" condition, put it inside this floor.
  *
+ * (There used to be a third — a latch for "version-pinned" staleness the worker refused to
+ * fix unattended, telling the user to uninstall and reinstall by hand. That advice was
+ * wrong: the reinstall reuses the stale directory. Step 3 above fixes that case directly,
+ * so the latch is gone; a sync that genuinely fails is an ordinary failure for limit 1.)
+ *
  * The floor is measured from lastATTEMPT, which advances on every spawn. Measuring from
- * lastFetch (which only advances on SUCCESS) is what made limits 1 and 2 unreachable: a
- * failing fetch left the check permanently due. If state cannot be persisted the throttle
- * cannot work, so the hook fails CLOSED and skips the repair rather than run it unbounded.
+ * lastFetch (which only advances on SUCCESS) is what made limit 1 unreachable: a failing
+ * fetch left the check permanently due. If state cannot be persisted the throttle cannot
+ * work, so the hook fails CLOSED and skips the repair rather than run it unbounded.
  *
  * SHIPPED WITH THE PLUGIN, registered via hooks/hooks.json. Two consequences:
  *
@@ -52,21 +71,21 @@
  *     because it still catches the real case where the manifest points at a version
  *     directory other than the one actually on disk.
  *
- * Because `claude plugin update` compares version strings only, any change to this file
- * MUST come with a version bump in .claude-plugin/plugin.json or it will never reach an
- * installed cache. That is the same upstream bug this hook exists to detect:
+ * Step 3 means a change to this file reaches installed caches without a version bump —
+ * once the installed copy is one that has step 3. Bump the version anyway when the hook
+ * changes; it costs nothing and keeps `claude plugin list` honest.
+ * Upstream bug for the version-string comparison:
  * https://github.com/anthropics/claude-code/issues/17361
  */
 
 import { execFileSync, spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { isVersionPinBlocked } from './lib/version-pin.js';
 import { shouldSpawnRepair } from './lib/spawn-decision.js';
 import { emit } from './lib/session-start.js';
+import { treeHash, syncTree } from './lib/cache-sync.js';
 
 const MARKETPLACE = 'tessellate-forge';
 const PLUGIN = 'forge';
@@ -136,39 +155,63 @@ function git(args) {
   }).trim();
 }
 
-/** Hash a directory's file contents so cache-vs-clone drift is detected exactly. */
-function hashDir(dir) {
-  if (!fs.existsSync(dir)) return null;
-  const h = createHash('sha256');
-  for (const name of fs.readdirSync(dir).sort()) {
-    const full = path.join(dir, name);
-    if (!fs.statSync(full).isFile()) continue;
-    h.update(name);
-    h.update(fs.readFileSync(full));
+/** Every manifest entry for forge, whatever its scope. Empty when the manifest is unreadable. */
+function installedEntries() {
+  if (!fs.existsSync(manifestPath)) return [];
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    return manifest?.plugins?.[`${PLUGIN}@${MARKETPLACE}`] ?? [];
+  } catch {
+    return [];
   }
-  return h.digest('hex');
 }
 
-function installedEntry() {
-  if (!fs.existsSync(manifestPath)) return null;
-  let manifest;
-  try {
-    manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-  } catch {
-    return null;
-  }
-  const entries = manifest?.plugins?.[`${PLUGIN}@${MARKETPLACE}`] ?? [];
-  return entries.find(e => e.scope === 'user') ?? entries[0] ?? null;
+function samePath(a, b) {
+  if (!a || !b) return false;
+  const norm = p =>
+    path
+      .resolve(p)
+      .replace(/[\\/]+$/, '')
+      .toLowerCase();
+  return norm(a) === norm(b);
 }
 
-/** Clone HEAD sha, or null when it can't be read. Part of the version-pin block fingerprint. */
-function cloneHead() {
-  try {
-    const sha = git(['rev-parse', 'HEAD']);
-    return /^[0-9a-f]{40}$/.test(sha) ? sha : null;
-  } catch {
-    return null;
+/**
+ * The entry THIS session loaded. Claude Code sets CLAUDE_PLUGIN_ROOT to the directory it
+ * ran the hook from, which is ground truth for "what is this session reading" — better
+ * than guessing which of a user-scope and several project-scope entries the loader chose.
+ * Falls back to the user entry, then the first, when the variable is absent (tests, a
+ * manual run).
+ */
+function installedEntry(entries = installedEntries()) {
+  const loaded = process.env.CLAUDE_PLUGIN_ROOT;
+  return (
+    (loaded && entries.find(e => samePath(e.installPath, loaded))) ??
+    entries.find(e => e.scope === 'user') ??
+    entries[0] ??
+    null
+  );
+}
+
+/**
+ * Distinct install directories a session could still load: on disk, and either user-scoped
+ * or belonging to a project directory that still exists. A deleted worktree's entry is
+ * skipped rather than repaired — nothing will ever start there again. Several entries
+ * usually share one directory (every main checkout at the same version), hence distinct.
+ */
+function liveInstallPaths(entries) {
+  const seen = new Set();
+  const out = [];
+  for (const e of entries) {
+    if (!e.installPath || !fs.existsSync(e.installPath)) continue;
+    if (e.scope !== 'user' && e.projectPath && !fs.existsSync(e.projectPath))
+      continue;
+    const key = path.resolve(e.installPath).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(e.installPath);
   }
+  return out;
 }
 
 function behindCount() {
@@ -180,11 +223,24 @@ function behindCount() {
   }
 }
 
-/** cache standards vs clone standards — differ means the clone has rules never extracted. */
-function cacheBehindClone(entry) {
-  const a = hashDir(path.join(entry.installPath, 'standards'));
-  const b = hashDir(path.join(clonePath, 'standards'));
-  return a && b && a !== b;
+/** Installed dir vs clone — differ means the clone has content sessions never see. */
+function cacheBehindClone(installPath, cloneDigest = treeHash(clonePath)) {
+  const a = treeHash(installPath);
+  return !!a && !!cloneDigest && a !== cloneDigest;
+}
+
+/** The version string the clone would install as. */
+function cloneVersion() {
+  try {
+    return JSON.parse(
+      fs.readFileSync(
+        path.join(clonePath, '.claude-plugin', 'plugin.json'),
+        'utf8'
+      )
+    ).version;
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------- worker mode
@@ -237,6 +293,61 @@ function runCli(bin, args) {
   });
 }
 
+/** Steps 1 and 2 of the repair: the CLI's own update path, run only where it can do anything. */
+function runCliUpdates(bin, behind, entry) {
+  // Marketplace FIRST. The clone is what goes stale; updating the plugin alone no-ops.
+  if (behind) {
+    try {
+      runCli(bin, ['plugin', 'marketplace', 'update', MARKETPLACE]);
+      log('ran: claude plugin marketplace update');
+    } catch (err) {
+      log(
+        `marketplace update FAILED: ${String(err?.message ?? err).slice(
+          0,
+          300
+        )}`
+      );
+    }
+  }
+
+  // `plugin update` compares version strings, so it is a guaranteed (and slow — 1-2 min)
+  // no-op unless the clone's version moved. Skip it when it cannot act; step 3 covers
+  // the content either way.
+  const target = cloneVersion();
+  if (target && entry && target !== entry.version) {
+    try {
+      runCli(bin, ['plugin', 'update', `${PLUGIN}@${MARKETPLACE}`]);
+      log(`ran: claude plugin update (${entry.version} -> ${target})`);
+    } catch (err) {
+      log(`plugin update FAILED: ${String(err?.message ?? err).slice(0, 300)}`);
+    }
+  }
+}
+
+/**
+ * Step 3: copy the clone over every live install that still differs from it. Hashing a tree
+ * costs a read of every file, so `known` (already hashed by the caller) is trusted and only
+ * directories the caller never saw — one `plugin update` just extracted — are hashed here.
+ */
+function syncStaleInstalls(dirs, known) {
+  const digest = treeHash(clonePath);
+  const synced = [];
+  for (const dir of dirs) {
+    const stale = known.has(dir)
+      ? known.get(dir)
+      : cacheBehindClone(dir, digest);
+    if (!stale) continue;
+    const r = syncTree(clonePath, dir);
+    log(
+      `synced clone -> ${dir}: ${r.written} written, ${r.removed} removed, ${r.failed.length} failed`
+    );
+    for (const f of r.failed.slice(0, 5))
+      log(`  could not sync ${f.rel}: ${f.error}`);
+    synced.push(dir);
+  }
+  return synced;
+}
+
 function repair() {
   if (!acquireLock()) {
     log('repair skipped — another repair holds the lock');
@@ -244,7 +355,8 @@ function repair() {
   }
 
   try {
-    const entry = installedEntry();
+    const entries = installedEntries();
+    const entry = installedEntry(entries);
     if (!entry || !fs.existsSync(clonePath)) {
       log('repair skipped — forge not installed or no marketplace clone');
       return;
@@ -261,10 +373,20 @@ function repair() {
     }
 
     const behindBefore = behindCount();
-    const cacheStaleBefore = cacheBehindClone(entry);
+    const digestBefore = treeHash(clonePath);
+    // dir -> stale?  One content hash per directory; reused by step 3 below.
+    const verdicts = new Map(
+      liveInstallPaths(entries).map(dir => [
+        dir,
+        cacheBehindClone(dir, digestBefore),
+      ])
+    );
+    const staleBefore = [...verdicts]
+      .filter(([, stale]) => stale)
+      .map(([d]) => d);
     const versionBefore = entry.version;
 
-    if (!behindBefore && !cacheStaleBefore) {
+    if (!behindBefore && staleBefore.length === 0) {
       log('no drift — nothing to repair');
       // Clear a recorded FAILURE once the problem is gone, so it stops being announced.
       // A recorded success is kept: sessions still need to be told to restart.
@@ -278,102 +400,77 @@ function repair() {
 
     const bin = resolveClaudeBin();
     log(
-      `drift detected (behind=${
-        behindBefore ?? 'n/a'
-      }, cacheStale=${cacheStaleBefore}) — repairing with ${bin}`
+      `drift detected (behind=${behindBefore ?? 'n/a'}, stale installs=${
+        staleBefore.length
+      }) — repairing with ${bin}`
     );
 
-    // Marketplace FIRST. The clone is what goes stale; updating the plugin alone no-ops.
-    if (behindBefore) {
-      try {
-        runCli(bin, ['plugin', 'marketplace', 'update', MARKETPLACE]);
-        log('ran: claude plugin marketplace update');
-      } catch (err) {
-        log(
-          `marketplace update FAILED: ${String(err?.message ?? err).slice(
-            0,
-            300
-          )}`
-        );
-      }
-    }
+    runCliUpdates(bin, behindBefore, entry);
 
-    try {
-      runCli(bin, ['plugin', 'update', `${PLUGIN}@${MARKETPLACE}`]);
-      log('ran: claude plugin update');
-    } catch (err) {
-      log(`plugin update FAILED: ${String(err?.message ?? err).slice(0, 300)}`);
-    }
+    // Re-read: `plugin update` may have added a new version directory to the manifest.
+    // The marketplace update may also have moved the clone, so verdicts taken against the
+    // old clone are only trusted while its content is unchanged.
+    const entriesAfter = installedEntries();
+    const dirsAfter = liveInstallPaths(entriesAfter);
+    const cloneMoved = treeHash(clonePath) !== digestBefore;
+    const synced = syncStaleInstalls(
+      dirsAfter,
+      cloneMoved ? new Map() : verdicts
+    );
 
     // VERIFY AGAINST THE FILESYSTEM. The CLI reports success while no-oping — trusting
-    // its exit code is the exact mistake that let this drift for ten days.
-    const entryAfter = installedEntry();
+    // its exit code is the exact mistake that let this drift for ten days. Only directories
+    // this run touched or never hashed need re-reading; the rest were verified equal above.
+    const entryAfter = installedEntry(entriesAfter);
     const behindAfter = behindCount();
-    const cacheStaleAfter = entryAfter ? cacheBehindClone(entryAfter) : true;
+    const digestAfter = treeHash(clonePath);
+    const staleAfter = dirsAfter.filter(dir =>
+      !cloneMoved && verdicts.has(dir) && !synced.includes(dir)
+        ? false
+        : cacheBehindClone(dir, digestAfter)
+    );
     const versionAfter = entryAfter?.version ?? 'unknown';
     const healthy =
       !behindAfter &&
-      !cacheStaleAfter &&
+      staleAfter.length === 0 &&
       !!entryAfter &&
       fs.existsSync(entryAfter.installPath);
 
-    // Distinguish two very different failures:
-    //
-    //   behindAfter > 0                     -> the update genuinely failed (network, CLI).
-    //                                          Retrying later is worth it.
-    //
-    //   behindAfter == 0 && cacheStaleAfter -> VERSION-PINNED STALENESS. The clone is
-    //                                          current but the cache was never re-extracted,
-    //                                          because `claude plugin update` keys off the
-    //                                          version string and forge shipped standards
-    //                                          changes without bumping it (observed
-    //                                          2026-07-28: PR #38 edited anti-patterns.md
-    //                                          while plugin.json stayed at 0.4.2).
-    //                                          Retrying is POINTLESS — the CLI will no-op
-    //                                          forever. Only a forced re-extract fixes it,
-    //                                          and that means removing the working copy, so
-    //                                          this worker reports instead of attempting it
-    //                                          unattended.
-    const versionPinned = !healthy && !behindAfter && cacheStaleAfter;
     const state = readState();
-    const failures =
-      healthy || versionPinned ? 0 : (state.consecutiveFailures ?? 0) + 1;
+    const failures = healthy ? 0 : (state.consecutiveFailures ?? 0) + 1;
+
+    const how =
+      versionBefore !== versionAfter
+        ? `updated forge ${versionBefore} -> ${versionAfter}`
+        : `refreshed forge ${versionAfter} in place`;
+    const where =
+      synced.length > 0
+        ? ` (${synced.length} install dir(s) synced from the clone)`
+        : '';
 
     writeState({
       consecutiveFailures: failures,
       lastRepair: {
         ts: Date.now(),
         ok: healthy,
-        versionPinned,
-        // Fingerprint of the world this verdict was reached in. A version-pinned verdict
-        // stays authoritative only while both still hold; see isVersionPinBlocked().
-        pinnedAtVersion: versionPinned ? versionAfter : undefined,
-        pinnedAtCloneHead: versionPinned ? cloneHead() : undefined,
         from: versionBefore,
         to: versionAfter,
         behindBefore,
         behindAfter,
+        synced: synced.length,
         detail: healthy
-          ? `updated forge ${versionBefore} -> ${versionAfter}`
-          : versionPinned
-          ? `the clone is current but the cached copy of v${versionAfter} was never re-extracted — ` +
-            `forge changed standards without bumping its version, so 'claude plugin update' no-ops. ` +
-            `This needs a forced reinstall: claude plugin uninstall ${PLUGIN}@${MARKETPLACE} && ` +
-            `claude plugin install ${PLUGIN}@${MARKETPLACE}`
-          : `repair ran but drift remains (behind=${
-              behindAfter ?? 'n/a'
-            }, cacheStale=${cacheStaleAfter})`,
+          ? `${how}${where}`
+          : `repair ran but drift remains (behind=${behindAfter ?? 'n/a'}, ` +
+            `stale installs=${staleAfter.length}) — see ${logPath}`,
       },
     });
 
     log(
       healthy
-        ? `repair OK: ${versionBefore} -> ${versionAfter}`
-        : versionPinned
-        ? `repair BLOCKED: version-pinned staleness at v${versionAfter} — needs forced reinstall (not attempted unattended)`
+        ? `repair OK: ${how}${where}`
         : `repair INCOMPLETE (failure #${failures}): behind=${
             behindAfter ?? 'n/a'
-          } cacheStale=${cacheStaleAfter}`
+          } stale=${staleAfter.join(', ') || 'none'}`
     );
   } catch (err) {
     log(`repair threw: ${String(err?.message ?? err).slice(0, 300)}`);
@@ -447,34 +544,32 @@ function hook() {
   const installMissing =
     !entry.installPath || !fs.existsSync(entry.installPath);
   const cloneExists = fs.existsSync(clonePath);
-  const cacheStale = !installMissing && cloneExists && cacheBehindClone(entry);
+  const cacheStale =
+    !installMissing && cloneExists && cacheBehindClone(entry.installPath);
   const behind = !installMissing && cloneExists ? behindCount() : null;
   const liveProblem = installMissing || cacheStale || !!behind;
 
   // Report what the last background repair did — once per session, not once globally.
+  // A record written by the version that refused "version-pinned" drift is superseded:
+  // its advice (reinstall by hand) was wrong, and the next worker run replaces it.
   const state = readState();
   const last = state.lastRepair;
   const sessionId = readSessionId();
   if (
     last?.ts &&
+    !last.versionPinned &&
     (last.ok || liveProblem) &&
     shouldReportRepair(state, last, sessionId)
   ) {
     recordRepairReported(state, last, sessionId);
     if (last.ok) {
       notes.push(
-        `a background repair updated forge (${last.from} -> ${last.to}). ` +
+        `a background repair ${last.detail}. ` +
           `This session is still running the previously loaded copy — restart to pick it up.`
       );
-    } else if (last.versionPinned) {
-      // The usual two-command refresh is the WRONG advice here — it is precisely what
-      // no-ops. Give the forced-reinstall remedy instead.
-      problems.push(`automatic repair cannot fix this one: ${last.detail}`);
     } else {
       problems.push(
-        `an automatic forge repair ran and did NOT resolve the drift (${last.detail}). ` +
-          `Run manually: claude plugin marketplace update ${MARKETPLACE} && ` +
-          `claude plugin update ${PLUGIN}@${MARKETPLACE}`
+        `an automatic forge repair ran and did NOT resolve the drift (${last.detail}).`
       );
     }
   }
@@ -495,11 +590,6 @@ function hook() {
   // and then not queueing one is how a user ends up waiting on a fix that is never coming.
   const failures = state.consecutiveFailures ?? 0;
   const backedOff = failures >= MAX_FAILURES_BEFORE_BACKOFF;
-  const pinBlocked = isVersionPinBlocked(last, entry, {
-    cacheStale,
-    behind,
-    head: cloneHead(),
-  });
 
   // Throttle on lastATTEMPT, not lastFetch. lastFetch only advances when a fetch SUCCEEDS
   // (deliberately — see the fetch handler in repair()), so gating on it meant any persistent
@@ -512,7 +602,6 @@ function hook() {
     minIntervalMs: MIN_SPAWN_INTERVAL_MS,
     liveProblem,
     backedOff,
-    pinBlocked,
   });
   // Spawn first, describe second. Recording the attempt can fail (read-only state file), and
   // that turns a queued repair into a skipped one — so the outcome has to be known before any
@@ -537,8 +626,8 @@ function hook() {
 
   if (cacheStale) {
     problems.push(
-      `forge standards in the plugin cache (v${entry.version}) differ from the marketplace ` +
-        `clone on disk — the clone has rules that were never extracted.${queued}`
+      `the forge copy this session loaded (v${entry.version} at ${entry.installPath}) differs ` +
+        `from the marketplace clone on disk — the clone has changes that were never extracted.${queued}`
     );
   }
 
@@ -548,15 +637,7 @@ function hook() {
     );
   }
 
-  if (pinBlocked) {
-    problems.push(
-      `automatic repair is latched off for this one — retrying cannot fix version-pinned ` +
-        `staleness, so it has stopped trying. Fix it with a forced reinstall: ` +
-        `claude plugin uninstall ${PLUGIN}@${MARKETPLACE} && ` +
-        `claude plugin install ${PLUGIN}@${MARKETPLACE}. The latch releases on its own if ` +
-        `the clone or the installed version moves.`
-    );
-  } else if (backedOff && spawned) {
+  if (backedOff && spawned) {
     problems.push(
       `automatic repair has failed ${failures} times in a row — it is now backed off to ` +
         `daily. See ${logPath} and fix it manually.`

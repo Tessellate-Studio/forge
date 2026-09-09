@@ -18,29 +18,29 @@ inherits it — interchangeable, inter-usable, self-learning (via reviewed PRs).
 
 ## What's inside
 
-| Path | What |
-|---|---|
-| `.claude-plugin/marketplace.json` | Marketplace manifest (this repo is its own marketplace). |
-| `.claude-plugin/plugin.json` | The `forge` plugin manifest. |
-| `skills/build-feature/` | Implement + verify a change end-to-end on-device until it objectively passes. |
-| `skills/roadmap-pulse/` | Weekly planning-doc honesty pass + rubric-scored priorities. |
-| `skills/new-app/` | Scaffold a new platform-wired app from a requirements brief. |
-| `skills/security-sweep/` | Dependency vulnerability sweep — triage, safe auto-fix, dismiss accepted residuals. Implements `standards/security-triage.md`. |
-| `skills/crash-monitor/` | Daily Sentry + GitHub Issues triage — noise filters, confidence-gated auto-fix, revert cooldown. |
-| `skills/device-test/` | Drains the cross-app device-test queue; ships `dtq` / `device-test-status`, a read-only terminal status board for the same queue (see below). |
-| `skills/status-check/` | Session wrap-up loop-closer — verifies and settles the PRs/branches/issues/queue items this conversation opened; manual-only bits come back as a short list. |
-| `standards/workflows.md` | **Single home** for all working rules (branch placement, TDD, quality pass, status updates, etc.). |
-| `standards/anti-patterns.md` | The 14 app-agnostic build guardrails. |
-| `standards/authoritative-claims.md` | The core rule: cite a source or label a hypothesis. |
-| `standards/security-triage.md` | `npm audit` / Dependabot triage policy. |
-| `standards/doc-placement.md` | Where each doc type lives in a Tessellate app. |
-| `standards/testing.md` | Unit vs E2E/visual/rule-compliance (litmus) vs UAT — tiers, testID contract, trigger flow. |
-| `references/CLAUDE.base.md` | One-page CLAUDE.md template for new apps (used by `/new-app`). |
-| `standards-cli/` | The code-standards SDK: `standards`/`bp` CLI, validators, scaffolding templates. |
-| `rubric/` | The rubric SDK: `rubric` CLI + `evaluateFromContext` scoring API (root export). |
-| `tools/brief/` | The `brief` CLI: run any command, print a token-cheap summary of its output instead of the raw dump. See `standards/workflows.md`. |
-| `tools/work-claim/` | The `wip` CLI: who is working on which issue/PR — post, heartbeat and release the 🚧 work claim, and print the cross-repo board. See `standards/workflows.md` → "Work claims". |
-| `.github/workflows/code-inspection.yml` | **Reusable** advisory inspection gate apps call from their CI. |
+| Path                                    | What                                                                                                                                                                           |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.claude-plugin/marketplace.json`       | Marketplace manifest (this repo is its own marketplace).                                                                                                                       |
+| `.claude-plugin/plugin.json`            | The `forge` plugin manifest.                                                                                                                                                   |
+| `skills/build-feature/`                 | Implement + verify a change end-to-end on-device until it objectively passes.                                                                                                  |
+| `skills/roadmap-pulse/`                 | Weekly planning-doc honesty pass + rubric-scored priorities.                                                                                                                   |
+| `skills/new-app/`                       | Scaffold a new platform-wired app from a requirements brief.                                                                                                                   |
+| `skills/security-sweep/`                | Dependency vulnerability sweep — triage, safe auto-fix, dismiss accepted residuals. Implements `standards/security-triage.md`.                                                 |
+| `skills/crash-monitor/`                 | Daily Sentry + GitHub Issues triage — noise filters, confidence-gated auto-fix, revert cooldown.                                                                               |
+| `skills/device-test/`                   | Drains the cross-app device-test queue; ships `dtq` / `device-test-status`, a read-only terminal status board for the same queue (see below).                                  |
+| `skills/status-check/`                  | Session wrap-up loop-closer — verifies and settles the PRs/branches/issues/queue items this conversation opened; manual-only bits come back as a short list.                   |
+| `standards/workflows.md`                | **Single home** for all working rules (branch placement, TDD, quality pass, status updates, etc.).                                                                             |
+| `standards/anti-patterns.md`            | The 14 app-agnostic build guardrails.                                                                                                                                          |
+| `standards/authoritative-claims.md`     | The core rule: cite a source or label a hypothesis.                                                                                                                            |
+| `standards/security-triage.md`          | `npm audit` / Dependabot triage policy.                                                                                                                                        |
+| `standards/doc-placement.md`            | Where each doc type lives in a Tessellate app.                                                                                                                                 |
+| `standards/testing.md`                  | Unit vs E2E/visual/rule-compliance (litmus) vs UAT — tiers, testID contract, trigger flow.                                                                                     |
+| `references/CLAUDE.base.md`             | One-page CLAUDE.md template for new apps (used by `/new-app`).                                                                                                                 |
+| `standards-cli/`                        | The code-standards SDK: `standards`/`bp` CLI, validators, scaffolding templates.                                                                                               |
+| `rubric/`                               | The rubric SDK: `rubric` CLI + `evaluateFromContext` scoring API (root export).                                                                                                |
+| `tools/brief/`                          | The `brief` CLI: run any command, print a token-cheap summary of its output instead of the raw dump. See `standards/workflows.md`.                                             |
+| `tools/work-claim/`                     | The `wip` CLI: who is working on which issue/PR — post, heartbeat and release the 🚧 work claim, and print the cross-repo board. See `standards/workflows.md` → "Work claims". |
+| `.github/workflows/code-inspection.yml` | **Reusable** advisory inspection gate apps call from their CI.                                                                                                                 |
 
 ## Install
 
@@ -69,18 +69,31 @@ jobs:
   inspect:
     uses: Tessellate-Studio/forge/.github/workflows/code-inspection.yml@master
     with:
-      fail_on_error: false   # advisory; flip to true once tuned
+      fail_on_error: false # advisory; flip to true once tuned
 ```
 
 ## Freshness check (SessionStart)
 
-`autoUpdate` on a git marketplace does not actually pull the clone, and
-`claude plugin update` compares version strings only — so a plugin can sit stale
-for days while reporting success. `hooks/forge-freshness.mjs` runs at session
-start, checks for that drift, and repairs it in a detached background worker.
+`autoUpdate` on a git marketplace does not actually pull the clone,
+`claude plugin update` compares version strings only, and `claude plugin
+install` reuses a cache directory that already exists for that version — so a
+change merged without a version bump is unreachable by any CLI command, and
+the plugin sits stale while every command reports success.
+`hooks/forge-freshness.mjs` runs at session start, checks for that drift, and
+repairs it in a detached background worker:
+
+1. `claude plugin marketplace update` — pulls the clone.
+2. `claude plugin update` — only when the clone's version string moved, so the
+   CLI extracts a fresh version directory the way it means to.
+3. Copy the clone over **every** installed directory that still differs —
+   the user-scope install _and_ each per-project / per-worktree install, which
+   step 2 never touches. This is what makes a bump optional rather than a
+   ritual, and what stops long-lived worktrees drifting from master.
 
 It never blocks session start and cannot fix the session that triggers it — the
-plugin is already loaded by then, so a repair makes the *next* session correct.
+plugin is already loaded by then, so a repair makes the _next_ session correct.
+Nothing needs copy-pasting; if the hook ever asks you to run something by hand,
+that is the bug to fix.
 
 **Turning it off:**
 
@@ -92,11 +105,11 @@ Set it in your environment to silence the check entirely — nothing else to und
 and unsetting it resumes normal behaviour. Prefer this over disabling the whole
 plugin, which would also take the skills and standards with it.
 
-Because it spawns a process per session, a repair that *cannot* succeed is a
-repair that runs forever. Three layered limits prevent that: the version-pin
-latch, the consecutive-failure backoff, and a hard floor on how often any worker
-may spawn for any reason. If you add a new "but we should really check now"
-condition, put it *inside* that floor — see the header of
+Because it spawns a process per session, a repair that _cannot_ succeed is a
+repair that runs forever. Two layered limits prevent that: the
+consecutive-failure backoff, and a hard floor on how often any worker may
+spawn for any reason. If you add a new "but we should really check now"
+condition, put it _inside_ that floor — see the header of
 `hooks/forge-freshness.mjs`.
 
 ## Device-test status (SessionStart)
