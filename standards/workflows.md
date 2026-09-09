@@ -647,7 +647,7 @@ without the quoted `**Status:**` silently reopening a closed test.
 **One comment per test is load-bearing, not tidiness.** A comment's title is
 its first heading, its Status is its first Status line, and its notes are
 whatever sits below the first rule after that — so a SECOND test stacked into
-the same comment is not a second row on the board. It is filed as a *note* on
+the same comment is not a second row on the board. It is filed as a _note_ on
 the first. On alate#562 comment 5589887980 a correction and two tests shared
 one comment: the board showed one row, titled after the correction, and
 `gender-unisex-739` had no row anywhere — nothing could run it, close it, or
@@ -734,13 +734,13 @@ an item:
   three is commentary and is skipped, however carefully it is laid out —
   alate#562 comment 5571959196 is a drain correction with two `###` headings
   and a closing sentence opening `**Status:**` that explains, in prose, why a
-  *different* item is blocked. It was reported as malformed every day.
+  _different_ item is blocked. It was reported as malformed every day.
   Conversely the glyph outranks everything: a comment wearing 🤖 with a
   typo'd Status stays on the board as a violation, because a comment
   declaring itself an item is one.
 - **A field named inside `` ` `` backticks is documentation, not a field.**
-  The drain that leaves a note reading ``No `**Status:**` line on this
-  comment`` is describing the absence, not supplying the field. Matched
+  The drain that leaves a note reading `` No `**Status:**` line on this
+comment `` is describing the absence, not supplying the field. Matched
   literally, that note gave two live alate items a Status made of the note's
   own prose — so the board reported the wrong defect and no drain would ever
   have appended the real line.
@@ -873,6 +873,75 @@ Two carve-outs, both learned by breaking them (alate PRs
 
 Watch for **line-count parity masking content loss**: a table row that loses a
 column leaves the file the same length. Diff the content, not the line count.
+
+## Workflow names — the SUBJECT is mandatory, and the FILE NAME is an API
+
+**Every workflow's `name:` states its role and its subject: `<Role> — <Subject>`.**
+The role comes from the closed list below; the subject is a proper noun specific
+enough that two repos cannot produce the same string. Not enforced in CI.
+
+| Role       | The question it answers                          | Example                                    |
+| ---------- | ------------------------------------------------ | ------------------------------------------ |
+| `Watch`    | is this thing alive _right now_?                 | `Watch — CI runner fleet`                  |
+| `Alert`    | turn someone else's finding into a tracked issue | `Alert bridge — healthchecks.io to issues` |
+| `Guard`    | did the signal that _should_ exist appear?       | `Guard — PR check coverage`                |
+| `Gate`     | does this diff pass?                             | `Rule compliance — Alate`                  |
+| `Build`    | produce an artefact                              | `Build Android APK`                        |
+| `Ship`     | move an existing artefact to users               | `Vercel production deploy`                 |
+| `Maintain` | housekeeping on the repo itself                  | `Relock — self-hosted`                     |
+
+`Watch` and `Guard` must never share a word. A watcher observes a live system; a
+guard asserts that a required signal _exists_. `Alert` does neither — it only
+relays what something else found, so it must never be named as though it
+monitors. Established single-word gates (`CI`, `Code Inspection`, `No user
+data`, `Lint`) keep their names: they are already unambiguous in every repo.
+
+**Never name a workflow after a repo-relative word.** `ops`, `production`,
+`gate` and `health` mean something different in each repo, so they collide the
+moment two repos are read side by side.
+
+**The file name stays. Change the `name:`, not the file.** A workflow filename
+is an API: `gh workflow run <file>.yml`, `gh run list --workflow=<file>.yml`,
+`POST /actions/workflows/<file>.yml/dispatches`, the workflow's numeric id, and
+its entire run history all key on it — and renaming severs every one of them
+with no error anywhere. `dependabot-auto-merge.yml` is the standing example: it
+displays as `Dependabot triage`, no longer auto-merges anything, and keeps the
+wrong filename **on purpose**. The one rename worth making is a workflow that
+has **never run and is not yet wired to an external caller** — nothing to sever,
+nothing to break — and that window closes the first time either becomes true.
+
+**Because the filename cannot carry the subject, line 1 of the file must.**
+Every workflow opens with `# <display name> — SUBJECT: <one clause naming
+exactly what this observes or acts on>`. Then
+`grep -m1 SUBJECT .github/workflows/*.yml` prints the repo's whole role map in
+one screen — the artefact that was missing when a filename got read as a
+description of itself.
+
+**Do not "fix" separator drift across languages.** `gate-watchdog.sh` beside
+`gate_watchdog_eval.py` is not drift: a Python module with a hyphen cannot be
+imported, and `scripts/test_gate_watchdog_eval.py` does
+`from gate_watchdog_eval import evaluate`. Shell and YAML take hyphens, Python
+takes underscores, and one unit is allowed both.
+
+**Do not rename the secrets and repo variables to match.** A workflow reading an
+unset `vars.*` in an `if:` does not fail — it goes inert, silently, for ever.
+Never let a cosmetic pass touch a string whose absence is indistinguishable from
+health.
+
+**Why:** a workflow name is read far more often than a workflow is opened, and
+almost always in a list — `gh run list`, the Actions sidebar, a PR's check set,
+an issue title. A name that omits its subject is not shorthand; it is a claim
+the reader will fill in wrongly. Monitoring is the worst place for that, because
+the name is the only thing standing between "this alerts" and "this does not".
+
+_Precedent: alate 2026-09-09 — `gate-watchdog` was read as "the thing that
+surfaces failed CI runs", and that reading survived several turns of a live
+diagnosis before anyone opened the file. It only ever polls
+`GET /orgs/{org}/actions/runners` and checks that one of three named boxes is
+online carrying `ci-light`; it has never looked at a run result. The same
+session found `ops-watchdog` naming two unrelated applications in two repos, and
+`ops-alert` naming a workflow, a label emitted by a different workflow, and an
+issue-title prefix._
 
 ## CI spend — heavy builds are MANUAL-DISPATCH ONLY
 
