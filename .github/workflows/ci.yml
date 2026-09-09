@@ -90,5 +90,25 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
-      - name: Run npm audit
+      # BLOCKING: runtime dependencies only. These are what actually ship when
+      # someone installs the plugin, so a high-severity advisory here is a real
+      # exposure and must stop the PR.
+      - name: Run npm audit (runtime deps — blocking)
+        run: npm audit --audit-level=high --omit=dev
+
+      # ADVISORY: the full tree, dev tooling included. Reported, never blocking.
+      #
+      # This split exists because the unscoped gate went red on 2026-09-09 for
+      # GHSA-2883-xcg3-v3hh in js-yaml, reachable only via eslint@8 and
+      # jest@29 — build tooling that never ships. Neither has a non-major fix,
+      # so the gate was failing every PR in the repo for something nobody could
+      # act on. forge's own standard says a rule nobody can satisfy is not a
+      # rule; `standards/security-triage.md` says classify runtime-vs-build-time
+      # by dependency path, which is exactly what `--omit=dev` does.
+      #
+      # Keep this step. Build-time compromise is a genuine supply-chain risk
+      # even when it does not ship, so dev advisories must stay VISIBLE — they
+      # just must not block a docs PR on an unfixable transitive dev dep.
+      - name: Run npm audit (full tree — advisory only)
+        continue-on-error: true
         run: npm audit --audit-level=high
