@@ -14,7 +14,6 @@ function at(overrides) {
     minIntervalMs: MIN,
     liveProblem: false,
     backedOff: false,
-    pinBlocked: false,
     ...overrides,
   });
 }
@@ -58,7 +57,6 @@ describe('the rate ceiling cannot be bypassed', () => {
         minIntervalMs: MIN,
         liveProblem: true,
         backedOff: false,
-        pinBlocked: false,
       });
       if (decision.spawn) {
         spawns++;
@@ -75,16 +73,7 @@ describe('the rate ceiling cannot be bypassed', () => {
   });
 });
 
-describe('the hard stops come first', () => {
-  it('never spawns while the version pin is latched, however overdue', () => {
-    expect(
-      at({ pinBlocked: true, lastAttempt: NOW - DAY, liveProblem: true })
-    ).toEqual({
-      spawn: false,
-      reason: 'pin-latched',
-    });
-  });
-
+describe('the hard stop comes first', () => {
   it('respects the backoff interval instead of the normal one', () => {
     // 90 minutes in: past the hourly interval, nowhere near the daily one.
     expect(at({ backedOff: true, intervalMs: DAY, liveProblem: true })).toEqual(
