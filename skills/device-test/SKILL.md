@@ -230,76 +230,45 @@ untested for no stated reason.
    screenshots will be the user's job — and so can every **loom** item, which
    never uses adb at all (Scope table → "loom is in scope"). No phone is a
    reason to skip alate/mood-layer/badige, not a reason to end the drain.
-2. **Fetch every queue — always `--paginate`.** Per repo in the scope table:
+2. **List every queue — one call per repo.** Tests are issues now, so the
+   whole fetch is a label filter:
    ```bash
-   gh api "repos/Tessellate-Studio/<repo>/issues?labels=device-test-queue&state=open" \
-     --paginate --jq '.[] | select(.pull_request | not) | .number'
-   gh api repos/Tessellate-Studio/<repo>/issues/<n>/comments \
-     --paginate --jq '.[] | {id: .id, body: .body}'
+   gh api "repos/Tessellate-Studio/<repo>/issues?labels=device-test&state=all&per_page=100" \
+     --paginate --jq '.[] | select(.pull_request | not) | {number, title, state, state_reason, labels: [.labels[].name]}'
    ```
-   Two ways this fetch silently lies if you get it wrong, both of which make a
-   busy queue look empty rather than erroring:
-   - **Without `--paginate` you get only the first 30 comments, oldest
-     first** — so the items you lose are the *newest* ones, exactly the ones a
-     drain needs. alate#562 is well past 30 comments; an unpaginated read of it
-     reports "nothing pending" while real OPEN tests sit unseen below the page
-     boundary. `skills/device-test/scripts/queue-lib.js` already paginates —
-     it is hand-rolled `gh api` calls inside a session that forget.
-   - Use `gh api`, NOT `gh issue list --json` — the latter fails outright on
+   Three ways this lies if you get it wrong, all of which make a busy queue
+   look empty rather than erroring:
+   - **Without `--paginate` you get only the first 100**, and the ones you
+     lose are the newest — exactly what a drain needs. `queue-lib.js` already
+     paginates; it is hand-rolled `gh api` calls inside a session that forget.
+   - **`gh api`, not `gh issue list --json`** — the latter fails outright on
      gh 2.98.0 ("invalid character '{' after object key") for every field
-     combination, which silently takes the whole fetch down.
+     combination, taking the whole fetch down.
+   - **An empty response is not an empty queue.** `gh` can return nothing
+     without failing; reading that as `[]` printed `alate  nothing pending`
+     while alate held 17 open tests (2026-09-09). `queue-lib.parseGh` refuses
+     an empty body — do the same in any hand-rolled call.
 
-   An item is pending iff its body contains `**Status:** OPEN`. No queue issue
-   in a repo → that repo simply has nothing pending (the *enqueue* side is
-   responsible for creating it); note it and move on.
-3. **Repair format drift — do not just report it.** Anything the parser marks
-   UNPARSEABLE is a comment that *looks* like an item but cannot be read as
-   one. **Fix it in place; never hand the user a list to tidy by hand.** For
-   each one, open it and decide:
-   - **A real test missing its Status line** → append `- **Status:** OPEN` so
-     it enters the queue, then drain it this sitting like any other item. This
-     is the common case: an item enqueued before the format settled.
-   - **More than one test in one comment** → split it: one comment per test,
-     each keeping its own heading, fields and Status, then reduce the original
-     to whatever prose was actually a correction (no Status line, so the
-     parser reads it as commentary). `dtq` reports these separately from the
-     malformed list, because the stacked tests have **no row at all** — the
-     comment's first heading is its title and its first Status line is its
-     state, so everything after the first test is filed as a note on it.
-   - **A Status naming no defined state** (`CLOSED`, `🅿️ PARKED` — both real)
-     → rewrite it to the value that matches what actually happened, and stamp
-     the heading glyph with it. A state the format doesn't define is a state
-     no tool can act on.
-   - **A note, or commentary on another item** → leave it alone; the parser
-     already skips it. It skips bot notices (`### 📦` OTA, `### 🔒` device
-     claim, `### 🚧` work claim) outright, and it skips anything that is not
-     an item in the first place — no item glyph in the heading, no
-     `**Steps:**`/`**Expect:**` field (the colon matters: `**Expect
-     correction for item …**` is prose), and no Status naming one of the
-     four states. A correction written like a document is still a correction.
-   - **Genuinely ambiguous** → leave it and say so in the wrap-up, with the
-     comment URL and what is missing. That is the only case that reaches a
-     human, and it should be rare.
+   A test is pending iff its issue is **open**. `needs-human`, `needs-build`,
+   `parked` and `failed` say which kind; the label table lives in
+   [`workflows.md` → "Device-test queue"](../../standards/workflows.md).
+   Prefer `dtq` over hand-rolled calls — it reads both media during the
+   migration and you will otherwise miss whichever half you did not query.
 
-   `dtq` prints the reason beside each flagged URL — "no `**Status:**` line",
-   "names no state" — so the repair above is a lookup, not an investigation.
+3. **Repair what the board flags — do not just report it.** There is no
+   format drift left to repair: state is the issue's own, so a `**Status:**`
+   line cannot contradict a glyph, and no id needs stamping. Two things still
+   reach a human:
+   - **An open `device-test` issue missing its body fields** (no Verifies, no
+     Steps, no Expect) → ask the PR it came from and fill them in, or close it
+     `not_planned` saying why. It is one row on the board reading "missing
+     fields", not a parse failure.
+   - **Two tests stacked in one issue body** → split them, one issue per test.
+     `dtq` counts the `### <glyph>` headings in a body and says how many are
+     hidden behind the one it is showing; a stacked test has no row of its
+     own, so nothing runs it, closes it, or notices it is missing.
 
-   **Restamp drifted headings in the same pass.** `dtq` counts headings that
-   don't match their Status line (missing glyph, missing ID, or a glyph that
-   contradicts the Status). Rewrite each to `### <glyph> <comment id> —
-   <intent>` per the glyph table in the standard. It's one PATCH per comment,
-   no device involved, and it's the whole reason the issue page can be read
-   without expanding anything. Two rules: **the `**Status:**` line decides the
-   glyph, never the reverse** — a heading is never evidence about a test — and
-   the intent text stays exactly as its author wrote it.
-
-   Say what was repaired in the wrap-up. A drain that reports "N comments
-   don't match the format" without having fixed them has not done its job —
-   the whole point of the queue is that nobody maintains it by hand.
-
-   Why this matters more than tidiness: a malformed item is an **invisible**
-   item. On alate#562 nine comments were flagged, and two of them were real
-   OPEN tests that had silently dropped off the board — one for over a week.
+   Say what was repaired in the wrap-up.
 4. **Claim the device before touching it.** The queue issue carries the lock —
    format and semantics in
    [`standards/workflows.md` → "Claiming the device"](../../standards/workflows.md).
@@ -522,38 +491,38 @@ For each OPEN item on the current app:
    issue, per the app's rules), link it from the per-step table, and carry
    on with the remaining steps if the app relaunches.
 
-   **Every status edit moves two lines: the `**Status:**` line and the heading
-   glyph** (⚪ passed, 🔴 failed, 🔧 needs build — table in the standard). One
-   PATCH, both lines. A ⚪ heading over an OPEN item is worse than no glyph at
-   all, because someone scrolling the issue reads it as finished.
+   **A verdict is an issue operation now, not a Status edit.** Tick each
+   step's checkbox as you RUN it, pass or fail — a step nobody reached stays
+   unticked and reads as *not run* without anyone writing prose about it. Then
+   close or label per the table below. There is no Status line and no heading
+   glyph to keep in sync, which is the whole reason this medium replaced
+   comments.
 
-   **Anything you observed that the Status line can't carry goes in a note on
-   that same comment**, under a `---` rule — why it couldn't run, a pre-req
-   that's still missing, a PR/SHA correction. Not a new comment: notes live
-   with the test they belong to (standard → "Notes go on the item, under a
-   rule").
+   **Anything you observed that a label cannot carry goes in a comment on that
+   issue** — why it could not run, a pre-req still missing, a PR/SHA
+   correction. Ordinary comments, in reading order; no rule, no boundary.
 2. **Pass** (every step ✅, or ⛔ N/A with a named home — a ⏭ NOT RUN row is
-   not a pass; the item stays OPEN with the table saying what is left) →
-   edit the Status line and the heading (never delete, never new
-   comment), then minimize the comment as Resolved so the queue doesn't grow
-   unscrollable — see `standards/workflows.md` → "Device-test queue" for the
-   GraphQL call (REST has no minimize endpoint):
+   not a pass; the issue stays open with the unticked boxes saying what is
+   left) → close it as completed:
    ```bash
-   gh api repos/Tessellate-Studio/<repo>/issues/comments/<comment-id> \
-     -X PATCH -f body="<body with 🤖/🙋 → ⚪ in the heading and
-                        Status: OPEN → ✅ done <date>>"
+   gh issue close <n> -R Tessellate-Studio/<repo> --reason completed \
+     --comment "<what ran, on which build, and what you saw>"
    ```
-3. **Fail** (any step in the table is ❌, whatever the others did) → capture
-   what was seen (screenshot/logcat; the user's words for a `HUMAN:` step),
-   file it where the app's rules say — regression-log row via PR, or a GitHub
-   issue — and set `**Status:** ❌ failed → <link>`. The per-step table stays
-   in the note, so the steps that passed and the ones that were not run
-   survive alongside the failure. **Do not fix mid-drain**:
-   the sitting stays short; the fix is its own session with its own branch.
-   **Do not minimize this comment** — the bug is still open regardless of
-   where it's tracked now; hiding it under "Resolved" reads as handled and
-   risks it getting forgotten. It stays fully visible in the queue until
-   someone actually fixes it and a later drain flips it to ✅ done.
+   Nothing to minimize: a closed issue is already out of the default view,
+   which is what the minimize dance existed to fake.
+3. **Fail** (any step ❌, whatever the others did) → capture what was seen
+   (screenshot/logcat; the user's words for a `HUMAN:` step), file it where
+   the app's rules say — regression-log row via PR, or a GitHub issue — and
+   **label the test `failed`, leaving it OPEN**, with a comment linking the
+   bug:
+   ```bash
+   gh issue edit <n> -R Tessellate-Studio/<repo> --add-label failed
+   ```
+   **A failure is open work, not a closed run.** The test is retired only when
+   a later drain re-runs it after the fix lands and it passes — which is why
+   it must not be closed here. Every drain re-checks open `failed` tests for
+   exactly this reason. **Do not fix mid-drain**: the sitting stays short; the
+   fix is its own session with its own branch.
 
    **Then spin up a chip for it — filing is not tracking.** An issue with
    nobody on it is a note, not a fix, and a queue that only accumulates

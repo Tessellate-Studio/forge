@@ -19,8 +19,10 @@ const {
   daysSince,
   describeClaim,
   fetchDeviceClaims,
+  REPOS,
 } = require('./queue-lib');
 const { clip } = require('../../../tools/work-claim/lib/protocol.js');
+const { enqueue } = require('./enqueue');
 
 // clip lives in the shared claim protocol module: this copy and the `wip`
 // board's had already drifted — one coerced with String(), this one called
@@ -297,7 +299,87 @@ function render(results, opts, devices) {
   return out.join('\n');
 }
 
+/**
+ * `dtq enqueue` — file a test as an issue, without hand-writing the body.
+ *
+ * Routed before commander rather than as a `program.command()`: the bare
+ * `dtq` board is what everyone runs, and commander's subcommand mode changes
+ * how a no-argument invocation behaves. Keeping the board's argv handling
+ * untouched is worth one `if`.
+ */
+async function runEnqueue(argv) {
+  const arg = name => {
+    const i = argv.indexOf(`--${name}`);
+    return i === -1 ? null : argv[i + 1];
+  };
+  const many = name =>
+    argv.reduce(
+      (acc, a, i) => (a === `--${name}` ? [...acc, argv[i + 1]] : acc),
+      []
+    );
+
+  const repoKey = arg('repo');
+  const target = REPOS.find(r => r.key === repoKey || r.repo === repoKey);
+  if (!target || !arg('intent')) {
+    console.error(
+      chalk.red(
+        'usage: dtq enqueue --repo <alate|mood-layer|badige|loom> --intent "<what this proves>"\n' +
+          '                   [--verifies <pr>] [--sha <sha>] [--delivery <how it reaches the device>]\n' +
+          '                   [--needs-runtime <version>] [--why <why a device is needed>]\n' +
+          '                   [--step "<one step>"]... [--expect "<one expectation>"]... [--dry-run]\n\n' +
+          'Prefix a step with "HUMAN:" to mark it as needing a person — that is what labels the issue needs-human.'
+      )
+    );
+    process.exit(1);
+  }
+
+  const result = await enqueue({
+    repo: target.repo,
+    intent: arg('intent'),
+    dryRun: argv.includes('--dry-run'),
+    fields: {
+      verifies: arg('verifies'),
+      sha: arg('sha'),
+      delivery: arg('delivery'),
+      needsRuntime: arg('needs-runtime'),
+      why: arg('why'),
+      steps: many('step'),
+      expect: many('expect'),
+    },
+  });
+
+  if (result.body) {
+    console.log(chalk.bold(`would ${result.action}: ${result.title}`));
+    console.log(chalk.dim(`labels: ${result.labels.join(', ')}`));
+    if (result.existing) {
+      console.log(
+        chalk.yellow(
+          `an open test already covers this intent — #${result.existing}; this would be appended as a comment`
+        )
+      );
+    }
+    console.log(`\n${result.body}`);
+    return;
+  }
+  console.log(
+    chalk.green(
+      result.action === 'append'
+        ? `appended to existing test ${target.key}#${result.number}`
+        : `enqueued ${target.key}#${result.number}`
+    )
+  );
+}
+
 async function main() {
+  if (process.argv[2] === 'enqueue') {
+    const ready = await checkGhReady();
+    if (!ready.ok) {
+      console.error(chalk.red(ready.message));
+      process.exit(1);
+    }
+    return runEnqueue(process.argv.slice(3));
+  }
+
   const program = new Command();
   program
     .name('device-test-status')

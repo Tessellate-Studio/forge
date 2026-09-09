@@ -459,325 +459,141 @@ Some changes need a human holding the device: gesture feel, animation quality,
 camera/share-sheet flows, multi-step journeys on real accounts, anything gated
 behind a store-track install. A session that ships such a change does not wait
 to be asked — it **enqueues the test before ending the turn**, so a later
-`/forge:device-test` drain session can walk the user through everything
-pending, across apps, in one sitting.
+`/forge:device-test` drain can walk everything pending, across apps, in one
+sitting.
 
 **Queue only what you cannot verify yourself.** adb screenshots, logcat,
 `adb shell input` taps on a connected device, jest, Metro — all self-serve; do
 those and don't queue them. The queue holds the residue that needs human hands
 or human judgment.
 
-**The queue is one pinned GitHub issue per app repo** — title
-`Device test queue`, label `device-test-queue`. Items are comments on it:
-comments never merge-conflict across concurrent branches, and issues put zero
-files in the repo, so nothing can leak into the app package. If the issue or
-label doesn't exist yet, create and pin it (self-healing beats asking):
+**A test is one GitHub issue in the app's own repo, labelled `device-test`.**
+Its id is the issue number (`alate#712`) — which exists at creation, never
+changes, and is a live link anywhere. Open/closed and labels carry the state;
+nothing is parsed out of prose.
+
+| Situation | Issue state | Labels |
+|---|---|---|
+| Pending, agent-runnable | open | `device-test` |
+| Pending, needs a person | open | `device-test` `needs-human` |
+| Blocked on a native build | open | `device-test` `needs-build` |
+| Parked by decision | open | `device-test` `parked` |
+| Failed, bug filed | **open** | `device-test` `failed` |
+| Passed | closed, reason `completed` | `device-test` |
+| Withdrawn / superseded | closed, reason `not_planned` | `device-test` |
+
+**A failed test stays OPEN**, labelled `failed`, linking the bug it produced.
+It is retired only when a later drain re-runs it after the fix lands and it
+passes. Closing on failure is how a bug stops being re-checked.
+
+**Withdrawn is not a pass.** `not_planned` means superseded, invalid, or
+dropped — reporting it as done would claim a verification nobody performed.
+
+*(This replaced one pinned issue per repo with tests as comments, 2026-09-09,
+[RFD-003](../memory/decisions/rfd-003-device-tests-as-issues-one-global-device-lock.md).
+That medium needed five parser repairs — forge #79, #80, #81, #102, #117 —
+every one the same defect: a comment has no state, so state was simulated in
+prose, and prose drifts. A `**Status:**` line, a mirrored heading glyph, an id
+stamped by a second API call, and "one comment per test" as convention are all
+things an issue simply is.)*
+
+### Enqueue
 
 ```bash
-gh label create device-test-queue --repo Tessellate-Studio/<repo> \
-  --color 5319e7 --description "Pinned queue of on-device tests" || true
-gh issue create --repo Tessellate-Studio/<repo> --title "Device test queue" \
-  --label device-test-queue \
-  --body "Pending on-device tests. Sessions append comments in the format from forge standards/workflows.md → Device-test queue; /forge:device-test drains them. Do not edit others' comments except the Status line at drain time."
-gh issue pin <n> --repo Tessellate-Studio/<repo>
+dtq enqueue --repo alate --intent "budget-column-739 — BUDGET is always the fifth column" \
+  --verifies 739 --sha 8d3ce08 \
+  --delivery "production OTA once #739 lands. Both platforms." \
+  --needs-runtime 1.3.1 \
+  --step "Profile → Price range → clear any budget. Open a fit check." \
+  --step "HUMAN: judge whether the ring reads as empty rather than broken." \
+  --expect "Five columns, BUDGET an empty ring with a muted em dash."
 ```
 
-**Enqueue = one comment on that issue, in this fixed format** (drain sessions
-parse it — keep the bold field names exactly):
+The body template lives in forge (`skills/device-test/scripts/enqueue.js`), not
+as a `.github/ISSUE_TEMPLATE` file in each app — ADR-003's zero-files
+constraint still holds, and four template copies would drift four ways.
+`--dry-run` prints what it would create.
 
-```markdown
-### 🤖 <test id> — <what this test intends to prove>
+**It searches before it creates.** An open `device-test` issue whose intent
+matches gets the new detail as a comment instead of a second issue; the same
+failure is routinely reported by several sessions, and a queue with four
+copies of one test wastes a device sitting four times over.
 
-- **PR:** #<n> · **SHA:** <merged sha, or "unmerged — branch <name>">
-- **Delivery:** <how it reaches the phone: production OTA (published/pending) |
-  needs tag build v<x.y.z> | Expo Go | dev build | APK sideload>
-- **Needs runtime:** <expo.version / versionCode / fingerprint the installed
-  app must have for this change to be receivable, or "any">
-- **Steps:** <numbered, from app-open to the moment of truth>
-- **Expect:** <what a pass looks like, concretely>
-- **Status:** OPEN
-```
-
-- **Prove the Steps are reachable on the user's real setup before you write
-  them.** An item that asks for state the app can never reach there spends the
-  user's hands on nothing — and a setting they flip to satisfy it can wreck the
-  ground truth of another queued item. One `curl` against the live surface
-  first: `standards/authoritative-claims.md` → "Reading is not running."
-- **Write Steps machine-first.** The drain agent executes every step it can
-  reach itself — app launch/force-stop, navigation taps (`adb shell input
-tap`/`text`/`keyevent`), screenshots (`adb exec-out screencap -p`), logcat
-  watches — and involves the human only for what genuinely needs judgment or
-  a human-only surface (gesture feel, animation quality, camera/biometrics,
-  real-account sign-ins, iOS/TestFlight where there is no adb). Prefix those
-  steps with `HUMAN:`; an item whose steps carry no `HUMAN:` prefix is fully
-  agent-verifiable and gets tested and closed with zero user involvement.
-- **Steps are independent unless a step says otherwise.** The drain runs
-  every one and records each step's own outcome ("Every step gets its own
-  verdict", below); a failed step does not skip the rest. Where step N+1
-  genuinely needs step N's state — a tip that only shows on the first visit
-  after step 1 clears storage — prefix it `DEPENDS: step N`, and the drain
-  records it as _not run_ when N fails. Both prefixes can sit on one step
-  (`DEPENDS: step 1 · HUMAN: …`); `DEPENDS:` says nothing about who runs it.
-  Don't mark a dependency that isn't one: an item whose every step "depends"
-  on the first is an item that gets one step of coverage.
-- **Needs runtime** is the field that saves the sitting: an OTA stranded by a
-  runtime-fingerprint drift is untestable until a new store build is installed.
-  Record what the phone must run, so the drain session skips-with-reason
-  ("needs the v1.2.2 tag build — install first") instead of chasing a stale OTA.
-- **Every read of a queue issue's comments MUST pass `--paginate`.** The REST
-  API returns 30 comments per page, oldest first, so an unpaginated fetch
-  silently drops the **newest** items — precisely the ones a drain needs — and
-  returns 200 while doing it. A long-lived queue (alate#562 is well past 30)
-  then reads as quieter than it is, and a drain can report "nothing pending"
-  while real OPEN tests sit unseen below the page boundary:
-  ```bash
-  gh api repos/Tessellate-Studio/<repo>/issues/<queue-issue>/comments \
-    --paginate --jq '.[] | {id: .id, body: .body}'
-  ```
-  Use `gh api` for this, **not** `gh issue list --json` — the latter fails
-  outright on gh 2.98.0 ("invalid character '{' after object key") for every
-  field combination, taking the whole fetch down. The two failures are
-  opposites and both bite: one fetch dies loudly, the other lies quietly.
-  `skills/device-test/scripts/queue-lib.js` already paginates; it is
-  hand-rolled `gh api` calls inside a session that forget to.
-- Items are closed by **editing the comment's Status line and its heading
-  glyph together** (`**Status:** ✅ done <date>` under a `⚪` heading, or
-  `**Status:** ❌ failed → <link>` under a `🔴` one) — never by deleting the
-  comment. A failed test's findings go to the app's regression log or a new
-  issue; the Status line links there. The queue holds tests, not
-  investigations. The Status line is one value for the whole item; the
-  per-step table in the note (below) is what says which steps that value
-  actually covers.
-- **A `✅` may not carry an unresolved caveat in prose.** Before writing one,
-  re-read the result for hedge vocabulary — _unproven, unverified, still
-  unobserved, never been run, inferred rather than observed, does not cover,
-  worth carrying_. Every hit is either resolved, or filed as its own queue item
-  / issue whose number appears in the result. A caveat written under a PASSED
-  line is gone the moment the drain moves on: nothing but that sentence knows it
-  exists, and the item will never be re-read because it is closed. A pass with
-  a named limit is a pass; a pass with a loose limit is a lie with a footnote.
-  Standard: `standards/authoritative-claims.md` → "Labelling is not tracking."
-- **`**Status:** 🔧 needs build — <what's needed>`** — a fourth status value,
-  distinct from bare `OPEN`: it means the drain _looked_ at this item and
-  determined it
-  cannot be tested on any currently-installed build, OTA or otherwise — not
-  just "didn't get to it yet." Write this instead of leaving the item silently
-  `OPEN` whenever Needs runtime can't be satisfied by the phone's current
-  install AND no OTA can reach it either (a true native-build blocker, not a
-  publish-lag one). This is the durable log the device-test-drain skill's daily
-  and weekly automation both read: the **daily** drain skips anything already
-  marked `🔧 needs build` (no point re-checking every morning) and tests
-  everything else immediately — OTA-deliverable items are NEVER gated by a
-  build schedule; the **weekly** build cycle (see `skills/device-test/SKILL.md`
-  → "Self-scheduled automation") is the only thing that acts on this marker,
-  and only when at least one exists per app (see the CI-spend carve-out below —
-  this is the one case a build may fire without a literal human click). Once a
-  fresh build lands and the item becomes testable, flip it back to bare `OPEN`
-  (not straight to done) so the next drain picks it up normally.
-- **After marking an item `✅ done`, minimize the comment as Resolved** —
-  GitHub's native hide/minimize (the same menu as Spam/Abuse/Duplicate/Outdated
-  on any comment's `...` button) collapses it to a one-line "X hidden items"
-  summary without deleting anything, so a long-running queue doesn't force
-  users to scroll past — and expand — every passed item just to find the
-  Status line at the bottom. REST has no endpoint for this; use the GraphQL
-  mutation with the comment's `node_id` (from the same `issues/comments/<id>`
-  fetch used to read the body):
-  ```bash
-  gh api graphql -f query='
-  mutation($id: ID!) {
-    minimizeComment(input: {subjectId: $id, classifier: RESOLVED}) {
-      minimizedComment { isMinimized minimizedReason }
-    }
-  }' -f id="<node_id>"
-  ```
-  **`❌ failed → <link>` items stay visible — do NOT minimize them.** The
-  underlying bug is still open regardless of where it's now tracked; hiding
-  the comment under a "Resolved" label is actively misleading (reads as
-  "handled" to anyone scanning the queue) and risks the failure getting
-  forgotten. A human can un-hide any comment from the same menu, so a wrong
-  minimize is reversible, but the drain agent shouldn't rely on someone
-  noticing and fixing it — get the classifier right the first time.
-- Enqueue in the same session that ships the change — a queued item written
-  while the context is warm has real Steps and a real Expect; one written later
-  from the diff has neither.
-
-### The heading carries status, ID and intent
-
-The board (`dtq`) always knew which items were open and who was needed. The
-**issue page** did not — thirty comments each headed by a sentence, and the only
-way to tell a passed test from a blocked one was to expand it and read to the
-bottom. So the heading leads with the three things anyone scrolling the thread
-is actually looking for: **where it stands · which test it is · what it is for.**
-
-| Heading | `**Status:**` line           | What it means                                   |
-| ------- | ---------------------------- | ----------------------------------------------- |
-| 🤖      | `OPEN` (no `HUMAN:` step)    | Open — an agent can run this unattended         |
-| 🙋      | `OPEN` (has a `HUMAN:` step) | Open — needs a person with the phone            |
-| 🔧      | `🔧 needs build — <what>`    | Open, but no installable build can reach it yet |
-| ⚪      | `✅ done <date>`             | Closed — passed                                 |
-| 🔴      | `❌ failed → <link>`         | Closed as a test; still open as a bug           |
-
-**The `**Status:**` line stays the source of truth.** Every tool parses it; the
-heading glyph is its mirror, for human eyes. Edit the two in the same PATCH,
-never one without the other. A drain that finds them disagreeing restamps the
-heading (`skills/device-test/SKILL.md` → Step 0.3), and `dtq` counts the
-mismatches so drift cannot accumulate unseen.
-
-**The test ID is the comment's own GitHub id.** It is unique across every
-session and machine without anything having to allocate it, and it is already
-the anchor in the comment's URL (`…#issuecomment-<id>`) — quote the ID and
-anyone can jump straight to the test. The cost is that it doesn't exist until
-the comment does, so enqueue is two calls: post, then stamp. Write the body
-with a literal `<id>` in the heading and let the second call substitute it.
+**Labels are created on first use** — self-healing, so a repo joining the
+queue needs no setup:
 
 ```bash
-# 1. post the item — its heading still reads: ### 🤖 <id> — …
-id=$(gh api repos/Tessellate-Studio/<repo>/issues/<queue-issue>/comments \
-      -f body="$(cat item.md)" --jq '.id')
-
-# 2. stamp the comment's own id into its heading
-gh api repos/Tessellate-Studio/<repo>/issues/comments/"$id" -X PATCH \
-  -f body="$(sed "s/<id>/$id/" item.md)"
+for l in device-test needs-human needs-build parked failed; do
+  gh label create "$l" --repo Tessellate-Studio/<repo> --color 5319e7 || true
+done
 ```
 
-### Notes go on the item, under a rule
+### What goes in the body
 
-Observations that belong to a test — a drain that could not run it and why, a
-correction to the PR/SHA, a pre-req that cleared — are **appended to that
-item's own comment**, each under a `---` rule:
+- **`**Verifies:** #<pr> (<sha>)`** — a plain reference, **never** a closing
+  keyword. A merged PR saying `closes #712` would close the very test that
+  exists to check it. GitHub renders the cross-reference on the PR's timeline
+  either way, and every later PR mentioning the test number appears on the
+  test's timeline — the traceability the comment medium could never have.
+- **`**Delivery:**`** — how it reaches the phone: production OTA
+  (published/pending) | needs tag build v<x.y.z> | Expo Go | dev build | APK
+  sideload.
+- **`**Needs runtime:**`** — the `expo.version` / versionCode / fingerprint the
+  installed app must have for this change to be receivable, or "any". This is
+  the field that saves the sitting: an OTA stranded by a runtime-fingerprint
+  drift is untestable until a new store build is installed, and recording it
+  lets the drain skip-with-reason instead of chasing a stale OTA.
+- **`**Steps:**` as a task list** (`- [ ] 1. …`). A drain ticks a box when it
+  RUNS that step, pass or fail, so a step nobody reached stays unticked and
+  reads as *not run* with no prose to interpret. **Expect stays numbered** —
+  an expectation is judged, not performed, and a checkbox invites ticking one
+  that failed.
 
-```markdown
-- **Status:** OPEN
+**Prove the Steps are reachable on the user's real setup before you write
+them.** A test that cannot run on any device or store you have is not a test;
+it is a request for someone to discover that for you. One `curl` first would
+have saved a live store setting being flipped for nothing (alate, 2026-09-05).
 
----
+**Write Steps machine-first.** The drain executes every step it can reach
+itself — launch/force-stop, `adb shell input tap`/`text`/`keyevent`,
+`adb exec-out screencap -p`, logcat — and involves a human only for what needs
+judgment or a human-only surface (gesture feel, camera/biometrics,
+real-account sign-ins, iOS/TestFlight where there is no adb). Prefix those
+`HUMAN:`; that prefix is what labels the issue `needs-human`.
 
-**Note — <date> · <session or person>:** <what was observed, and what it means
-for this test.>
-```
+**Steps are independent unless a step says otherwise.** The drain runs every
+step still reachable after one fails, and records each step's own outcome —
+a failed step is a finding, not a reason to stop probing
+([`anti-patterns.md`](./anti-patterns.md)). Say `DEPENDS: step N` when a step
+genuinely cannot run without an earlier one.
 
-One comment per test, its whole history in reading order. The rule is what
-keeps two notes from reading as one paragraph, and it is also the parser's
-boundary: **fields above it, notes below.** That boundary is what lets a note
-quote the item it discusses ("Expect is that the button does _not_ appear")
-without the quoted `**Status:**` silently reopening a closed test.
+**A `✅` may not carry an unresolved caveat in prose.** Before closing a test
+as completed, re-read the result for hedge vocabulary — *unproven, unverified,
+still unobserved, never been run, inferred rather than observed, does not
+cover, worth carrying*. Every hit is either resolved, or filed as its own
+issue whose number appears in the result. A caveat under a passed line is gone
+the moment the drain moves on. Standard:
+[`authoritative-claims.md`](./authoritative-claims.md) → "Labelling is not
+tracking."
 
-**One comment per test is load-bearing, not tidiness.** A comment's title is
-its first heading, its Status is its first Status line, and its notes are
-whatever sits below the first rule after that — so a SECOND test stacked into
-the same comment is not a second row on the board. It is filed as a _note_ on
-the first. On alate#562 comment 5589887980 a correction and two tests shared
-one comment: the board showed one row, titled after the correction, and
-`gender-unisex-739` had no row anywhere — nothing could run it, close it, or
-notice it was missing. `dtq` now counts the `### <glyph>` headings in each
-comment and says how many tests are hidden behind the one it is showing. The
-repair is to split them, each keeping its own heading, fields and Status
-(`skills/device-test/SKILL.md` → Step 0.3).
+### Keeping a test true
 
-The habit this replaces — a separate `_Drain note … for the item above_`
-comment — stops making sense the moment another item is enqueued between them,
-and it splits one test's history across the thread. Notes never carry a
-`**Status:**` line of their own; a note that changes where a test stands edits
-the item's Status and heading instead, then explains itself underneath.
+**Notes are ordinary comments** on the test's own issue, in reading order. No
+rule, no parser boundary, no "fields above, notes below" convention to drift.
 
-### Every step gets its own verdict
+**One test per issue.** Two tests stacked in one body means the second has no
+row on any board — `dtq` counts the `### <glyph>` headings in a body and says
+how many are hidden behind the one it is showing.
 
-A five-step item that reads `❌ failed → #694` looks tested. On alate #562
-(item 5526181662, 2026-09-07) it wasn't: step 1 failed, the drain stopped
-rather than "compound on a failed precondition", and nothing recorded that
-steps 2–5 were never run. Step 2 was a swipe, and every swipe on that screen
-had hard-crashed the app since its PR shipped four days earlier — found by
-accident, while verifying the fix for step 1 (forge #100). Steps are
-independent probes of the same PR unless marked `DEPENDS:`; a failed one is a
-finding, not a reason to stop probing. So a drain records **one row per
-step**, in the note under the rule, and the Status line summarises them:
+**A PR that deliberately changes behaviour an open test covers must amend that
+test in the same PR** — edit the Expect, add a comment, or close it
+`not_planned` with the reason. Same shape as the existing "if your change makes
+a doc claim stale, fix it in the same PR" rule, applied to tests. Timeline
+cross-references make finding them a lookup rather than a search.
 
-```markdown
-**Note — <date> · <session>:** <build/OTA confirmed how, then the table>
-
-| #   | step                   | result                                                             |
-| --- | ---------------------- | ------------------------------------------------------------------ |
-| 1   | docked-on-launch       | ❌ FAIL → #694 — opens at ~72% height, Expect was the bottom strip |
-| 2   | end-of-deck bounce     | ✅ PASS — refuses to move past the first card; logcat clean        |
-| 3   | gesture tip            | ⏭ NOT RUN — depends on step 1                                      |
-| 4   | iOS edge-swipe-back    | ⛔ N/A on Android — `HUMAN:`, needs a TestFlight pass              |
-| 5   | docked-card legibility | ✅ PASS — text reads over the photo at 0.66 alpha                  |
-```
-
-| Row                         | Means                                                                                            |
-| --------------------------- | ------------------------------------------------------------------------------------------------ |
-| `✅ PASS — <what was seen>` | Expect met; the evidence sits in the same cell                                                   |
-| `❌ FAIL → <link>`          | Expect not met; filed, and the link is where it lives now                                        |
-| `⏭ NOT RUN — <why>`         | Nobody ran it: `blocked by step N`, `depends on step N`, `needs human`, `app would not relaunch` |
-| `⛔ N/A — <why>`            | Cannot exist on this platform or build; say where it _can_ run                                   |
-
-**The Status line is the worst row:** any ❌ → `❌ failed → <link>`; no ❌
-but any ⏭ → stays `OPEN`, and the next drain runs only the ⏭ rows; every row
-✅, or ⛔ with a named home → `✅ done`. A ⏭ row under a ✅ is exactly the
-"unresolved caveat in prose" a ✅ may not carry. `dtq` does not read the
-table — it is for the humans and the next drain, which is why it lives with
-the item and not in a wrap-up nobody re-reads.
-
-### Format drift is the drain's job to fix, not yours
-
-A comment that _looks_ like an item but cannot be parsed is an **invisible**
-item — it is not on the board, so nobody tests it and nobody knows. On
-alate#562 nine comments were flagged at once and two were real OPEN tests that
-had silently dropped off, one for over a week.
-
-So the drain REPAIRS drift rather than reporting it (`skills/device-test/SKILL.md`
-→ Step 0.3). A real test missing its Status line gets `- **Status:** OPEN`
-appended and is drained that sitting; a heading missing its glyph or ID, or
-carrying one that contradicts the Status line, gets restamped; notes and bot
-notices are left alone; only a genuinely ambiguous comment reaches a human.
-Nobody maintains this queue by hand.
-
-The parser is deliberately forgiving, because every rigid rule here has cost
-an item:
-
-- **`**Status:** OPEN — <note>` is OPEN.** Prefix match, not equality. An
-  equality check made "OPEN — routed to another agent" unparseable, dropping a
-  live item off the board entirely.
-- **A title is `### Foo` OR a `**Foo**` opening the first non-empty line.**
-  The bold form predates the heading convention. First line only — a bold run
-  mid-body is ordinary prose (`**Why:** …`), and matching those turned
-  explanatory drain notes into phantom malformed items.
-- **A heading is not, by itself, an item.** Three signals say "item", and any
-  one is enough: the heading **opens with an item glyph** (🤖 🙋 🔧 ⚪ 🔴), the
-  body carries the **shape of a test** (`**Steps:**` / `**Expect:**`, or its
-  legacy spelling `**Expected:**` — the colon is load-bearing, because a
-  sentence merely opening `**Expect correction for item …**` is prose, not
-  the field), or the Status line **names one of the four states**. A comment
-  with none of the
-  three is commentary and is skipped, however carefully it is laid out —
-  alate#562 comment 5571959196 is a drain correction with two `###` headings
-  and a closing sentence opening `**Status:**` that explains, in prose, why a
-  _different_ item is blocked. It was reported as malformed every day.
-  Conversely the glyph outranks everything: a comment wearing 🤖 with a
-  typo'd Status stays on the board as a violation, because a comment
-  declaring itself an item is one.
-- **A field named inside `` ` `` backticks is documentation, not a field.**
-  The drain that leaves a note reading `` No `**Status:**` line on this
-comment `` is describing the absence, not supplying the field. Matched
-  literally, that note gave two live alate items a Status made of the note's
-  own prose — so the board reported the wrong defect and no drain would ever
-  have appended the real line.
-- **A Status the format does not define is a violation, not a guess.**
-  `CLOSED`, `🅿️ PARKED` — real values off both queues — name none of the four
-  states, so the board says so and names the comment rather than inventing a
-  state for it. `dtq` prints the reason next to each flagged URL, because the
-  point of the flag is that somebody fixes it.
-- **Bot notices are not items.** `### 📦` (OTA published) and `### 🔒` (device
-  claim) are skipped outright. They carry a heading and no Status, so without
-  this they pile up as "malformed" forever — six of those nine. A new bot
-  posting here must pick a heading glyph **outside** the item set
-  (🤖 🙋 🔧 ⚪ 🔴) and be added to that list; 🤖 used to be on it, and now that
-  it means "open, agent-runnable" a notice wearing it would make every
-  agent-runnable item invisible.
-- **A missing glyph or ID is drift, never a dropped item.** Everything in the
-  heading is optional to the parser: the hundreds of items enqueued before
-  this template still read correctly, and what's missing surfaces as a
-  restamp, not a disappearance.
-
+**Enqueue in the same session that ships the change.** A test written while
+the context is warm has real Steps and a real Expect; one written later from
+the diff has neither.
 ### Claiming the device — one lock per handset, in litmus
 
 `dtq` is read-only. It answers _what is pending_; it never answered **is
