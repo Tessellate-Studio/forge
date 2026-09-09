@@ -38,6 +38,10 @@ function statusIcon(item) {
       return chalk.green('✓ DONE ');
     case STATUS.NEEDS_BUILD:
       return chalk.blue('🔧 BUILD ');
+    case STATUS.PARKED:
+      return chalk.gray('🅿️ PARKED');
+    case STATUS.WITHDRAWN:
+      return chalk.gray('⊘ WITHDRAWN');
     default:
       return chalk.magenta('? UNPARSED');
   }
@@ -52,10 +56,13 @@ function renderRepo(result, opts) {
     return lines;
   }
 
-  if (!result.issueNumber) {
-    lines.push(
-      `${header}  ${chalk.gray('no queue issue found — nothing pending')}`
-    );
+  // A missing LEGACY queue issue is not an empty queue — it is the end state
+  // of the migration, after which every test is a labelled issue. Returning
+  // early here (as this did) would blank the board for the whole repo the
+  // moment its legacy queue was retired, hiding real open tests. Only say
+  // "nothing pending" when there is genuinely nothing in EITHER medium.
+  if (!result.issueNumber && result.items.length === 0) {
+    lines.push(`${header}  ${chalk.gray('nothing pending')}`);
     return lines;
   }
 
@@ -64,6 +71,14 @@ function renderRepo(result, opts) {
   const done = result.items.filter(i => i.state === STATUS.DONE);
   const needsBuild = result.items.filter(i => i.state === STATUS.NEEDS_BUILD);
   const unparsed = result.items.filter(i => i.state === STATUS.UNPARSEABLE);
+
+  // Parked is OPEN work that the daily drain skips by decision — it must be
+  // counted and listed, not filtered out. Leaving it uncounted made a parked
+  // test invisible on the board, which is the exact failure this medium was
+  // chosen to end. Withdrawn is closed and shows only under --all, next to
+  // done, but is never added to the done count: nothing was verified.
+  const parked = result.items.filter(i => i.state === STATUS.PARKED);
+  const withdrawn = result.items.filter(i => i.state === STATUS.WITHDRAWN);
   const needsHuman = open.filter(i => i.needsHuman).length;
 
   const counts = [
@@ -71,9 +86,21 @@ function renderRepo(result, opts) {
     `${failed.length} failed`,
     `${needsHuman} needs-human`,
     `${needsBuild.length} needs-build`,
+    parked.length ? `${parked.length} parked` : null,
     `${done.length} done`,
-  ].join(' · ');
-  lines.push(`${header}  ${chalk.gray(counts)}  ${chalk.dim(result.issueUrl)}`);
+    withdrawn.length ? `${withdrawn.length} withdrawn` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  lines.push(
+    `${header}  ${chalk.gray(counts)}  ${chalk.dim(result.issueUrl || '')}`
+  );
+
+  // Half the queue unreadable is NOT an empty queue. Name which half, so the
+  // counts above read as partial rather than as the whole truth.
+  if (result.partial) {
+    lines.push(chalk.red(`  ⚠ partial — ${result.partial}`));
+  }
 
   // The device line used to sit here, once per repo. It moved to the foot of
   // the board (renderDevices): the lock is one per handset, not one per app,
@@ -133,8 +160,8 @@ function renderRepo(result, opts) {
   }
 
   const visible = opts.all
-    ? [...open, ...failed, ...needsBuild, ...done]
-    : [...open, ...failed, ...needsBuild];
+    ? [...open, ...failed, ...needsBuild, ...parked, ...done, ...withdrawn]
+    : [...open, ...failed, ...needsBuild, ...parked];
   if (visible.length === 0 && unparsed.length === 0) {
     lines.push(chalk.gray('  (queue empty)'));
   }
@@ -229,7 +256,10 @@ function render(results, opts, devices) {
 
   const totals = results.reduce(
     (acc, r) => {
-      if (r.error || !r.issueNumber) {
+      // Same trap as renderRepo's guard: keyed on the LEGACY queue issue,
+      // this dropped a repo's issue-based tests out of the totals the moment
+      // its legacy queue went. Count anything that produced items.
+      if (r.error || !r.items) {
         return acc;
       }
       r.items.forEach(i => {
