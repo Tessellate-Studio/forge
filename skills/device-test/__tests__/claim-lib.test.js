@@ -266,3 +266,115 @@ describe('the device one-liner reads as a sentence', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// RFD-003 section 3 — one lock per physical device, outside every app queue.
+// ---------------------------------------------------------------------------
+describe('where a device lock lives', () => {
+  const { DEVICES, deviceFor, LOCK_REPO } = require('../scripts/claim-lib');
+
+  it('holds the lock in litmus, not in an app repo and not in forge', () => {
+    // The device is not any one app's: alate, mood-layer and badige all drive
+    // the same handset. litmus is the shared testing-utilities repo for the
+    // mobile apps, and it is PRIVATE, so a claim may name what is being
+    // tested. forge is public, which is why the lock cannot live there.
+    expect(LOCK_REPO).toBe('Tessellate-Studio/litmus');
+    DEVICES.forEach(d => expect(d.repo).toBe(LOCK_REPO));
+  });
+
+  it('gives each physical device its own issue', () => {
+    // One issue per DEVICE, not per app: a drain can hold the Pixel over adb
+    // while a human is mid-sitting on the iPhone, and neither blocks the
+    // other.
+    const numbers = DEVICES.map(d => d.issue);
+    expect(new Set(numbers).size).toBe(DEVICES.length);
+    expect(DEVICES.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('finds the Android handset by its adb serial', () => {
+    const pixel = deviceFor('804KPSL1724518');
+    expect(pixel.issue).toBe(43);
+    expect(pixel.adb).toBe(true);
+  });
+
+  it('knows the iPhone has no adb path, so its claim waits on a human', () => {
+    // Not a workaround — the honest description of the device. Every step is
+    // someone's hands, and a claim parked on a human never expires.
+    const iphone = DEVICES.find(d => !d.adb);
+    expect(iphone).toBeDefined();
+    expect(iphone.issue).toBe(44);
+    expect(iphone.waitsOnHuman).toBe(true);
+  });
+
+  it('falls back to the adb device when asked for an unknown serial', () => {
+    // A serial nobody registered is far likelier to be the Pixel re-flashed
+    // than a second phone nobody told the queue about; guessing the iPhone
+    // would park an agent-runnable drain on a human forever.
+    expect(deviceFor('NOT-A-SERIAL').adb).toBe(true);
+  });
+});
+
+describe('two sessions racing for the same device', () => {
+  const { losesRaceTo } = require('../scripts/claim-lib');
+
+  const held = (id, who) => ({
+    id,
+    html_url: `https://github.com/Tessellate-Studio/litmus/issues/43#issuecomment-${id}`,
+    body: [
+      '### 🔒 Device claim',
+      `- **Claimed by:** ${who}`,
+      '- **Device:** 804KPSL1724518',
+      `- **Claimed at:** ${minutesAgo(1)}`,
+      `- **Last touch:** ${minutesAgo(1)}`,
+      '- **Waiting on:** —',
+      '- **Claim:** HELD',
+    ].join('\n'),
+  });
+
+  it('stands the later poster down, deterministically', () => {
+    // Comment ids are server-assigned and monotonic, so both racers reach the
+    // SAME answer with no clock involved. The 16-second collision on
+    // 2026-09-07 resolves in one round trip.
+    const claims = [held(100, 'session-a'), held(200, 'session-b')].map(
+      parseClaim
+    );
+    expect(losesRaceTo(claims, 200).heldBy).toBe('session-a');
+    expect(losesRaceTo(claims, 100)).toBeNull();
+  });
+
+  it('both racers agree on the winner', () => {
+    const claims = [held(100, 'session-a'), held(200, 'session-b')].map(
+      parseClaim
+    );
+    const bWinner = losesRaceTo(claims, 200);
+    const aWinner = losesRaceTo(claims, 100);
+    expect(bWinner).not.toBeNull();
+    expect(aWinner).toBeNull();
+  });
+
+  it('ignores a released claim, however early it was posted', () => {
+    const releasedEarly = {
+      ...held(50, 'session-old'),
+      body: held(50, 'session-old').body.replace('HELD', 'RELEASED'),
+    };
+    const claims = [releasedEarly, held(200, 'session-b')].map(parseClaim);
+    expect(losesRaceTo(claims, 200)).toBeNull();
+  });
+
+  it('ignores a stale claim, so a crashed session cannot wedge the device', () => {
+    const silent = {
+      ...held(50, 'session-dead'),
+      body: held(50, 'session-dead').body.replace(
+        `- **Last touch:** ${minutesAgo(1)}`,
+        `- **Last touch:** ${minutesAgo(HEARTBEAT_STALE_MINUTES * 3)}`
+      ),
+    };
+    const claims = [silent, held(200, 'session-b')].map(parseClaim);
+    expect(losesRaceTo(claims, 200)).toBeNull();
+  });
+
+  it('is a no-op when nobody else is holding', () => {
+    expect(losesRaceTo([parseClaim(held(200, 'solo'))], 200)).toBeNull();
+    expect(losesRaceTo([], 200)).toBeNull();
+  });
+});
