@@ -113,3 +113,83 @@ jobs:
       - name: Run npm audit (full tree — advisory only)
         continue-on-error: true
         run: npm audit --audit-level=high
+
+  # Failure alerting for the DEFAULT BRANCH only.
+  #
+  # Scoped to non-PR events on purpose. A red run on a PR is not silent — the
+  # author is looking straight at it, and pr-gate-guard.yml covers the case
+  # where no check ran at all. A red run on `master` after a merge has nobody
+  # watching it, and that is the gap: a red run in the Actions tab is SILENT,
+  # which is how alate's backend deploys sat dead for 18 days (2026-06-15 ->
+  # 2026-07-03) while merges piled up unshipped.
+  #
+  # This ships ONLY to forge and litmus, the two repos whose ci.yml actually
+  # has a `push:` trigger. The four app repos are `pull_request`-only, so an
+  # alert there could never fire — and forge's own standard says a check that
+  # cannot fail is worse than no check, because it reads as coverage. Their
+  # real gap is that master is never tested at all; that needs a `push:`
+  # trigger and a decision about CI load, not a dead alert job.
+  alert-on-failure:
+    name: Alert — red default branch
+    needs: [inspect, lint, test, security]
+    if: failure() && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      # github-script, NOT `gh`. The CLI is ABSENT on the org's self-hosted
+      # runners (probed 2026-07-26), so `gh issue create` would become a silent
+      # `command not found` the moment this job moved off hosted — turning a
+      # loud failure into no alert at all.
+      - name: Open or append to the ci-failure issue
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const ref = process.env.GITHUB_REF_NAME;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const titlePrefix = `CI failure: ${ref}`;
+
+            // DEDUP — mandatory here, unlike the deploy alerters this borrows
+            // its shape from. None of those dedupe, and alate's
+            // supabase-migrations alerter has opened NINE issues that way
+            // (#306, #309, #311, #312, #316, #318, #324, #331, #332). ci.yml
+            // runs orders of magnitude more often than a deploy; undeduped it
+            // is a spam cannon, and an alert channel nobody can read is the
+            // same as no alert channel.
+            const open = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', labels: 'ci-failure', per_page: 100,
+            });
+            const existing = open.find((i) => i.title.startsWith(titlePrefix));
+
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: existing.number,
+                body: `Still red — ${runUrl}`,
+              });
+              core.info(`Appended to #${existing.number}; not duplicating.`);
+              return;
+            }
+
+            await github.rest.issues.create({
+              owner, repo,
+              title: `${titlePrefix} (${new Date().toISOString().slice(0, 10)})`,
+              // `bug` is REQUIRED, not decoration. crash-monitor's triage
+              // filter is an ALLOWLIST — bug / build-failure / crash-monitor /
+              // auto-generated / unlabelled. An issue labelled `ci-failure`
+              // ALONE is not on that list and gets skipped by the very
+              // automation meant to pick it up; mood-layer's APK alerter had
+              // exactly that bug until 2026-09-09.
+              labels: ['ci-failure', 'bug'],
+              body: [
+                `**CI is red on \`${ref}\`** — a non-PR run, so nothing else reports it.`,
+                '',
+                `Run: ${runUrl}`,
+                '',
+                'The default branch is failing its own gate. Anything merged after this point was gated against a build that no longer passes.',
+                '',
+                'Close this once CI is green again — the next failure opens a fresh issue.',
+              ].join('\n'),
+            });
+            core.notice('Opened a ci-failure issue.');
