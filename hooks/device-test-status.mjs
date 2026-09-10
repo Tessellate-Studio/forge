@@ -2,25 +2,26 @@
 /**
  * SessionStart hook — surfaces the device-test queue automatically, so a
  * session opens already knowing what's pending instead of someone spawning
- * an agent to poll each thread (see skills/device-test/SKILL.md).
+ * an agent to poll each repo (see skills/device-test/SKILL.md).
  *
  * Fetches the same data the /forge:device-test drain skill and the `dtq` /
  * device-test-status CLI use (skills/device-test/scripts/queue-lib.js) —
- * read-only, never edits or minimizes a comment.
+ * read-only.
  *
- * Quiet by design, same principle as forge-freshness.mjs: nothing pending
- * (or `gh` unavailable, or the check times out) prints nothing and exits 0.
- * A hook that nags every session regardless of outcome is its own nuisance.
- * Only speaks up when there's something a human would actually want to know
- * about first thing — an open item, a failure, or a comment whose format
- * has drifted.
+ * Quiet when every queue was read and nothing is pending, or when `gh` is not
+ * installed or authenticated (an environment fact, not worth a nag).
+ *
+ * NOT quiet when the queue could not be read — a repo fetch that errored, or
+ * the whole check running out of time. It used to abandon those silently, and
+ * silence reads as "nothing pending": session start said nothing about a queue
+ * with 22 open tests in it (forge#135). "Could not find out" is its own
+ * answer. What to say lives in lib/device-test-summary.js, which has tests.
  *
  * OFF SWITCH: set FORGE_DEVICE_TEST_STATUS_DISABLE=1.
  *
- * Self-bounded to TIMEOUT_MS so a slow/rate-limited GitHub API can never add
- * noticeable session-start latency — if the check hasn't finished by then,
- * it's abandoned like any other failure (silent, exit 0), same as any repo
- * whose fetch legitimately errored.
+ * ONE deadline over the whole check, not one per stage: two 12-second races
+ * back to back can take 24 seconds, past the 15-second budget in hooks.json,
+ * and then the harness kills the hook before it can say anything at all.
  */
 
 import { createRequire } from 'node:module';
@@ -31,7 +32,7 @@ const TIMEOUT_MS = 12_000;
 
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
-const { STATUS, checkGhReady, collect } = require(path.join(
+const { checkGhReady, collect } = require(path.join(
   here,
   '..',
   'skills',
@@ -44,86 +45,38 @@ const { emit, withDeadline, runHook, disabled } = require(path.join(
   'lib',
   'session-start.js'
 ));
+const { summariseQueue, unreadableNotice } = require(path.join(
+  here,
+  'lib',
+  'device-test-summary.js'
+));
+
+async function readQueue() {
+  const ready = await checkGhReady();
+  if (!ready || !ready.ok) {
+    return { skip: true };
+  }
+  return { results: await collect() };
+}
 
 async function main() {
-  if (
-    /^(1|true|yes|on)$/i.test(
-      process.env.FORGE_DEVICE_TEST_STATUS_DISABLE ?? ''
-    )
-  ) {
+  if (disabled(process.env.FORGE_DEVICE_TEST_STATUS_DISABLE)) {
     return;
   }
 
-  const ready = await withDeadline(checkGhReady(), TIMEOUT_MS);
-  if (!ready || !ready.ok) {
-    return; // no gh, not authenticated, or timed out — an environment fact, not worth a nag
+  const outcome = await withDeadline(readQueue(), TIMEOUT_MS);
+  if (outcome === null) {
+    await emit(unreadableNotice(`did not finish in ${TIMEOUT_MS / 1000}s`));
+    return;
+  }
+  if (outcome.skip) {
+    return;
   }
 
-  const results = await withDeadline(collect(), TIMEOUT_MS);
-  if (!results) {
-    return; // timed out — degrade silently, never block or slow session start
+  const summary = summariseQueue(outcome.results);
+  if (summary) {
+    await emit(summary);
   }
-
-  const lines = [];
-  let totalOpen = 0;
-  let totalFailed = 0;
-  let totalHuman = 0;
-  let totalNeedsBuild = 0;
-  let totalUnparsed = 0;
-
-  results.forEach(r => {
-    if (r.error || !r.issueNumber) {
-      return;
-    }
-    const open = r.items.filter(i => i.state === STATUS.OPEN);
-    const failed = r.items.filter(i => i.state === STATUS.FAILED);
-    const needsBuild = r.items.filter(i => i.state === STATUS.NEEDS_BUILD);
-    const unparsed = r.items.filter(i => i.state === STATUS.UNPARSEABLE);
-    const human = open.filter(i => i.needsHuman).length;
-    totalOpen += open.length;
-    totalFailed += failed.length;
-    totalHuman += human;
-    totalNeedsBuild += needsBuild.length;
-    totalUnparsed += unparsed.length;
-
-    if (open.length || failed.length || needsBuild.length || unparsed.length) {
-      const parts = [];
-      if (open.length) {
-        parts.push(
-          `${open.length} open${human ? ` (${human} needs-human)` : ''}`
-        );
-      }
-      if (failed.length) {
-        parts.push(`${failed.length} failed`);
-      }
-      if (needsBuild.length) {
-        parts.push(`${needsBuild.length} needs-build`);
-      }
-      if (unparsed.length) {
-        parts.push(`${unparsed.length} unparseable`);
-      }
-      lines.push(`- ${r.key}: ${parts.join(', ')} — ${r.issueUrl}`);
-    }
-  });
-
-  if (lines.length === 0) {
-    return; // every queue empty or fully done — a valid, quiet result
-  }
-
-  const summary = `${totalOpen} open, ${totalFailed} failed${
-    totalHuman ? `, ${totalHuman} needs-human` : ''
-  }${totalNeedsBuild ? `, ${totalNeedsBuild} needs-build` : ''}${
-    totalUnparsed ? `, ${totalUnparsed} unparseable` : ''
-  }`;
-
-  await emit({
-    systemMessage: `device-test queue: ${summary} — run \`dtq\` for details`,
-    context:
-      `The device-test queue (across alate, mood-layer, badige, loom) has pending items:\n` +
-      `${lines.join('\n')}\n` +
-      `This is informational only — don't act on it unless the user asks. Run \`dtq\` ` +
-      `(or \`device-test-status\`) for the live board, or /forge:device-test to drain it.`,
-  });
 }
 
 runHook(main);

@@ -58,12 +58,10 @@ function renderRepo(result, opts) {
     return lines;
   }
 
-  // A missing LEGACY queue issue is not an empty queue — it is the end state
-  // of the migration, after which every test is a labelled issue. Returning
-  // early here (as this did) would blank the board for the whole repo the
-  // moment its legacy queue was retired, hiding real open tests. Only say
-  // "nothing pending" when there is genuinely nothing in EITHER medium.
-  if (!result.issueNumber && result.items.length === 0) {
+  // Keyed on items, never on a queue issue: there is no queue issue any more
+  // (RFD-003), and a guard that read one skipped every repo in the
+  // SessionStart hook without a word (forge#135).
+  if (result.items.length === 0) {
     lines.push(`${header}  ${chalk.gray('nothing pending')}`);
     return lines;
   }
@@ -72,7 +70,6 @@ function renderRepo(result, opts) {
   const failed = result.items.filter(i => i.state === STATUS.FAILED);
   const done = result.items.filter(i => i.state === STATUS.DONE);
   const needsBuild = result.items.filter(i => i.state === STATUS.NEEDS_BUILD);
-  const unparsed = result.items.filter(i => i.state === STATUS.UNPARSEABLE);
 
   // Parked is OPEN work that the daily drain skips by decision — it must be
   // counted and listed, not filtered out. Leaving it uncounted made a parked
@@ -95,7 +92,9 @@ function renderRepo(result, opts) {
     .filter(Boolean)
     .join(' · ');
   lines.push(
-    `${header}  ${chalk.gray(counts)}  ${chalk.dim(result.issueUrl || '')}`
+    `${header}  ${chalk.gray(counts)}  ${chalk.dim(
+      `https://github.com/${result.repo}/issues?q=is%3Aopen+label%3Adevice-test`
+    )}`
   );
 
   // Half the queue unreadable is NOT an empty queue. Name which half, so the
@@ -109,54 +108,21 @@ function renderRepo(result, opts) {
   // so printing it inside each repo's block said the same thing up to four
   // times and implied a per-app lock that never existed.
 
-  if (unparsed.length > 0) {
-    lines.push(
-      chalk.magenta(
-        `  ⚠ ${unparsed.length} comment(s) don't match the queue format — check them:`
-      )
-    );
-
-    // The URL alone made this a list to scroll past. The reason makes it a
-    // list to act on — each line names the one edit that clears it.
-    unparsed.forEach(i =>
-      lines.push(
-        `    ${chalk.dim(i.commentUrl)}${
-          i.unparseableReason ? chalk.dim(`  — ${i.unparseableReason}`) : ''
-        }`
-      )
-    );
-  }
-
-  // Drift is cosmetic on the board (the Status line still decides state) but
-  // not on the issue page, where the heading glyph is the only thing a human
-  // scrolling past actually reads. Report the count; the drain restamps them.
-  // Louder than heading drift, and above it: drift is cosmetic, whereas a
-  // stacked comment means a test that IS NOT ON THIS BOARD. Its own row is
+  // A stacked body means a test that IS NOT ON THIS BOARD. Its own row is
   // printed normally below — the warning is about the ones underneath it.
   const stacked = result.items.filter(i => i.itemHeadings > 1);
   if (stacked.length > 0) {
     const hidden = stacked.reduce((n, i) => n + i.itemHeadings - 1, 0);
     lines.push(
       chalk.magenta(
-        `  ⚠ ${hidden} test(s) are stacked inside another comment and have no row here — split them:`
+        `  ⚠ ${hidden} test(s) are stacked inside another test's issue and have no row here — split them:`
       )
     );
     stacked.forEach(i =>
       lines.push(
         `    ${chalk.dim(i.commentUrl)}${chalk.dim(
-          `  — ${i.itemHeadings} tests in one comment; the queue is one comment per test`
+          `  — ${i.itemHeadings} tests in one issue body; the queue is one issue per test`
         )}`
-      )
-    );
-  }
-
-  const drifted = result.items.filter(
-    i => i.state !== STATUS.UNPARSEABLE && i.headingDrift
-  );
-  if (drifted.length > 0) {
-    lines.push(
-      chalk.dim(
-        `  ${drifted.length} heading(s) not stamped to match their Status — /forge:device-test restamps them`
       )
     );
   }
@@ -164,7 +130,7 @@ function renderRepo(result, opts) {
   const visible = opts.all
     ? [...open, ...failed, ...needsBuild, ...parked, ...done, ...withdrawn]
     : [...open, ...failed, ...needsBuild, ...parked];
-  if (visible.length === 0 && unparsed.length === 0) {
+  if (visible.length === 0) {
     lines.push(chalk.gray('  (queue empty)'));
   }
 
@@ -175,29 +141,18 @@ function renderRepo(result, opts) {
       const ageStr = age === null ? '' : chalk.dim(` (${age}d)`);
       const pr = item.pr ? chalk.dim(`PR #${item.pr}`) : '';
 
-      // Failed items' Status line is "failed (...) → <link> — <full writeup>";
-      // the writeup duplicates the linked issue, so keep the board scannable
-      // and show only up to the link. Needs-build items carry their "what's
-      // needed" text right after the emoji — surface that instead of the
-      // generic delivery/runtime pair, since that text IS the reason this
-      // item is sitting out of the daily drain.
-      const extra =
-        item.state === STATUS.FAILED
-          ? chalk.red(
-              clip(item.statusText.replace(/^❌\s*/, '').split(' — ')[0], 90)
-            )
-          : item.state === STATUS.NEEDS_BUILD
-          ? chalk.blue(clip(item.statusText.replace(/^🔧\s*/, ''), 90))
-          : clip(
-              [item.delivery, item.needsRuntime && `needs ${item.needsRuntime}`]
-                .filter(Boolean)
-                .join(' · '),
-              60
-            );
+      // Why a failed or build-blocked test is sitting there lives in its
+      // issue's comments now, not in a Status line the list endpoint returns,
+      // so every row shows the delivery pair and the label carries the rest.
+      const extra = clip(
+        [item.delivery, item.needsRuntime && `needs ${item.needsRuntime}`]
+          .filter(Boolean)
+          .join(' · '),
+        60
+      );
 
-      // The test id is the comment id — the thing you quote back ("re-run
-      // 5462960191") and the thing that anchors the comment URL, so the board
-      // and the issue name the same test the same way.
+      // The test id is the issue number (`alate#712`) — the thing you quote
+      // back, and a live link anywhere.
       const id = item.testId
         ? chalk.dim(`${item.testId}`)
         : chalk.magenta('unstamped');
