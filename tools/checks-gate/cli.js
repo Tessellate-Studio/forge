@@ -37,7 +37,7 @@ const USAGE = `checks-gate — exit 0 only when a PR's checks are green
   --register-timeout  <seconds>     for any check to start   (default ${DEFAULTS.registerTimeout})
   --timeout           <seconds>     for all checks to finish (default ${DEFAULTS.timeout})
 
-Exit: 0 green · 10 red · 11 no checks ran · 12 timed out · 2 usage · 1 internal
+Exit: 0 green (only) · 10 red · 11 no checks ran · 12 timed out · 2 usage/help · 1 internal
 Progress goes to stderr; the one RESULT line goes to stdout.`;
 
 /** Run gh, capturing both streams. Never rejects: a failed read is data here. */
@@ -114,9 +114,12 @@ function render(outcome) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
+
+  // Not EXIT.GREEN: this is a gate, and `cli.js --help && gh pr merge` must
+  // not merge. Exit 0 means the checks are green, and nothing else.
   if (options.help) {
     process.stdout.write(`${USAGE}\n`);
-    return EXIT.GREEN;
+    return EXIT.USAGE;
   }
   if (
     !/^[\w.-]+\/[\w.-]+$/.test(options.repo || '') ||
