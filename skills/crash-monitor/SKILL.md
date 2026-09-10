@@ -179,7 +179,7 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/safe-merge/cli.js" \
 
 Gate on the command's own exit status, never through a pipe — `cmd; if [ $? -eq 0 ]`, not `cmd | tail`.
 
-It checks, and prints evidence for, each of: every CI check concluded success; no revert touched these paths in 14 days; no manifest or lockfile change; exactly one production file (tests and docs alongside are fine); and that the diff shape is consistent with your `--declare`. **Anything it cannot verify routes to 4b** — an unknown is a refusal, not a shrug.
+It checks, and prints evidence for, each of: every CI check concluded success; no revert touched these paths in 14 days; no manifest or lockfile change; exactly one production file (tests and docs alongside are fine); that the diff shape is consistent with your `--declare`; that no open device test still verifies the PR; and that no production file is a sync, persistence or migration path. **Anything it cannot verify routes to 4b** — an unknown is a refusal, not a shrug.
 
 **Do not re-derive this verdict.** If your reading of the fix disagrees with the command, the command wins and you file an issue against it. A routing decision reached by reading the diff is an inference wearing the costume of a fact (`standards/authoritative-claims.md`).
 
@@ -190,9 +190,9 @@ Two things it does **not** decide, which stay your judgement and stay here in pr
 
 `--declare` is checked in one direction only: a diff shape inconsistent with `guard` is rejected, but no shape ever rescues a declared `rewrite`. It verifies the diff shape is **consistent with** your declaration; it does not verify the fix is a guard clause, and nothing can.
 
-No path exclusions — auth, payment, and data-deletion fixes merge too if they clear the gate. Note what that rests on: it was justified by the cooldown catching repeat failures, and until this command existed the cooldown had never once fired. The cooldown is real now, but it catches a *revert* — evidence the gate already got that code wrong — not a first-time bad merge into a sensitive path.
+**Sync, persistence and migration paths always go to a human** (decided 2026-09-10, forge#87). The file count cannot tell a one-line sync change from a harmless rename, and the cooldown only catches a *revert*, never a first bad merge. That class is the one with incidents behind it: alate's two silent-data-loss reports trace to sync (alate#669). Auth, payment and deletion fixes still merge if they clear the gate — nothing has earned them a carve-out yet; when something does, the word goes in `DATA_INTEGRITY_WORDS` in `lib/route.js`, not in this prose.
 
-**This gate is not universal.** `security-sweep` and `roadmap-pulse` merge on their own prose criteria and do not route through it.
+**Every automation merges through it.** `security-sweep` and `roadmap-pulse` do too since forge#86, with the conditions that cannot describe their changes printed as `skipped` rather than silently dropped.
 
 ### 4a. CODE BUG — confident fix (auto-merge)
 

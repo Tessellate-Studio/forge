@@ -19,14 +19,19 @@
 // silently-passing condition above. If a run is noisy, fix the observer.
 //
 // WHAT THE FILE COUNT IS NOT. Condition 4 counts production files. That is a
-// proxy and it does NOT track blast radius: a one-line change to an auth guard
-// is more dangerous than a three-file rename, and this cannot tell them apart.
-// The inherited policy ("No path exclusions — auth, payment and data-deletion
-// fixes auto-merge too") is carried forward here unchanged, but note it was
-// justified by the cooldown catching repeat failures — the same cooldown that
-// had never once fired. Treat that policy as inherited, not endorsed, and do
-// not read a 4a as "this change was low risk". Whether the gate should be
-// path-sensitive is an open decision, deliberately not made in this module.
+// proxy and it does NOT track blast radius: a one-line change to a sync guard
+// is more dangerous than a three-file rename, and the count cannot tell them
+// apart. The old "no path exclusions" policy was justified by a cooldown that
+// had never once fired. Decided 2026-09-10 (forge#87): sync, persistence and
+// migration paths route to a human whatever else they pass — condition 7,
+// narrow on purpose and with incident provenance. Auth, payment and deletion
+// were considered and left out for want of an incident. Do not read a 4a as
+// "this change was low risk".
+//
+// WHICH CONDITIONS APPLY depends on --source (forge#86): security-sweep and
+// roadmap-pulse used to merge on their own prose criteria. They now come
+// through here too, with the conditions that cannot describe their changes
+// skipped — visibly — rather than the whole gate.
 
 'use strict';
 
@@ -58,6 +63,75 @@ const LOCKFILES = new Set([
 
 function normalise(rawPath) {
   return String(rawPath).replace(/\\/g, '/').replace(/^\.\//, '');
+}
+
+/**
+ * Which conditions an automation is judged on (forge#86).
+ *
+ * Every source gets every condition unless it is named here, and an unknown
+ * source gets the full set — a typo in `--source` must never buy a lighter
+ * gate. A skipped condition still prints, as `skipped` with its reason, so a
+ * reader sees what was NOT checked instead of inferring a pass from absence.
+ *
+ * - security-sweep: its automatic lane is a lockfile-only `npm audit fix`, so
+ *   the one-production-file count and the guard/rewrite declaration say
+ *   nothing about it. `dependencies` does not disappear for it — it inverts
+ *   (checkDependencies).
+ * - roadmap-pulse: an auto-built P0 feature spans files by design, and the
+ *   declaration ratchet was calibrated on one-line crash fixes. CI, cooldown,
+ *   dependencies, device tests and data-integrity paths all still apply.
+ */
+const SOURCE_PROFILES = {
+  'security-sweep': {
+    skip: ['single-production-file', 'declare-vs-shape'],
+    why: 'a dependency patch is lockfile changes, not one guarded file',
+  },
+  'roadmap-pulse': {
+    skip: ['single-production-file', 'declare-vs-shape'],
+    why: 'an auto-built feature spans files by design',
+  },
+};
+
+function skippedFor(source, conditionName) {
+  const profile = SOURCE_PROFILES[source];
+  return profile && profile.skip.includes(conditionName) ? profile : null;
+}
+
+/**
+ * Condition 7's words (forge#87). Deliberately narrow, and each has a reason:
+ * alate's two silent-data-loss reports (#596, #606) trace to sync — alate#669,
+ * `mobile/src/services/syncService.ts` and `useAuthSync.ts` — whose failure
+ * mode is data quietly never leaving the phone; persistence is the other half
+ * of that same path; migrations rewrite stored data in place. Add a word when
+ * an incident earns it, the way every threshold in this module was earned.
+ */
+const DATA_INTEGRITY_WORDS = new Set([
+  'sync',
+  'synced',
+  'syncing',
+  'persist',
+  'persisted',
+  'persistence',
+  'storage',
+  'migrate',
+  'migration',
+  'migrations',
+]);
+
+/**
+ * Whole words of a path, split on separators and camelCase, lowercased — so
+ * `useAuthSync.ts` yields `sync` and `asyncUtils.ts` yields `async`, not `sync`.
+ */
+function pathWords(rawPath) {
+  return normalise(rawPath)
+    .split(/[/._-]+/)
+    .flatMap(part => part.split(/(?=[A-Z])/))
+    .map(word => word.toLowerCase())
+    .filter(Boolean);
+}
+
+function isDataIntegrityPath(rawPath) {
+  return pathWords(rawPath).some(word => DATA_INTEGRITY_WORDS.has(word));
 }
 
 function isTestPath(path) {
@@ -199,7 +273,10 @@ function checkInputIntegrity(state) {
   ) {
     missing.push('deviceVerification');
   }
-  if (!DECLARED_CLASSES.has(state.declaredClass)) {
+  if (
+    !skippedFor(state.source, 'declare-vs-shape') &&
+    !DECLARED_CLASSES.has(state.declaredClass)
+  ) {
     missing.push('declaredClass');
   }
   return missing.length
@@ -264,11 +341,50 @@ function checkCooldown(state) {
   };
 }
 
-/** 3. DEPENDENCIES. Not reviewable from a diff; security-sweep owns that lane. */
+/**
+ * security-sweep's side of condition 3: pass only when EVERY production file
+ * is a lockfile. Its automatic lane is `npm audit fix` with `package.json`
+ * untouched (skills/security-sweep Step 2a — a changed manifest is a direct
+ * dependency bump and goes to a human). Merely skipping condition 3 would let
+ * anything run under `--source security-sweep` through with app code in it.
+ * Why a manifest bump is not "safe": alate#203 (`puppeteer-core`), reverted for
+ * an ERR_REQUIRE_ESM that took /api/ai to 500.
+ */
+function checkLockfileOnly(diff) {
+  const files = diff.productionFiles || [];
+  if (files.length === 0) {
+    return {
+      status: 'unknown',
+      evidence: 'no production files — nothing a dependency patch would change',
+    };
+  }
+  const other = files.filter(
+    file => !LOCKFILES.has(normalise(file).split('/').pop().toLowerCase())
+  );
+  return other.length === 0
+    ? {
+        status: 'pass',
+        evidence: `lockfile-only (${files.length}) — security-sweep's lane`,
+      }
+    : {
+        status: 'fail',
+        evidence: `security-sweep auto-merges lockfiles only; also changed: ${other
+          .slice(0, 3)
+          .join(', ')}`,
+      };
+}
+
+/**
+ * 3. DEPENDENCIES. Not reviewable from a diff; security-sweep owns that lane —
+ *    and for security-sweep itself the rule inverts (checkLockfileOnly).
+ */
 function checkDependencies(state) {
   const diff = state.diff;
   if (!diff) {
     return { status: 'unknown', evidence: 'no diff observed' };
+  }
+  if (state.source === 'security-sweep') {
+    return checkLockfileOnly(diff);
   }
   const touched = [];
   if (diff.manifestChanged) {
@@ -392,6 +508,28 @@ function checkDeviceVerification(state) {
   };
 }
 
+/**
+ * 7. DATA-INTEGRITY PATHS (forge#87). A change to sync, persistence or
+ *    migration code goes to a human, whatever else it passes. The file count
+ *    cannot see that a one-line sync change outranks a three-file rename; this
+ *    can, for the one class with incidents behind it (DATA_INTEGRITY_WORDS).
+ */
+function checkDataIntegrityPath(state) {
+  const diff = state.diff;
+  if (!diff || !Array.isArray(diff.productionFiles)) {
+    return { status: 'unknown', evidence: 'no file list observed' };
+  }
+  const hits = diff.productionFiles.filter(isDataIntegrityPath);
+  return hits.length
+    ? {
+        status: 'fail',
+        evidence: `${hits
+          .slice(0, 3)
+          .join(', ')} — sync/persistence/migration changes go to a human`,
+      }
+    : { status: 'pass', evidence: 'no sync, persistence or migration path' };
+}
+
 const CONDITIONS = [
   { name: 'input-integrity', evaluate: checkInputIntegrity },
   { name: 'ci-green', evaluate: checkCi },
@@ -400,6 +538,7 @@ const CONDITIONS = [
   { name: 'single-production-file', evaluate: checkSingleProductionFile },
   { name: 'declare-vs-shape', evaluate: checkDeclarationAgainstShape },
   { name: 'device-verified', evaluate: checkDeviceVerification },
+  { name: 'data-integrity-path', evaluate: checkDataIntegrityPath },
 ];
 
 /**
@@ -409,12 +548,18 @@ const CONDITIONS = [
  */
 function routeFix(state) {
   const observed = state || {};
-  const checks = CONDITIONS.map(condition => ({
-    name: condition.name,
-    ...condition.evaluate(observed),
-  }));
+  const checks = CONDITIONS.map(condition => {
+    const skipped = skippedFor(observed.source, condition.name);
+    return skipped
+      ? {
+          name: condition.name,
+          status: 'skipped',
+          evidence: `not applied to ${observed.source} — ${skipped.why} (forge#86)`,
+        }
+      : { name: condition.name, ...condition.evaluate(observed) };
+  });
   const reasons = checks
-    .filter(check => check.status !== 'pass')
+    .filter(check => check.status !== 'pass' && check.status !== 'skipped')
     .map(check => `${check.name}: ${check.evidence}`);
   return { route: reasons.length === 0 ? '4a' : '4b', reasons, checks };
 }
@@ -426,6 +571,8 @@ module.exports = {
   detectDependencyChanges,
   isRevertOfAutoFix,
   CONDITIONS,
+  SOURCE_PROFILES,
+  isDataIntegrityPath,
   MAX_LINES_ADDED,
   MAX_LINES_REMOVED,
 };

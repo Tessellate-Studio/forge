@@ -14,7 +14,7 @@ This skill is a weekly project-management pulse. It does six things in sequence 
 3. **Dependency inference** — spot which open tasks block which; confirm with user; persist confirmed dependencies back into the BACKLOG entries.
 4. **RICE scoring** — invoke rubric-sdk per open task using the RICE framework (Reach × Impact × Confidence / Effort); adjust with reusability, strategic fit, and dependency-unblock multiplier overlays.
 5. **Output** — a prioritized top-5-to-10 list inline + append a dated section to `WEEKLY_DIGEST.md` so the history of weekly decisions accumulates.
-   5.5. **Auto-build** (autonomous runs only) — for the top P0 "Must" items, invoke `forge:build-feature` to implement end-to-end, ship to preview, and auto-merge on green. Cap: 2 per run.
+   5.5. **Auto-build** (autonomous runs only) — for the top P0 "Must" items, invoke `forge:build-feature` to implement end-to-end, ship to preview, and merge through safe-merge (`--source roadmap-pulse`). Cap: 2 per run.
 6. **Self-schedule** — first-run only: set up a weekly cron via the `schedule` skill. Default cadence Sunday 16:00 IST, override at first run.
 
 The point is not "produce a pretty list." The point is **align action with current goals, supported by sourced reasoning, weekly, without re-deriving from scratch each time.**
@@ -257,15 +257,18 @@ Everything built here ships to **test/preview** (OTA to the `preview` channel), 
    - Title: `feat(<scope>): <task title>`
    - Body: standard build-feature output — TLDR, what changed, test coverage, acceptance criteria verdicts
    - Labels: `pulse-auto-build`, `auto-generated`
-4. **Merge on the gated watch:**
-   `gh pr checks <pr-number> --watch >/dev/null && gh pr merge <pr-number> --squash`.
-   **Never `--auto`** — `hooks/merge-gate.mjs` denies it, and it never waited
-   here anyway (auto-merge blocks only on REQUIRED checks; no repo in this org
-   has any). That matters most in this skill, which runs unattended: a silent
-   instant-merge ships unverified code with nobody watching. See
+4. **Merge through the confidence command:**
+   `node "${CLAUDE_PLUGIN_ROOT}/tools/safe-merge/cli.js" --repo Tessellate-Studio/<repo> --pr <n> --source roadmap-pulse --what "<task title>"`.
+   It waits for CI and refuses on a revert cooldown, a dependency change, an
+   open device test that verifies the PR, or any sync/persistence/migration
+   path. It skips the one-file and declaration checks, which cannot describe
+   a feature, and prints them as `skipped`. Exit `10` → leave the PR open for
+   the user with the printed reasons; do not retry another way. **Never
+   `--auto`, and never a bare `gh pr merge`** — this runs unattended and is
+   the largest blast radius in the system (forge#86). See
    `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Merge on green".
 5. **Update BACKLOG:** mark the entry with status `DONE — <date>, PR #<n>` and the merged SHA once it lands. Collapse to a one-line tombstone per the "Docs stay lean" standard.
-6. **Log:** append to `Tessellate-Studio/litmus` auto-ship-log.md (default branch `main`):
+6. **Log:** safe-merge writes the auto-ship-log row on exit `0`. On exit `11` (merged, append failed) add it by hand to `Tessellate-Studio/litmus` auto-ship-log.md (default branch `main`):
    `| <date> | roadmap-pulse | <repo> | PR #<n> | <1-line what> | P0 auto-build |`
 
 **Cap at 2 items per run.** If more than 2 items qualify, build the top 2 by score. The rest stay in the priority list for next week (or the user picks them up manually).

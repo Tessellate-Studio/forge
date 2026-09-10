@@ -146,9 +146,12 @@ full list: [`anti-patterns.md` → "Merge on green by default"](./anti-patterns.
 # A merge you were asked for:
 gh pr checks <n> --watch >/dev/null && gh pr merge <n> --squash
 
-# An automated fix (crash-monitor, status-check, security-sweep):
+# An automated merge (crash-monitor, status-check, security-sweep, roadmap-pulse):
 node "${CLAUDE_PLUGIN_ROOT}/tools/safe-merge/cli.js" --repo <owner/name> --pr <n> \
-  --source <skill> --what "<one line>" --declare guard|rewrite
+  --source <skill> --what "<one line>" [--declare guard|rewrite]
+# --declare is required except for security-sweep and roadmap-pulse, which skip
+# the one-file and declaration checks (forge#86). Every source sends sync,
+# persistence and migration paths to a human (forge#87).
 ```
 
 **`gh pr merge --auto` is banned outright**, and this paragraph used to
