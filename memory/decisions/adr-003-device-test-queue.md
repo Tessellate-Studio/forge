@@ -1,6 +1,6 @@
 # ADR-003 — Cross-app device-test queue: GitHub issue comments + a forge drain skill
 
-**Status:** Accepted (user, 2026-08-18) · **Tier:** ADR (tactical — reversible, no code, single repo)
+**Status:** Accepted (user, 2026-08-18) · **Tier:** ADR (tactical — reversible, no code, single repo) · **Medium superseded** by [RFD-003](./rfd-003-device-tests-as-issues-one-global-device-lock.md) (2026-09-09) — its three constraints stand
 
 ## Context
 

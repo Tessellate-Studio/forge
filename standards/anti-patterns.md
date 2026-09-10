@@ -275,10 +275,13 @@ in front of you — and measure there. **Why:** in any app with a proxy, CDN or
 fronting layer, the debugging surface and the user surface are different
 systems, and the severity that drives everyone's priorities belongs to the
 second. *Precedent: loom (2026-09) — the admin 508 was reported as a two-day
-production outage measured against the admin origin; merchants enter through
-the API host that fronts it, where every route served 200 and the data path
-worked throughout. Real impact was a missing favicon and a ceiling on
-server-rendered routes. The entry point was one grep from the app manifest.*
+production outage measured against the admin origin. The entry point was one
+grep from the app manifest, and that grep is the lesson: per loom's own proxy
+config, the manifest's host rewrites every non-API path through to the same
+broken origin, so it did not insulate merchants from the fault. An earlier
+version of this precedent called merchants unaffected — the same unmeasured
+severity, pointed the other way (forge#89). Severity was never established at
+the entry point in either direction; the grep is what showed it was open.*
 
 ## WCAG 2.1 AA is a requirement, not a later polish pass (was #17)
 
