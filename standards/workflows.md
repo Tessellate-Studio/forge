@@ -594,6 +594,7 @@ cross-references make finding them a lookup rather than a search.
 **Enqueue in the same session that ships the change.** A test written while
 the context is warm has real Steps and a real Expect; one written later from
 the diff has neither.
+
 ### Claiming the device — one lock per handset, in litmus
 
 `dtq` is read-only. It answers _what is pending_; it never answered **is
@@ -662,8 +663,8 @@ still working the phone had its claim quietly ignored out from under it. How
 long a job takes is not evidence that it stopped.
 
 - **Close it when the work is done** — edit the comment so `**Claim:**` reads
-  `RELEASED`, then **minimize it as Resolved** (same GraphQL call as a done
-  item, above). A released claim collapses out of the thread; a live one is
+  `RELEASED`, then **minimize it as Resolved** (GraphQL `minimizeComment`,
+  `classifier: RESOLVED`). A released claim collapses out of the lock issue; a live one is
   the only 🔒 anyone has to scroll past. Do this even when the drain failed,
   stopped early, or found nothing.
 - **Signal liveness, not duration.** Rewrite `**Last touch:**` each time you
@@ -694,16 +695,11 @@ long a job takes is not evidence that it stopped.
     descendants.** "No live background children" is about the agent you
     spawned. Verify against the claim comments; they are the only record that
     survives the process tree.
-  - **Two claims seconds apart are not simultaneous — the earlier
-    `**Claimed at:**` holds the phone**, and the later one releases and stands
+  - **Two claims seconds apart are not simultaneous — the lower comment id
+    holds the phone** (rule 1 above), and the later one releases and stands
     down rather than racing.
 - **It is advisory.** Nothing can stop a raw `adb` command, and it is not
   trying to. It removes the ambiguity, which is the part that actually failed.
-- Claim comments are **not** queue items — the parser skips them, so they
-  don't land in the item counts or the unparseable bucket.
-- Claims written before the heartbeat existed carry only `**Claimed at:**`;
-  they're read against that instead, so nothing already on an issue has to be
-  rewritten.
 
 ## Docs stay lean — shipped items collapse to a one-line tombstone
 
