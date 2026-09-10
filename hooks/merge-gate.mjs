@@ -25,10 +25,24 @@
 // throws during classification is denied. A false deny costs one retry through a
 // sanctioned route; a false allow ships unverified code.
 
+import { execFile } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { promisify } from 'node:util';
 
 const require = createRequire(import.meta.url);
-const { classifyMergeCommand, looksLikeMerge } = require('./lib/merge-gate.js');
+const {
+  classifyMergeCommand,
+  looksLikeMerge,
+  mergeTarget,
+  REASON,
+} = require('./lib/merge-gate.js');
+const { withDeadline } = require('./lib/session-start.js');
+
+const execFileAsync = promisify(execFile);
+
+// The device-test question (forge#104) may take this long. hooks.json gives
+// the whole hook 10s; past this the decision goes to the user, not a guess.
+const DEVICE_DEADLINE_MS = 7_000;
 
 const readStdin = async () => {
   const chunks = [];
@@ -53,6 +67,96 @@ const decide = (permissionDecision, permissionDecisionReason) => {
 };
 
 const allow = () => process.exit(0);
+
+/** owner/name of the checkout's origin remote, or null. Local, no network. */
+const originSlug = async cwd => {
+  try {
+    const { stdout } = await execFileAsync(
+      'git',
+      ['-C', cwd || '.', 'remote', 'get-url', 'origin'],
+      { encoding: 'utf8', timeout: 3_000 }
+    );
+    const match = stdout
+      .trim()
+      .match(/github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+};
+
+/** The PR number a branch/URL selector — or the current branch — names. */
+const prNumberFor = async (selector, repo, cwd) => {
+  const args = selector ? ['pr', 'view', selector, '-R', repo] : ['pr', 'view'];
+  try {
+    const { stdout } = await execFileAsync(
+      'gh',
+      [...args, '--json', 'number', '--jq', '.number'],
+      { cwd: cwd || undefined, encoding: 'utf8', timeout: 5_000 }
+    );
+    return /^\d+$/.test(stdout.trim()) ? stdout.trim() : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Does an open device test still verify the PR this command merges?
+ * Repos without a device-test queue answer `clear` before any network call,
+ * so a forge merge costs one local `git remote` at most.
+ */
+const deviceCheck = async (command, cwd) => {
+  const target = mergeTarget(command);
+  if (!target) {
+    return {
+      status: 'unknown',
+      detail: 'could not tell which PR this command merges',
+    };
+  }
+  const repo = target.repo || (await originSlug(cwd));
+  if (!repo) {
+    return {
+      status: 'unknown',
+      detail: 'could not tell which repo this merge is in',
+    };
+  }
+
+  // Loaded lazily: this hook runs before EVERY shell command, and only an
+  // allowed merge ever needs the device-test modules.
+  const {
+    trackedRepo,
+    fetchVerification,
+  } = require('../skills/device-test/scripts/verification.js');
+  if (!trackedRepo(repo)) {
+    return { status: 'clear', detail: `${repo} has no device-test queue` };
+  }
+  const pr = target.pr || (await prNumberFor(target.selector, repo, cwd));
+  if (!pr) {
+    return {
+      status: 'unknown',
+      detail: `could not tell which ${repo} PR this merges`,
+    };
+  }
+  return { ...(await fetchVerification(repo, pr)), repo, pr };
+};
+
+const DEVICE_REFUSAL = ({ detail, repo, pr }) =>
+  [
+    `Refused: ${detail} — nobody has seen this change pass on a device yet (forge#104).`,
+    '\n\nEither:',
+    '\n  1. Run the test first (/forge:device-test), close it `completed` when it passes, then merge; or',
+    '\n  2. Merge before a device pass ON PURPOSE, and say so on the PR, where it stays:',
+    `\n     gh label create device-unverified -R ${repo} --color d93f0b --description "Merged before its device test passed" || true`,
+    `\n     gh pr edit ${pr} -R ${repo} --add-label device-unverified`,
+    '\n\nShipping first is often right — an OTA-delivered change can only be tested once it ships.',
+    ' What this changes is that it is no longer silent. Do not add the label just to get past this',
+    ' hook: if the change has not been thought about, ask the user.',
+  ].join('');
+
+const DEVICE_UNKNOWN = reason =>
+  `Could not confirm whether an open device test still verifies this PR (${reason}). ` +
+  'The merge gate does not read that as clear (forge#104). Approve to merge anyway, ' +
+  'or deny and check `dtq` first.';
 
 const REFUSAL = detail =>
   [
@@ -129,6 +233,33 @@ const main = async () => {
   }
 
   if (verdict.allow) {
+    // A gated merge waits for CI. Whether anyone has seen it work on a phone is
+    // a second question, asked only of merges that have already passed the
+    // first. safe-merge asks it itself (condition 6), so it is not re-asked.
+    if (verdict.reason === REASON.GATED_WATCH) {
+      const device = await withDeadline(
+        deviceCheck(command, payload?.cwd).catch(err => ({
+          status: 'unknown',
+          detail: err?.message ?? 'lookup failed',
+        })),
+        DEVICE_DEADLINE_MS
+      );
+      if (device === null || device.status === 'unknown') {
+        decide(
+          'ask',
+          DEVICE_UNKNOWN(
+            device === null
+              ? `the lookup took over ${DEVICE_DEADLINE_MS / 1000}s`
+              : device.detail
+          )
+        );
+        return;
+      }
+      if (device.status === 'pending') {
+        decide('deny', DEVICE_REFUSAL(device));
+        return;
+      }
+    }
     allow();
     return;
   }

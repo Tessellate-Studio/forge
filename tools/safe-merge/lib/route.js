@@ -37,6 +37,7 @@ const MAX_LINES_ADDED = 20;
 const DECLARED_CLASSES = new Set(['guard', 'rewrite']);
 const CI_STATUSES = new Set(['pass', 'fail', 'unknown']);
 const COOLDOWN_STATUSES = new Set(['clear', 'active', 'unknown']);
+const DEVICE_STATUSES = new Set(['clear', 'pending', 'unknown']);
 
 const MANIFESTS = new Set([
   'package.json',
@@ -191,6 +192,12 @@ function checkInputIntegrity(state) {
   }
   if (!state.cooldown || !COOLDOWN_STATUSES.has(state.cooldown.status)) {
     missing.push('cooldown');
+  }
+  if (
+    !state.deviceVerification ||
+    !DEVICE_STATUSES.has(state.deviceVerification.status)
+  ) {
+    missing.push('deviceVerification');
   }
   if (!DECLARED_CLASSES.has(state.declaredClass)) {
     missing.push('declaredClass');
@@ -356,6 +363,35 @@ function checkDeclarationAgainstShape(state) {
   };
 }
 
+/**
+ * 6. DEVICE VERIFICATION (forge#104). An open device test naming this PR in
+ *    `**Verifies:**` means nobody has seen the change work on a phone yet.
+ *    An unattended merge is the worst place to ship that silently, so it goes
+ *    to a human — unless the PR already carries `device-unverified`, a choice
+ *    someone made on purpose and left visible on the PR. The observation and
+ *    its rules live in skills/device-test/scripts/verification.js, shared with
+ *    the merge-gate hook, so the two routes cannot disagree about a PR.
+ */
+function checkDeviceVerification(state) {
+  const observed = state.deviceVerification || {};
+  if (observed.status === 'clear') {
+    return {
+      status: 'pass',
+      evidence: observed.detail || 'no open device test verifies this PR',
+    };
+  }
+  if (observed.status === 'pending') {
+    return {
+      status: 'fail',
+      evidence: observed.detail || 'an open device test verifies this PR',
+    };
+  }
+  return {
+    status: 'unknown',
+    evidence: observed.detail || 'device tests could not be read',
+  };
+}
+
 const CONDITIONS = [
   { name: 'input-integrity', evaluate: checkInputIntegrity },
   { name: 'ci-green', evaluate: checkCi },
@@ -363,6 +399,7 @@ const CONDITIONS = [
   { name: 'dependencies', evaluate: checkDependencies },
   { name: 'single-production-file', evaluate: checkSingleProductionFile },
   { name: 'declare-vs-shape', evaluate: checkDeclarationAgainstShape },
+  { name: 'device-verified', evaluate: checkDeviceVerification },
 ];
 
 /**
