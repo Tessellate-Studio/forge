@@ -62,8 +62,8 @@
     "test:safe-merge": "jest --config tools/safe-merge/jest.config.js",
     "test:work-claim": "jest --config tools/work-claim/jest.config.js",
     "test:coverage": "jest --config standards-cli/jest.config.js --coverage && jest --config rubric/jest.config.js --coverage",
-    "lint": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/ hooks/ skills/ --fix",
-    "lint:check": "eslint standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/ hooks/ skills/",
+    "lint": "eslint --ext .js,.mjs standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/ hooks/ skills/ --fix",
+    "lint:check": "eslint --ext .js,.mjs standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/ hooks/ skills/",
     "audit": "npm audit --audit-level=high",
     "validate": "node standards-cli/cli/bp-validate.js",
     "init": "node standards-cli/cli/bp-init.js",
@@ -119,7 +119,7 @@
   },
   "homepage": "https://github.com/Tessellate-Studio/forge#readme",
   "lint-staged": {
-    "*.js": [
+    "*.{js,mjs}": [
       "eslint --fix",
       "prettier --write"
     ]

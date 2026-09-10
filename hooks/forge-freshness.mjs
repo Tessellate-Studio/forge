@@ -93,6 +93,7 @@ const PLUGIN = 'forge';
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // network check at most hourly (worker is detached, so this costs no session latency)
 const BACKOFF_INTERVAL_MS = 24 * 60 * 60 * 1000; // after repeated failures, back off to daily
 const MAX_FAILURES_BEFORE_BACKOFF = 3;
+
 // Hard rate ceiling. NOTHING bypasses this — not a live problem, not a fresh install, not a
 // failure mode nobody has thought of yet. See the "RATE CEILING" note in the header.
 const MIN_SPAWN_INTERVAL_MS = 10 * 60 * 1000;
@@ -125,6 +126,7 @@ function readState() {
 function writeState(patch) {
   try {
     fs.mkdirSync(hooksDir, { recursive: true });
+
     // Merge rather than overwrite: hook mode and worker mode both own different fields.
     fs.writeFileSync(
       statePath,
@@ -157,7 +159,9 @@ function git(args) {
 
 /** Every manifest entry for forge, whatever its scope. Empty when the manifest is unreadable. */
 function installedEntries() {
-  if (!fs.existsSync(manifestPath)) return [];
+  if (!fs.existsSync(manifestPath)) {
+    return [];
+  }
   try {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
     return manifest?.plugins?.[`${PLUGIN}@${MARKETPLACE}`] ?? [];
@@ -167,7 +171,9 @@ function installedEntries() {
 }
 
 function samePath(a, b) {
-  if (!a || !b) return false;
+  if (!a || !b) {
+    return false;
+  }
   const norm = p =>
     path
       .resolve(p)
@@ -203,11 +209,16 @@ function liveInstallPaths(entries) {
   const seen = new Set();
   const out = [];
   for (const e of entries) {
-    if (!e.installPath || !fs.existsSync(e.installPath)) continue;
-    if (e.scope !== 'user' && e.projectPath && !fs.existsSync(e.projectPath))
+    if (!e.installPath || !fs.existsSync(e.installPath)) {
       continue;
+    }
+    if (e.scope !== 'user' && e.projectPath && !fs.existsSync(e.projectPath)) {
+      continue;
+    }
     const key = path.resolve(e.installPath).toLowerCase();
-    if (seen.has(key)) continue;
+    if (seen.has(key)) {
+      continue;
+    }
     seen.add(key);
     out.push(e.installPath);
   }
@@ -250,7 +261,9 @@ function acquireLock() {
     fs.mkdirSync(hooksDir, { recursive: true });
     if (fs.existsSync(lockPath)) {
       const held = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
-      if (Date.now() - (held.ts ?? 0) < LOCK_STALE_MS) return false; // another repair in flight
+      if (Date.now() - (held.ts ?? 0) < LOCK_STALE_MS) {
+        return false; // another repair in flight
+      }
       log(`breaking stale lock from pid ${held.pid}`);
     }
     fs.writeFileSync(
@@ -278,9 +291,12 @@ function resolveClaudeBin() {
     'bin',
     process.platform === 'win32' ? 'claude.exe' : 'claude'
   );
-  if (process.env.CLAUDE_BIN && fs.existsSync(process.env.CLAUDE_BIN))
+  if (process.env.CLAUDE_BIN && fs.existsSync(process.env.CLAUDE_BIN)) {
     return process.env.CLAUDE_BIN;
-  if (fs.existsSync(local)) return local;
+  }
+  if (fs.existsSync(local)) {
+    return local;
+  }
   return 'claude'; // fall back to PATH resolution
 }
 
@@ -336,13 +352,16 @@ function syncStaleInstalls(dirs, known) {
     const stale = known.has(dir)
       ? known.get(dir)
       : cacheBehindClone(dir, digest);
-    if (!stale) continue;
+    if (!stale) {
+      continue;
+    }
     const r = syncTree(clonePath, dir);
     log(
       `synced clone -> ${dir}: ${r.written} written, ${r.removed} removed, ${r.failed.length} failed`
     );
-    for (const f of r.failed.slice(0, 5))
+    for (const f of r.failed.slice(0, 5)) {
       log(`  could not sync ${f.rel}: ${f.error}`);
+    }
     synced.push(dir);
   }
   return synced;
@@ -374,6 +393,7 @@ function repair() {
 
     const behindBefore = behindCount();
     const digestBefore = treeHash(clonePath);
+
     // dir -> stale?  One content hash per directory; reused by step 3 below.
     const verdicts = new Map(
       liveInstallPaths(entries).map(dir => [
@@ -388,6 +408,7 @@ function repair() {
 
     if (!behindBefore && staleBefore.length === 0) {
       log('no drift — nothing to repair');
+
       // Clear a recorded FAILURE once the problem is gone, so it stops being announced.
       // A recorded success is kept: sessions still need to be told to restart.
       const prior = readState().lastRepair;
@@ -486,6 +507,7 @@ function spawnWorker() {
     const child = spawn(process.execPath, [selfPath, '--repair'], {
       detached: true,
       stdio: 'ignore',
+
       // On Windows `detached` allocates a NEW console for the child, which
       // steals foreground focus. The worker has no console output to show
       // (stdio is 'ignore'; it logs to forge-freshness.log), so hide it.
@@ -506,9 +528,13 @@ function spawnWorker() {
  */
 function readSessionId() {
   try {
-    if (process.stdin.isTTY) return null;
+    if (process.stdin.isTTY) {
+      return null;
+    }
     const raw = fs.readFileSync(0, 'utf8');
-    if (!raw.trim()) return null;
+    if (!raw.trim()) {
+      return null;
+    }
     return JSON.parse(raw).session_id ?? null;
   } catch {
     return null;
@@ -518,8 +544,12 @@ function readSessionId() {
 /** Has this session already been told about this specific repair? */
 function shouldReportRepair(state, last, sessionId) {
   const reported = state.reported ?? {};
-  if (reported.repairTs !== last.ts) return true; // a newer repair — nobody has heard yet
-  if (!sessionId) return false; // no identity available; fall back to once-only
+  if (reported.repairTs !== last.ts) {
+    return true;
+  } // a newer repair — nobody has heard yet
+  if (!sessionId) {
+    return false;
+  } // no identity available; fall back to once-only
   return !(reported.sessions ?? []).includes(sessionId);
 }
 
@@ -527,7 +557,9 @@ function recordRepairReported(state, last, sessionId) {
   const reported = state.reported ?? {};
   const sessions =
     reported.repairTs === last.ts ? [...(reported.sessions ?? [])] : [];
-  if (sessionId && !sessions.includes(sessionId)) sessions.push(sessionId);
+  if (sessionId && !sessions.includes(sessionId)) {
+    sessions.push(sessionId);
+  }
   writeState({
     reported: { repairTs: last.ts, sessions: sessions.slice(-50) }, // cap growth
   });
@@ -537,7 +569,9 @@ function hook() {
   const problems = [];
   const notes = [];
   const entry = installedEntry();
-  if (!entry) return { problems, notes }; // forge not installed, or manifest unreadable — stay silent
+  if (!entry) {
+    return { problems, notes };
+  } // forge not installed, or manifest unreadable — stay silent
 
   // Is anything actually wrong RIGHT NOW? Decided before replaying any repair history, so
   // a resolved-but-still-recorded failure is never announced to a healthy session.
@@ -583,7 +617,9 @@ function hook() {
     return { problems, notes };
   }
 
-  if (!cloneExists) return { problems, notes };
+  if (!cloneExists) {
+    return { problems, notes };
+  }
 
   // Whether a repair is even worth spawning is decided BEFORE describing the drift, so the
   // description can say what will actually happen. Announcing "a repair has been queued"
@@ -603,6 +639,7 @@ function hook() {
     liveProblem,
     backedOff,
   });
+
   // Spawn first, describe second. Recording the attempt can fail (read-only state file), and
   // that turns a queued repair into a skipped one — so the outcome has to be known before any
   // message claims it happened.

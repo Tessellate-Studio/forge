@@ -111,6 +111,16 @@ module.exports = {
   // Override rules for test files
   overrides: [
     {
+      // The hook executables are ES modules. Without this they parse as
+      // scripts and fail on `import` — and before `--ext .js,.mjs` was added to
+      // the lint scripts they were never linted at all, because ESLint 8 only
+      // expands a directory to `*.js`. That hid all four hooks, including the
+      // merge gate, behind a green lint:check (forge#115).
+      files: ['**/*.mjs'],
+      parserOptions: { sourceType: 'module' },
+      env: { node: true },
+    },
+    {
       files: ['**/*.test.js', '**/*.spec.js', '**/tests/**/*.js'],
       env: {
         jest: true,
