@@ -44,9 +44,10 @@ when not.
 
 - **Verify:** `gh pr view <n> -R <owner>/<repo> --json state,isDraft,mergeable,autoMergeRequest,statusCheckRollup`
 - **Auto-act:** follow `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` →
-  "Merge on green" exactly. Always the gated watch:
-  `gh pr checks <n> --watch >/dev/null && gh pr merge <n> --squash` — never
-  through a pipe. **Never `--auto`**: `hooks/merge-gate.mjs` denies it, and the
+  "Merge on green" exactly. Always the gated merge:
+  `node "${CLAUDE_PLUGIN_ROOT}/tools/checks-gate/cli.js" --repo <owner>/<repo> --pr <n> && gh pr merge <n> -R <owner>/<repo> --squash`
+  — never through a pipe. A `RESULT: NO CHECKS` or `TIMED OUT` is not red:
+  escalate it with that line, don't report a CI failure. **Never `--auto`**: `hooks/merge-gate.mjs` denies it, and the
   branch-protection probe that used to select between them is pointless — no
   repo in this org has required checks, so `--auto` could never wait. A draft
   PR whose work the transcript shows finished: mark ready first

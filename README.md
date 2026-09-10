@@ -39,6 +39,7 @@ inherits it — interchangeable, inter-usable, self-learning (via reviewed PRs).
 | `standards-cli/`                        | The code-standards SDK: `standards`/`bp` CLI, validators, scaffolding templates.                                                                                               |
 | `rubric/`                               | The rubric SDK: `rubric` CLI + `evaluateFromContext` scoring API (root export).                                                                                                |
 | `tools/brief/`                          | The `brief` CLI: run any command, print a token-cheap summary of its output instead of the raw dump. See `standards/workflows.md`.                                             |
+| `tools/checks-gate/`                    | The merge gate for a requested merge: exit 0 only when a PR's checks are green, from bucket state rather than `gh pr checks --watch`'s exit code. See `standards/workflows.md` → "Merge on green". |
 | `tools/work-claim/`                     | The `wip` CLI: who is working on which issue/PR — post, heartbeat and release the 🚧 work claim, and print the cross-repo board. See `standards/workflows.md` → "Work claims". |
 | `.github/workflows/code-inspection.yml` | **Reusable** advisory inspection gate apps call from their CI.                                                                                                                 |
 
