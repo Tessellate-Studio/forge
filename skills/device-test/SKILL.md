@@ -1,6 +1,6 @@
 ---
 name: device-test
-description: Drains the per-repo "Device test queue" GitHub issues across every Tessellate app with a queue — the three mobile apps (alate, mood-layer, badige) plus loom, whose items are browser-verified rather than adb-driven — AGENT-FIRST, and always runs its actual work in a cost-controlled model:sonnet subagent regardless of the invoking session's model. That subagent IS the drain and never delegates further: it executes every adb-automatable step itself (launch, taps, text entry, screenshots, logcat) and verifies Expect from what it captures; the human is pulled in only for steps marked HUMAN: (gesture feel, camera/biometrics, real accounts, iOS). Sessions enqueue tests per forge standards/workflows.md → "Device-test queue"; this skill fetches every OPEN item, verifies the right build/OTA is on the connected device per app, runs or walks every step of each test and records a per-step outcome (a failed step never skips the independent ones; a step nobody ran reads as not run), and closes items by editing their Status line — filing failures instead of fixing mid-drain, and spinning up a tracked chip for every failure it files so the bug is chased to completion instead of accumulating as an unowned issue (later drains re-check each `❌ failed` item and re-spawn a dead chip). Items that need a fresh native build (no OTA can reach them) get logged as `🔧 needs build` instead of tested — OTA-deliverable changes always test immediately, ad hoc or scheduled, never gated by a build cadence. Self-schedules a daily drain (9am local by default) that skips needs-build items, plus a separate weekly task that dispatches builds only for apps with a needs-build backlog (the one standing exception to the no-automatic-builds CI-spend rule). Use whenever the user asks to "drain the device test queue", "run device tests", "what needs testing on my phone", "device test session", passively "anything waiting on my phone?" — or on a schedule/idle moment whenever a device is adb-connected: agent-only items need no invitation. Empty queues everywhere is a valid, quiet result. Output is a wrap-up table: passed / failed→filed / needs-build→unblock / needs-human, with what unblocks each.
+description: Drains the open `device-test` issues (one GitHub issue per test) across every Tessellate app with a queue — the three mobile apps (alate, mood-layer, badige) plus loom, whose items are browser-verified rather than adb-driven — AGENT-FIRST, and always runs its actual work in a cost-controlled model:sonnet subagent regardless of the invoking session's model. That subagent IS the drain and never delegates further: it executes every adb-automatable step itself (launch, taps, text entry, screenshots, logcat) and verifies Expect from what it captures; the human is pulled in only for steps marked HUMAN: (gesture feel, camera/biometrics, real accounts, iOS). Sessions enqueue tests per forge standards/workflows.md → "Device-test queue"; this skill fetches every OPEN item, verifies the right build/OTA is on the connected device per app, runs or walks every step of each test and records a per-step outcome (a failed step never skips the independent ones; a step nobody ran reads as not run), and closes each passed test issue as completed (a failed one is labelled `failed` and left open) — filing failures instead of fixing mid-drain, and spinning up a tracked chip for every failure it files so the bug is chased to completion instead of accumulating as an unowned issue (later drains re-check each open `failed` test and re-spawn a dead chip). Tests that need a fresh native build (no OTA can reach them) get labelled `needs-build` instead of tested — OTA-deliverable changes always test immediately, ad hoc or scheduled, never gated by a build cadence. Self-schedules a daily drain (9am local by default) that skips needs-build items, plus a separate weekly task that dispatches builds only for apps with a needs-build backlog (the one standing exception to the no-automatic-builds CI-spend rule). Use whenever the user asks to "drain the device test queue", "run device tests", "what needs testing on my phone", "device test session", passively "anything waiting on my phone?" — or on a schedule/idle moment whenever a device is adb-connected: agent-only items need no invitation. Empty queues everywhere is a valid, quiet result. Output is a wrap-up table: passed / failed→filed / needs-build→unblock / needs-human, with what unblocks each.
 ---
 
 # Device test drain
@@ -10,19 +10,19 @@ loom, a real browser — to verify.
 Most of those steps an agent can drive itself over adb; only judgment calls and
 human-only surfaces (gesture feel, camera, real accounts, iOS) need the user —
 and the queue format marks exactly those with `HUMAN:`. Each shipping session
-enqueues a test item (the enqueue rule and the fixed comment format live in
+enqueues a test as its own issue (the enqueue rule and the body fields live in
 [`standards/workflows.md` → "Device-test queue"](../../standards/workflows.md)
 — single home; this skill never restates it). This skill is the other half:
 one sitting, phone in hand, every pending item across every app, no prompting
 per item.
 
-**Just checking what's pending?** Don't spawn an agent to poll the threads —
+**Just checking what's pending?** Don't spawn an agent to poll the repos —
 run `dtq` (or `device-test-status`, same tool) from anywhere with `gh`
 authenticated: `npx github:Tessellate-Studio/forge dtq`, or `dtq` directly if
 forge is installed globally (`npm install -g github:Tessellate-Studio/forge`).
-It's read-only: fetches the same issues/comments this skill drains, parses the
-fixed format below, and prints a table — open items, which need a human vs.
-are agent-runnable, failures with their filed link, and item age. `--watch`
+It's read-only: fetches the same labelled issues this skill drains and prints
+a table — open tests, which need a human vs. are agent-runnable, failed,
+needs-build and parked tests, item age, and who holds each device. `--watch`
 auto-refreshes, `--repo <name>` scopes to one app, `--json` for scripting. See
 `skills/device-test/scripts/status-board.js`.
 
@@ -37,8 +37,9 @@ re-clone — no PATH entry and no PowerShell execution-policy exemption needed.
 This also runs automatically: `hooks/device-test-status.mjs` (a SessionStart
 hook, registered in `hooks/hooks.json`) checks the same queues at the start of
 every session and surfaces a one-line summary when anything is open, failed,
-or malformed — silent when every queue is empty, same as this skill's own
-"quiet is a valid result" rule. Off switch: `FORGE_DEVICE_TEST_STATUS_DISABLE=1`.
+needs-build, parked — or could not be read. It is silent only when every queue
+was read and nothing is pending, same as this skill's own "quiet is a valid
+result" rule; an unreadable queue is not an empty one (forge#135). Off switch: `FORGE_DEVICE_TEST_STATUS_DISABLE=1`.
 
 ## Model — always a cost-controlled subagent
 
@@ -51,7 +52,7 @@ paragraph is addressed to the launcher only, and following it from inside the
 agent produces the nested-agent failure this section exists to prevent.
 
 Draining is high tool-call-volume, low-reasoning work: screenshots, taps,
-`adb` round-trips, Status-line edits. None of that benefits from a frontier
+`adb` round-trips, issue closes and labels. None of that benefits from a frontier
 model, and running it inline would silently bill whatever model the invoking
 session happens to be on for every one of those round-trips — expensive if
 that session is on a premium model, and the same waste again on every
@@ -71,7 +72,7 @@ not delegate again.** The rule above is satisfied by your own existence: the
 moment this file is being read inside a `model: "sonnet"` agent, "must execute
 in a subagent" is already true, and spawning another agent satisfies nothing —
 it only adds a layer. The agent executing Steps 0-4 runs **every** `adb`, `gh`,
-screenshot and Status-line edit itself, and **must not call the Agent tool at
+screenshot and issue update itself, and **must not call the Agent tool at
 all**: not to "delegate the taps", not to fan out one agent per app, not to
 hand off a single item. The one permitted exception is
 `mcp__ccd_session__spawn_task` (Step 3 case 3), which queues a *follow-up*
@@ -92,11 +93,14 @@ sufficient on its own, because the launching session decides to spawn some
 seconds earlier, and a drain that has been spawned but has not claimed yet is
 invisible everywhere you would think to look. So immediately before the Agent
 call — not at the top of the turn, not "we checked a few minutes ago" — fetch
-the claim comments on the queue issues of every app the drain will touch on
-the device (alate, mood-layer, badige; loom carries no claim because it never
-uses adb) and read them fresh. Paginate the fetch, per Step 0.2 — a claim is a
-comment like any other, and on a long queue it is one of the newest, which is
-exactly what an unpaginated read drops. Two rules follow from how this failed:
+the claim comments on the device's own lock issue in `Tessellate-Studio/litmus`
+([#43](https://github.com/Tessellate-Studio/litmus/issues/43) the Pixel,
+[#44](https://github.com/Tessellate-Studio/litmus/issues/44) the iPhone — one
+lock per handset, shared by alate, mood-layer and badige; loom carries no claim
+because it never uses adb) and read them fresh. `dtq` prints the same thing
+under **Devices**, and prints `? UNREADABLE` — a reason to stop, never "free" —
+when it cannot tell. Paginate a hand-rolled fetch: the newest claim is exactly
+what an unpaginated read drops. Two rules follow from how this failed:
 
 - **A completion notification is NOT evidence that a drain stopped.** "No live
   background children" describes the agent you spawned, not its descendants.
@@ -112,13 +116,13 @@ exactly what an unpaginated read drops. Two rules follow from how this failed:
   interleaving destroyed it anyway. **Verify against the claim comments, never
   against the notification.**
 - **A claim that appears seconds after you spawn means you are the newcomer —
-  stand down.** If a `HELD` claim shows up on any queue issue between your
+  stand down.** If a `HELD` claim shows up on the device's lock issue between your
   pre-spawn read and your agent's own Step 0.4 read, someone else got there
   first, however small the gap. Stop the agent, release anything you posted,
   and report who holds the device. Do not race it, and do not reason that two
   claims seconds apart are effectively simultaneous — a 16-second gap is
-  precisely what the collision above was made of. Whoever's claim is
-  **earlier** holds the phone; the later one yields, every time.
+  precisely what the collision above was made of. Whoever's claim has the
+  **lower comment id** holds the phone; the later one yields, every time.
 
 ## Self-scheduled automation — daily drain, weekly build
 
@@ -128,27 +132,28 @@ still exist) keep the queue moving without a manual trigger:
 
 - **`device-test-daily-drain`**, every morning (9:00 AM local unless the user
   picked otherwise) — runs this skill's full workflow, with one restriction:
-  **skip any item whose Status is already `🔧 needs build`** (Step 1, below) —
-  re-checking those daily is wasted API calls when only a fresh build changes
-  the answer. Every other OPEN item, including every OTA-deliverable one,
+  **skip any test labelled `needs-build` or `parked`** (Step 1, below) —
+  re-checking a build-blocked test daily is wasted API calls when only a fresh
+  build changes the answer, and a parked one waits on a decision. Every other
+  open test, including every OTA-deliverable one,
   tests immediately — OTA items are NEVER gated by the weekly build cycle, only
   native-build-blocked ones are. Silent when nothing was pending or nothing
   changed, per this skill's own "quiet is correct" rule — a scheduled task
   that pings every morning regardless of outcome is a nuisance, not a signal.
 - **`device-test-weekly-build`**, once a week — does NOT run this skill's
-  drain workflow. It only checks each app's queue for comments marked `🔧
-  needs build`; for any app with at least one, it dispatches that app's build
+  drain workflow. It only checks each app for open tests labelled
+  `needs-build`; for any app with at least one, it dispatches that app's build
   workflow (`workflow_dispatch` via `gh workflow run`, discovered per-repo with
   `gh workflow list` rather than hardcoded — build workflow names drift), logs
   the dispatch on the affected item(s), and for sideload-friendly apps
   (mood-layer, badige — see the Scope table) auto-installs the finished
-  artifact on a connected device via `adb install -r`, flipping the item back
-  to plain `OPEN` so the next daily drain picks it up. For Play-Store apps
+  artifact on a connected device via `adb install -r`, removing the
+  `needs-build` label so the next daily drain picks it up. For Play-Store apps
   (alate), a fresh CI build still can't be sideloaded onto a Play-installed
   copy (Play App Signing — see alate regression history, e.g. issue #596); the
   weekly task notes the build is ready and needs Play Console promotion, a
   step that stays the user's per the manual-runbook rule. **This task never
-  fires when no app has a `🔧 needs build` item** — see `standards/workflows.md`
+  fires when no app has an open `needs-build` test** — see `standards/workflows.md`
   → "CI spend" for why this is the one standing exception to "no build without
   a human click," and the guardrails that keep it from becoming an
   unconditional timer.
@@ -166,10 +171,10 @@ session in a directory that does not exist — the table used to say
 
 | App | Remote | Local checkout | Delivery today | Queue |
 |---|---|---|---|---|
-| alate | `Tessellate-Studio/alate` | `C:\Users\SAPTAMI\OneDrive\Apps\Tessellate\apps\alate` | Play internal testing + TestFlight; JS fixes as **production-channel OTAs** (from master only) | issue labelled `device-test-queue` |
-| The Mood Layer | `Tessellate-Studio/mood-layer` | `C:\Users\SAPTAMI\OneDrive\Apps\Tessellate\apps\mood-layer` | **Expo Go / local dev server** — no store presence | issue labelled `device-test-queue` |
-| badige | `Tessellate-Studio/badige` | `C:\Users\SAPTAMI\OneDrive\Apps\Tessellate\apps\badige` | **APK sideload / dev build** — no store presence | issue labelled `device-test-queue` |
-| loom (Alate for Brands) | `Tessellate-Studio/loom` | `C:\Users\SAPTAMI\OneDrive\Apps\Tessellate\apps\loom` | **Shopify app + theme app extension** — `shopify app deploy` from `main`; nothing installs on a phone | issue labelled `device-test-queue` ([#88](https://github.com/Tessellate-Studio/loom/issues/88)) |
+| alate | `Tessellate-Studio/alate` | `C:\Users\SAPTAMI\OneDrive\Apps\Tessellate\apps\alate` | Play internal testing + TestFlight; JS fixes as **production-channel OTAs** (from master only) | issues labelled `device-test` |
+| The Mood Layer | `Tessellate-Studio/mood-layer` | `C:\Users\SAPTAMI\OneDrive\Apps\Tessellate\apps\mood-layer` | **Expo Go / local dev server** — no store presence | issues labelled `device-test` |
+| badige | `Tessellate-Studio/badige` | `C:\Users\SAPTAMI\OneDrive\Apps\Tessellate\apps\badige` | **APK sideload / dev build** — no store presence | issues labelled `device-test` |
+| loom (Alate for Brands) | `Tessellate-Studio/loom` | `C:\Users\SAPTAMI\OneDrive\Apps\Tessellate\apps\loom` | **Shopify app + theme app extension** — `shopify app deploy` from `main`; nothing installs on a phone | issues labelled `device-test` |
 
 forge itself is **not** under `apps/` — it lives at
 `C:\Users\SAPTAMI\OneDrive\Apps\Tessellate\tools\forge`. Use that when a chip
@@ -184,9 +189,9 @@ there in the same PR**, or the queue is drainable but invisible on the board.
 
 ### loom is in scope, and it is verified in a browser
 
-loom carries a `device-test-queue` label and an open queue issue
-([loom#88](https://github.com/Tessellate-Studio/loom/issues/88)) with real
-enqueued items, and drains have already been working it. The previous
+loom has real enqueued tests (its legacy queue was
+[loom#88](https://github.com/Tessellate-Studio/loom/issues/88)), and drains
+have already been working it. The previous
 "out of scope: loom is a Shopify web app" line contradicted that, and the cost
 of leaving the contradiction standing is a labelled queue quietly accumulating
 items that no drain is accountable for. It is in scope. A loom item differs
@@ -209,8 +214,9 @@ from a phone item in exactly three ways:
   build. Extension assets do **not** ship on merge, so Step 2's "verify
   delivery before walking items" still applies in full: confirm the deployed
   extension version is the one under test before recording any verdict. No CI
-  workflow performs that deploy, so an item blocked on it is
-  `🔧 needs build — shopify app deploy from loom main`, and the unblock stays
+  workflow performs that deploy, so a test blocked on it is labelled
+  `needs-build` with a comment naming `shopify app deploy from loom main`, and
+  the unblock stays
   the user's per the manual-runbook rule. The weekly build task does not cover
   loom for the same reason: there is nothing to `workflow_dispatch`.
 
@@ -252,8 +258,8 @@ untested for no stated reason.
    A test is pending iff its issue is **open**. `needs-human`, `needs-build`,
    `parked` and `failed` say which kind; the label table lives in
    [`workflows.md` → "Device-test queue"](../../standards/workflows.md).
-   Prefer `dtq` over hand-rolled calls — it reads both media during the
-   migration and you will otherwise miss whichever half you did not query.
+   Prefer `dtq` over hand-rolled calls — it already paginates, refuses an
+   empty response, and names a repo it could not read.
 
 3. **Repair what the board flags — do not just report it.** There is no
    format drift left to repair: state is the issue's own, so a `**Status:**`
@@ -269,8 +275,9 @@ untested for no stated reason.
      own, so nothing runs it, closes it, or notices it is missing.
 
    Say what was repaired in the wrap-up.
-4. **Claim the device before touching it.** The queue issue carries the lock —
-   format and semantics in
+4. **Claim the device before touching it.** The lock is a comment on the
+   device's own issue in `Tessellate-Studio/litmus` (#43 the Pixel, #44 the
+   iPhone), never on an app's queue — format and semantics in
    [`standards/workflows.md` → "Claiming the device"](../../standards/workflows.md).
    Read the claims first:
    - **Held by another session and still alive** → do NOT drive the device.
@@ -283,16 +290,18 @@ untested for no stated reason.
      working holds the phone — and a claim marked `**Waiting on:** human`
      is alive indefinitely.
    - **Free, released, or silent past the window** → post your own claim
-     comment naming your session and the `adb` serial, then proceed. If you
+     comment on that lock issue, naming your session and the `adb` serial,
+     then proceed. If you
      took over a silent claim, say so in yours.
    - **Someone claimed between the launch check and now → you are the
      newcomer; stand down.** The session that spawned you re-read the claims
      immediately before spawning ("Before you spawn a drain", above). If a
-     `HELD` claim exists now that was not there then — or one appears with a
-     `**Claimed at:**` earlier than yours — the other session got there first
-     even if the gap is seconds. Release your claim, don't touch `adb`, and
-     report who holds it. The earlier `**Claimed at:**` wins; ties do not
-     get split by optimism.
+     `HELD` claim exists now that was not there then — or one has a lower
+     comment id than yours — the other session got there first even if the
+     gap is seconds. Release your claim, don't touch `adb`, and report who
+     holds it. The lower comment id wins (`losesRaceTo` in `claim-lib.js`):
+     ids are server-assigned, so both racers reach the same verdict without
+     comparing clocks.
    - **`RELEASED` on every claim does not prove nobody is running.** It proves
      nobody has claimed *yet*. A drain that was spawned moments ago has not
      posted its claim, and a completion notification about a parent agent says
@@ -302,8 +311,8 @@ untested for no stated reason.
      rule above rather than proceeding.
 
    **Then keep the heartbeat up.** Rewrite `**Last touch:**` on your claim
-   every time you drive the device — piggyback it on the PATCHes you're
-   already making per item, not as a separate timer. Before handing the phone
+   every time you drive the device — piggyback it on the issue updates you're
+   already making per test, not as a separate timer. Before handing the phone
    to a human, set `**Waiting on:** human — <what you asked for>`, and clear
    it back to `—` when you resume. Silence is the only thing that releases a
    claim you didn't close yourself.
@@ -336,33 +345,35 @@ untested for no stated reason.
 
 ### Step 1 — Split the work: agent items, human items, and build-blocked items
 
-Classify every item by Status first, then (for OPEN ones) by Steps:
+Classify every open test by its labels first, then (for the rest) by Steps:
 
-- **Already `❌ failed`** — a previous drain filed this one. It is open work,
-  not a closed item, so it gets re-checked every drain: read the linked issue
-  (`gh issue view`). **Closed** → re-run the item now; if it passes, flip it
-  to `✅ done` and minimize it, which is the only thing that actually retires
-  a failure. **Still open** → check whether its recorded `task_id` chip is
+- **Labelled `failed`** — a previous drain filed this one. It is open work,
+  so it gets re-checked every drain: read the bug it links (`gh issue view`).
+  **Bug closed** → re-run the test now; if it passes, remove `failed` and
+  close the test `completed`, which is the only thing that actually retires a
+  failure. **Bug still open** → check whether its recorded `task_id` chip is
   still live (`mcp__ccd_session__dismiss_task` reports an already-started or
   dismissed task); if the chip is gone and the bug is not fixed, **spawn a
-  fresh one** (Step 3 case 3) and record the new id. Either way, carry it into
+  fresh one** (Step 3 case 3) and record the new id in a comment on the
+  test. Either way, carry it into
   the wrap-up with the issue link and its age — a failure that has been open
   across several drains is worth saying out loud, not quietly re-listing.
-- **Already `🔧 needs build`** — a previous drain already determined this item
+- **Labelled `needs-build`** — a previous drain already determined this test
   can't be reached by any OTA and the installed build predates it. On a
   **daily** run, skip these entirely (see "Self-scheduled automation" above —
-  that's the whole point of the marker). On an **ad hoc** run (the user
+  that's the whole point of the label). On an **ad hoc** run (the user
   explicitly asked right now), it's fine to give Step 2's version check one
   more cheap look in case a human already installed a newer build since the
-  marker was written — if it's now satisfiable, drop back to OPEN and treat it
-  like any other item this run; if still blocked, leave it exactly as-is
-  (don't rewrite a comment that's still accurate).
-- **OPEN, agent-runnable** (no `HUMAN:` prefix anywhere — every step is
+  label was added — if it's now satisfiable, remove `needs-build` and treat it
+  like any other test this run; if still blocked, leave it exactly as-is.
+- **Labelled `parked`** — parked by decision. Skip it on every run and list
+  it in the wrap-up; only the user un-parks a test.
+- **Open, agent-runnable** (no `HUMAN:` prefix anywhere — every step is
   adb-executable, or browser-executable on loom): **just run them (Step 2 →
   3), no question asked.** This is the self-maintenance path — the user should
   not be consulted about tests an agent can execute and judge from a
   screenshot/logcat (or a page read and its console).
-- **OPEN, needs-human** (at least one `HUMAN:` step): present one short table —
+- **Open, `needs-human`** (at least one `HUMAN:` step): present one short table —
   app · item · the specific `HUMAN:` steps · Needs runtime · testable-now
   verdict — and walk them with the user if they're present. If the user isn't
   in the loop right now (including every automated daily/weekly run — there is
@@ -386,7 +397,7 @@ under test is in it. Per app, before its first item:
 1. Installed build: `adb shell dumpsys package com.tessellate.alate | grep -E "versionCode|versionName"`.
 2. Compare against each item's **Needs runtime**. Item needs a newer tag build
    than installed AND isn't reachable by any OTA → **needs build** (Step 3
-   case 4, below): write `🔧 needs build` on the item now, don't wait until
+   case 4, below): label the test `needs-build` now, don't wait until
    Step 3 to decide — tell the user which build would unblock it (Play
    internal / `gh run download` + `adb install`) in the wrap-up. Never trigger
    a heavy build yourself from inside a drain — that's the separate weekly
@@ -404,7 +415,7 @@ under test is in it. Per app, before its first item:
    Runtime mismatch (installed build's runtime vs the update's — both
    platforms use `expo.version` under the appVersion policy since alate
    v1.3.1) → **needs build** — under this policy the OTA existing doesn't
-   help; only a new binary bumps `expo.version`. Write `🔧 needs build` same
+   help; only a new binary bumps `expo.version`. Label it `needs-build` same
    as case 2. Never generalize an iOS delivery pass to Android or vice versa —
    the lanes are independent and have diverged for months.
 
@@ -416,8 +427,8 @@ stale against the item's SHA, not a heavy CI build.
 
 **badige** — check the installed package (`adb shell dumpsys package | grep -i
 badige` or its known package id); if the item's SHA is newer than the
-installed APK → **needs build**: write `🔧 needs build — <SHA/workflow that'd
-unblock it>` now, same as alate case 2/3. Don't dispatch the APK workflow
+installed APK → **needs build**: label it `needs-build` and comment the
+SHA/workflow that would unblock it now, same as alate case 2/3. Don't dispatch the APK workflow
 yourself from inside a drain (see Step 2's alate note); the weekly scheduled
 task handles it, or the user can locate an existing artifact with `gh run
 list` and `adb install -r` it themselves before the next daily drain.
@@ -432,8 +443,8 @@ run any backend pre-req the item states (a `curl` against the alate backend is
 agent-runnable — do it first, a failing one explains everything downstream),
 then establish that the deployed extension carries the change. If you cannot
 establish it from anything the repo records, do **not** record a pass —
-`🔧 needs build — shopify app deploy from loom main (confirm in Partner
-Dashboard → extension version history)` and name it in the wrap-up. The
+label it `needs-build`, comment `shopify app deploy from loom main (confirm in
+Partner Dashboard → extension version history)`, and name it in the wrap-up. The
 weekly build task doesn't cover loom: there is no workflow to dispatch, so
 the unblock is the user's.
 
@@ -452,6 +463,39 @@ For each OPEN item on the current app:
    than guessing; if a target can't be located confidently after two
    attempts, downgrade the item to needs-human with a note — never close on
    a guessed tap.
+
+   **Prove the app owns the screen before every input and after every
+   capture.** `adb shell input` drives whatever is in front. On alate
+   (2026-09-08) a crash dropped the app to the launcher, it was read as
+   back-navigation, and the next "measurement" drag moved a launcher icon
+   toward Uninstall — reported as a gesture result. Gate every helper on the
+   resumed activity:
+   ```sh
+   need_app() {
+     cur="$(adb shell dumpsys activity activities | grep -o 'mResumedActivity[^}]*}' | head -1)"
+     case "$cur" in
+       *"$PKG"*) return 0 ;;
+       *) echo "GUARD FAIL — app is NOT foreground: $cur" >&2; return 1 ;;
+     esac
+   }
+   tap()  { need_app || return 1; adb shell input tap "$1" "$2"; }
+   shot() { need_app || return 1; adb exec-out screencap -p > "$1"; need_app || return 1; }
+   ```
+   A step that cannot show the app owned the screen reports no verdict:
+   `⏭ NOT RUN — app not foreground`. **After every gesture, before reading the
+   screen, check for a crash** — `adb logcat -d | grep -c 'FATAL EXCEPTION'`
+   rising means the app died, whatever the screenshot seems to show. One
+   logcat read at the first symptom would have found alate#741's worklet
+   crash three turns sooner (forge#116).
+
+   **Never characterise an artefact you cannot read.** Screenshots can be Read
+   and asserted on; screen recordings cannot — video frames are not decodable
+   here. A recording described as "the card should now visibly lag your
+   finger" was the app crashing to the home screen, which the user saw at a
+   glance. Attach a video with **no claim** about its content — or, better,
+   assert on something readable: `uiautomator dump` bounds before and after a
+   gesture give a number a reviewer can check (the same 900 px drag moved a
+   card 132 px at a deck edge and 320 px toward a card).
    On **loom** the same paragraph applies with the browser tools substituted
    for `adb` — `navigate` / `read_page` / screenshots to drive and capture,
    `read_console_messages` and `read_network_requests` for errors (Scope table
@@ -473,8 +517,7 @@ For each OPEN item on the current app:
    nobody to hand the phone to is `⏭ NOT RUN — needs human`; a step that
    cannot exist on this platform is `⛔ N/A — <why, and where it can run>`.
 
-   Record the outcomes as a per-step table in the note (format and the
-   Status-line rule: standard → "Every step gets its own verdict"), not as
+   Record the outcomes as a per-step table in a comment on the test, not as
    one word for the whole item. A step nobody ran must read as *not run* —
    a reader who sees only `❌ failed → #694` on a five-step item assumes all
    five were tested. *Precedent: alate #562 item 5526181662 — step 1 failed,
@@ -542,32 +585,32 @@ For each OPEN item on the current app:
      what was observed **verbatim** (which entry points reproduced it, how
      many times, and what was NOT reached), the suggested starting point, an
      instruction to fix it via `forge:build-feature` so the result is
-     device-verified rather than eyeballed, and a closing instruction to flip
-     this queue item's Status line + heading glyph and close the issue once
-     it verifies.
-   **Record the returned `task_id` on the queue item**, in the note under the
-   `---` rule, beside the issue link. An unrecorded chip is indistinguishable
+     device-verified rather than eyeballed, and a closing instruction to re-run
+     this test once the fix ships, then remove `failed` and close it
+     `completed`.
+   **Record the returned `task_id` on the test**, in the same comment that
+   links the bug. An unrecorded chip is indistinguishable
    from one that was never spawned, so without it the next drain cannot tell
    whether the failure is being worked or has simply been sitting.
 4. **Needs build** (Step 2 verdict — no OTA can reach it and the installed
-   build predates it) → set `**Status:** 🔧 needs build — <what's needed>`
-   (e.g. "next tag ≥ v1.3.2", "next EAS/APK build off master") — this is the
-   durable log the weekly build task reads (see "Self-scheduled automation"
-   and `standards/workflows.md` → "Device-test queue"). Report the exact
-   unblock in the wrap-up too ("install the v1.2.2 internal-track build") for
-   whoever's reading right now, but the Status line is what makes it survive
-   past this session. Stays un-minimized — it's open work, not a closed item.
+   build predates it) → label the test `needs-build` and comment what's
+   needed (e.g. "next tag ≥ v1.3.2", "next EAS/APK build off master") — the
+   label is the durable log the weekly build task reads (see "Self-scheduled
+   automation" and `standards/workflows.md` → "Device-test queue"). Report the
+   exact unblock in the wrap-up too ("install the v1.2.2 internal-track build")
+   for whoever's reading right now, but the label is what makes it survive
+   past this session. The test stays open — it's open work.
 
 ### Step 4 — Wrap up
 
 **Close the device claim FIRST**, before writing anything up — two actions on
-the claim comment you posted in Step 0 (nothing to close if this was a
-loom-only sitting and you never claimed):
+the claim comment you posted on the litmus lock issue in Step 0 (nothing to
+close if this was a loom-only sitting and you never claimed):
 
 1. edit it so `**Claim:**` reads `RELEASED`;
-2. **minimize it as Resolved** (the same GraphQL `minimizeComment` call used
-   for a passed item), so it collapses out of the thread instead of sitting
-   there looking live.
+2. **minimize it as Resolved** (GraphQL `minimizeComment`, `classifier:
+   RESOLVED`), so it collapses out of the lock issue instead of sitting there
+   looking live.
 
 Do this even when the drain failed, stopped early, or found nothing. Closing
 the claim is the signal that the phone is free — nothing else is. The
@@ -577,14 +620,14 @@ and left its claim standing has told everyone else the device is busy.
 One table: item · app · verdict (✅ agent-verified, with screenshot / ✅ human-
 confirmed / ❌ → filed link + chip `task_id` (or "chip re-spawned", or how
 many drains it has been open) / 🔧 needs build → what would unblock it / 🙋
-needs-human → the specific `HUMAN:` steps waiting). Identify each item by its
-test ID (the comment id) so the user can jump straight to it.
+needs-human → the specific `HUMAN:` steps waiting). Identify each test by its
+issue number (`alate#712`) so the user can jump straight to it.
 Then, per the user's communication style: what they need to do (installs,
-promotions), what got filed for follow-up sessions. If any repo's queue issue
-had drifted from the format, say what you REPAIRED (Step 0.3) — and list only
-the ones you genuinely could not classify, with their URL and what's missing.
-"N comments don't match the format" with nothing done about them is not an
-acceptable wrap-up line. **A daily automated run only speaks up if this table has at
+promotions), what got filed for follow-up sessions. If any test was missing
+body fields or stacked two tests in one body, say what you REPAIRED (Step 0.3)
+— and list only the ones you genuinely could not fix, with their URL and
+what's missing. "N tests need attention" with nothing done about them is not
+an acceptable wrap-up line. **A daily automated run only speaks up if this table has at
 least one non-empty row** (something tested, failed, newly logged as
 needs-build, or a failure whose chip had to be re-spawned) — an empty drain
 stays silent per the "quiet is correct" rule,
@@ -610,7 +653,10 @@ same as the SessionStart hook.
   and it schedules later work rather than doing this drain's.
 - **No enqueueing** — writing queue items is the shipping session's job at
   ship time, when Steps and Expect are still warm (see the standard).
-- **Never deletes or rewrites queue comments** beyond the Status line.
+- **Never deletes a test or rewrites its Steps/Expect** — a drain ticks step
+  boxes, comments, labels and closes. A test whose Expect went stale is
+  amended by the PR that changed the behaviour (standard → "Keeping a test
+  true").
 
 ## When NOT to use
 

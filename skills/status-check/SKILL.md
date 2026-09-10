@@ -106,21 +106,17 @@ when not.
 
 ### (e) Device-test queue items stranded
 
-- **Verify:** fetch the item's comment
-  (`gh api repos/<owner>/<repo>/issues/<n>/comments --paginate` — without
-  `--paginate` you get only the first 30, oldest first, so a recently
-  enqueued item is invisible) and parse the fixed
-  format (`${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Device-test
-  queue"). Is the **PR** merged? Is **Delivery** satisfied (OTA published,
-  build exists)?
-- **Auto-act:** PR unmerged → route it through (b)/(a) first, then edit the
-  comment's `**SHA:**` field from "unmerged — branch <x>" to the merged SHA.
-  Field edits only — never rewrite or delete queue items; Status-line
-  semantics belong to the device-test skill. If the correction needs
-  explaining, append it as a note on that same comment under a `---` rule
-  (standard → "Notes go on the item, under a rule") — never as a free-floating
-  "correction to the comments above", which stops making sense the moment
-  another item is enqueued between them.
+- **Verify:** list the open tests — `dtq --json`, or
+  `gh api "repos/<owner>/<repo>/issues?labels=device-test&state=open&per_page=100" --paginate`
+  (without `--paginate` the newest tests are the ones dropped) — and read each
+  body's fields (`${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Device-test
+  queue"). Is the **Verifies** PR merged? Is **Delivery** satisfied (OTA
+  published, build exists)?
+- **Auto-act:** PR unmerged → route it through (b)/(a) first, then correct the
+  SHA in the test body's `**Verifies:**` line to the merged one. Field edits
+  only — never close, relabel or delete a test; verdicts belong to the
+  device-test skill. If the correction needs explaining, add an ordinary
+  comment on that test's issue.
 - **Escalate when:** Delivery needs an OTA publish or a tag build — heavy
   builds are manual-dispatch only (`${CLAUDE_PLUGIN_ROOT}/standards/workflows.md`
   → "CI spend"). Manual row: "dispatch <workflow> / publish OTA, then the
