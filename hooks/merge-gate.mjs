@@ -18,7 +18,8 @@
 //     rather than a tool call, so the hook never sees it. No exemption needed;
 //     the allow-rule for safe-merge covers only the model INVOKING the CLI.
 //   - It does not judge whether the checks passed. That is safe-merge's job, or
-//     `gh pr checks --watch`'s. This only refuses routes where nobody asked.
+//     checks-gate's (or `gh pr checks --watch`'s). This only refuses routes
+//     where nobody asked.
 //
 // Failure policy is asymmetric, matching the cost of being wrong: unreadable
 // stdin means no command to judge, so allow; a command that is merge-shaped but
@@ -168,9 +169,11 @@ const REFUSAL = detail =>
     '\n     --source <skill> --what "<one line>" [--declare guard|rewrite]',
     '\n   It waits for CI, refuses on a fail, treats zero-checks and still-running as unknown',
     '\n   rather than a pass, and writes the auto-ship ledger row itself.',
-    "\n\n2. A merge you were asked for — gate it on the check command's OWN exit status:",
-    '\n   gh pr checks <n> -R <owner/name> --watch >/dev/null && gh pr merge <n> -R <owner/name> --squash',
-    "\n   Redirect, never pipe: `| tail` hands `&&` tail's exit code, not the checks'.",
+    "\n\n2. A merge you were asked for — gate it on checks-gate's OWN exit status:",
+    '\n   node "${CLAUDE_PLUGIN_ROOT}/tools/checks-gate/cli.js" --repo <owner/name> --pr <n> && gh pr merge <n> -R <owner/name> --squash',
+    '\n   It waits for checks to appear and retries a failed read, so a network blip is not "red".',
+    "\n   Never pipe it: `| tail` hands `&&` tail's exit code, not the checks'.",
+    '\n   (`gh pr checks <n> --watch >/dev/null && …` is still accepted, but reads those as red.)',
     '\n\nIf the merge genuinely should bypass CI, say so and ask the user — do not reshape the ',
     'command to get past this hook.',
   ].join('');
@@ -227,7 +230,7 @@ const main = async () => {
         err?.message ?? 'unknown error'
       }). ` +
         'This fails closed on purpose. Merge through safe-merge, or through ' +
-        '`gh pr checks <n> --watch >/dev/null && gh pr merge <n> --squash`.'
+        '`node "${CLAUDE_PLUGIN_ROOT}/tools/checks-gate/cli.js" --repo <owner/name> --pr <n> && gh pr merge <n> --squash`.'
     );
     return;
   }
@@ -236,7 +239,10 @@ const main = async () => {
     // A gated merge waits for CI. Whether anyone has seen it work on a phone is
     // a second question, asked only of merges that have already passed the
     // first. safe-merge asks it itself (condition 6), so it is not re-asked.
-    if (verdict.reason === REASON.GATED_WATCH) {
+    if (
+      verdict.reason === REASON.GATED_WATCH ||
+      verdict.reason === REASON.GATED_CHECKS
+    ) {
       const device = await withDeadline(
         deviceCheck(command, payload?.cwd).catch(err => ({
           status: 'unknown',
@@ -275,7 +281,7 @@ main().catch(err => {
         err?.message ?? 'unknown error'
       }). ` +
         'It fails closed. Merge through safe-merge, or through ' +
-        '`gh pr checks <n> --watch >/dev/null && gh pr merge <n> --squash`.'
+        '`node "${CLAUDE_PLUGIN_ROOT}/tools/checks-gate/cli.js" --repo <owner/name> --pr <n> && gh pr merge <n> --squash`.'
     );
     return;
   }

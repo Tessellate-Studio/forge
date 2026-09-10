@@ -21,6 +21,7 @@ describe('commands that are not merges at all', () => {
     'gh pr list --state open',
     'npm test',
     'git log --oneline -1 && echo done',
+    'node "${CLAUDE_PLUGIN_ROOT}/tools/checks-gate/cli.js" --repo o/r --pr 131',
 
     // Mentioning the words in prose (a commit message, a heredoc) is not a merge.
     'git commit -m "document why gh pr merge --auto is banned"',
@@ -86,6 +87,58 @@ describe('the two sanctioned routes', () => {
     const cmd =
       'gh pr checks 5 --watch >/dev/null && gh pr merge 5 --squash --delete-branch && git pull';
     expect(allowed(cmd)).toBe(true);
+  });
+});
+
+describe('the checks-gate CLI as the gate', () => {
+  // `gh pr checks --watch` exits non-zero on a network blip or before any check
+  // has registered, so it reads as red when nothing failed (alate#752, #791).
+  // checks-gate polls bucket state instead, and must be accepted in its place.
+  const GATE =
+    'node "${CLAUDE_PLUGIN_ROOT}/tools/checks-gate/cli.js" --repo o/r --pr 131';
+
+  it('allows checks-gate gating the merge with &&', () => {
+    const cmd = `${GATE} && gh pr merge 131 -R o/r --squash`;
+    expect(allowed(cmd)).toBe(true);
+    expect(reasonFor(cmd)).toBe(REASON.GATED_CHECKS);
+  });
+
+  it('allows it by absolute Windows path', () => {
+    const cmd =
+      'node "C:/Users/x/.claude/plugins/cache/tessellate-forge/forge/0.15.0/tools/checks-gate/cli.js" ' +
+      '--repo o/r --pr 1 && gh pr merge 1 -R o/r --squash';
+    expect(allowed(cmd)).toBe(true);
+  });
+
+  it('allows it by an unquoted path', () => {
+    const cmd =
+      'node tools/checks-gate/cli.js --repo o/r --pr 1 && gh pr merge 1 --squash';
+    expect(allowed(cmd)).toBe(true);
+  });
+
+  it('refuses it piped — `&&` would test the pipe, not the gate', () => {
+    const cmd = `${GATE} | tail -3 && gh pr merge 131 --squash`;
+    expect(allowed(cmd)).toBe(false);
+    expect(reasonFor(cmd)).toBe(REASON.UNGATED);
+  });
+
+  it('refuses it AFTER the merge', () => {
+    const cmd = `gh pr merge 131 --squash && ${GATE}`;
+    expect(allowed(cmd)).toBe(false);
+    expect(reasonFor(cmd)).toBe(REASON.UNGATED);
+  });
+
+  it('refuses a command that only mentions the path', () => {
+    const cmd = 'echo "tools/checks-gate/cli.js" && gh pr merge 1 --squash';
+    expect(allowed(cmd)).toBe(false);
+    expect(reasonFor(cmd)).toBe(REASON.UNGATED);
+  });
+
+  it('refuses node running something else that mentions the path', () => {
+    const cmd =
+      'node -e "console.log(\'tools/checks-gate/cli.js\')" && gh pr merge 1 --squash';
+    expect(allowed(cmd)).toBe(false);
+    expect(reasonFor(cmd)).toBe(REASON.UNGATED);
   });
 });
 
