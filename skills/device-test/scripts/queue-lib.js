@@ -340,6 +340,7 @@ module.exports = {
   // Re-exported so callers get the whole queue surface from one require.
   ...require('./claim-lib'),
   checkGhReady,
+  parseGh,
   fetchRepoQueue,
   fetchLabelledIssues,
   fetchDeviceClaims,

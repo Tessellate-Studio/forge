@@ -36,6 +36,10 @@ function at(overrides = {}) {
       detail: 'no revert in 14d',
       ...(overrides.cooldown || {}),
     },
+    deviceVerification:
+      'deviceVerification' in overrides
+        ? overrides.deviceVerification
+        : { status: 'clear', detail: 'no open device test verifies #1' },
     declaredClass:
       'declaredClass' in overrides ? overrides.declaredClass : 'guard',
   });

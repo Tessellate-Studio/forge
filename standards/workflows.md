@@ -161,31 +161,6 @@ identical success message it gives when it genuinely waited. Measured on alate,
 queued. `hooks/merge-gate.mjs` now denies the flag, so the old advice is not
 merely stale — it is unrunnable.
 
-**`--auto` succeeding is not proof it will wait — verify the repo actually has
-a merge gate before trusting it.** GitHub's auto-merge only blocks on required
-status checks; if the repo has none configured, `--auto` reports success and
-merges the PR **immediately**, before CI even starts, with no error to catch —
-the exact same success message as the case where it genuinely waited. A repo
-can have no required checks for reasons that have nothing to do with the
-`gh pr merge` command itself: no branch-protection rule exists yet, or (the
-sharper trap) the plan tier can't have one at all — a private repo on GitHub's
-free tier 403s on `gh api repos/<owner>/<repo>/branches/<default>/protection`
-with "Upgrade to GitHub Pro or make this repository public," meaning `--auto`
-can _never_ gate there no matter how it's configured. **Check this once per
-repo, before the first `--auto` of the session**
-(`gh api repos/<owner>/<repo>/branches/<default-branch>/protection` — a 403/404
-means no gate exists) and route accordingly: if it succeeds and lists
-`required_status_checks`, `--auto` is safe to trust for the rest of the
-session; if it 403s/404s, use the gated watch (below) for **every** merge in
-that repo, not just when `--auto` is rejected — rejection and "succeeds with
-nothing to wait on" look identical from the command's own exit code, so the
-repo-level check is the only way to tell them apart. (Precedent: 2026-08-24,
-alate — five PRs in one session each merged within 1-2 seconds of `--auto`,
-CI still queued/running on the self-hosted runners at merge time; the
-branch-protection check 403'd with the free-tier message above. Every `--auto`
-merge in that repo has been landing before its own CI result exists, silently,
-since the repo's creation — not a one-off.)
-
 **Gate the merge on the check command's OWN exit status — never through a
 pipe.** `gh pr checks N --watch | tail` reports tail's exit code, not the
 checks', so `&& gh pr merge` fires even when a check failed. Same trap:
@@ -215,6 +190,30 @@ Three things worth knowing about it:
 - **It fails closed.** A command that is merge-shaped but cannot be classified
   is denied. A false deny costs one retry through a sanctioned route; a false
   allow ships unverified code.
+
+**[enforced] An open device test that verifies the PR blocks the merge — unless
+the PR says `device-unverified`.** Both routes ask it: the hook, after a gated
+merge has already passed the CI check, and `safe-merge` as condition 6. The
+test→PR edge is the `**Verifies:** #<pr>` line every device test carries
+("Device-test queue", below). If an open test names this PR:
+
+- **Run it first** — `/forge:device-test`, close it `completed` when it passes,
+  then merge; or
+- **ship before a device pass on purpose, and say so on the PR:**
+  `gh pr edit <n> --add-label device-unverified`. Often the right call: an
+  OTA-delivered change can only be tested once it ships. The label stays on the
+  PR as the record that it went out unverified. It is not a way past the hook —
+  if nobody has thought about it, ask the user.
+
+Repos with no device-test queue skip the lookup entirely. A lookup that fails
+or runs out of time is not "clear": the hook hands that merge to the user as a
+question, and `safe-merge` routes it to a human.
+*Why:* alate#670 merged and shipped as a production OTA while its own queue
+entry said none of its four behaviours had been verified on any device; every
+sift swipe on that screen crashed the app for four days (forge#104). "Verified
+on device" was something a PR said about itself. **What this does not catch:**
+a UI PR that never enqueued a test — no edge, nothing to check. The enqueue rule
+still covers that half.
 
 Why it exists at all: every rule above was written down before it was enforced,
 and each was then broken by the same session that could have read it — alate's
@@ -535,6 +534,9 @@ done
   exists to check it. GitHub renders the cross-reference on the PR's timeline
   either way, and every later PR mentioning the test number appears on the
   test's timeline — the traceability the comment medium could never have.
+  **It is also what the merge gate reads:** while this test is open, PR
+  `#<pr>` does not merge unless it carries `device-unverified` ("Merge on
+  green", above).
 - **`**Delivery:**`** — how it reaches the phone: production OTA
   (published/pending) | needs tag build v<x.y.z> | Expo Go | dev build | APK
   sideload.

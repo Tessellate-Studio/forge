@@ -299,4 +299,86 @@ function classifyMergeCommand(command) {
   return gatedWatchVerdict(command, bare);
 }
 
-module.exports = { classifyMergeCommand, looksLikeMerge, REASON };
+/** `gh pr merge` flags that consume the next token as their value. */
+const VALUE_FLAGS = new Set([
+  '-R',
+  '--repo',
+  '-t',
+  '--subject',
+  '-b',
+  '--body',
+  '-F',
+  '--body-file',
+  '-A',
+  '--author-email',
+  '--match-head-commit',
+]);
+
+/**
+ * Which PR a merge command targets, as far as the command itself says.
+ *
+ * Used only AFTER classifyMergeCommand allows a merge, to ask a second question
+ * (forge#104: does an open device test still verify it?). A field left null
+ * means "not stated here" — the caller resolves it from the checkout (origin
+ * remote, current branch) or treats it as unknown. Never a guess.
+ *
+ * @param {string} command
+ * @returns {{repo: string|null, pr: string|null, selector: string|null} | null}
+ *   null = no target this parser can read (a GraphQL mutation)
+ */
+function mergeTarget(command) {
+  const segment = splitOnAnd(String(command || '')).find(s =>
+    looksLikeMerge(s)
+  );
+  if (!segment) {
+    return null;
+  }
+
+  const rest = segment.match(/repos\/([\w.-]+\/[\w.-]+)\/pulls\/(\d+)\/merge/);
+  if (rest) {
+    return { repo: rest[1], pr: rest[2], selector: null };
+  }
+
+  // Tokens come from the quote-blanked form, so a quoted --subject counts as
+  // one token rather than smearing its words into positional arguments.
+  const tokens = stripQuotedSpans(segment).trim().split(/\s+/);
+  const start = tokens.findIndex(
+    (token, i) => token === 'merge' && tokens[i - 1] === 'pr'
+  );
+  if (start === -1) {
+    return null;
+  }
+
+  let repo = null;
+  let selector = null;
+  for (let i = start + 1; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (/^\d*[<>|]/.test(token)) {
+      break; // a redirection (`>/dev/null`, `2>&1`) ends the argument list
+    }
+    if (token === '-R' || token === '--repo') {
+      repo = tokens[i + 1] || null;
+      i += 1;
+    } else if (token.startsWith('--repo=')) {
+      repo = token.slice('--repo='.length);
+    } else if (VALUE_FLAGS.has(token)) {
+      i += 1;
+    } else if (!token.startsWith('-') && token && selector === null) {
+      selector = token;
+    }
+  }
+
+  const url =
+    selector && selector.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
+  if (url) {
+    return { repo: repo || url[1], pr: url[2], selector: null };
+  }
+  const number = selector && selector.match(/^#?(\d+)$/);
+  return {
+    repo,
+    pr: number ? number[1] : null,
+    selector: number ? null : selector,
+  };
+}
+
+module.exports = { classifyMergeCommand, looksLikeMerge, mergeTarget, REASON };

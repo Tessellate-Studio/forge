@@ -36,6 +36,9 @@ const {
   detectDependencyChanges,
   isRevertOfAutoFix,
 } = require('./lib/route');
+const {
+  fetchVerification,
+} = require('../../skills/device-test/scripts/verification');
 
 const EXIT = {
   MERGED: 0,
@@ -402,14 +405,16 @@ async function main() {
   }
 
   const diff = await observeDiff(options.repo, options.pr);
-  const [ci, cooldown] = await Promise.all([
+  const [ci, cooldown, deviceVerification] = await Promise.all([
     observeCi(options.repo, options.pr),
     observeCooldown(options.repo, diff ? diff.productionFiles : []),
+    fetchVerification(options.repo, options.pr),
   ]);
   const verdict = routeFix({
     diff,
     ci,
     cooldown,
+    deviceVerification,
     declaredClass: options.declare,
   });
 
