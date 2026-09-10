@@ -35,6 +35,7 @@ const {
   classifyFiles,
   detectDependencyChanges,
   isRevertOfAutoFix,
+  SOURCE_PROFILES,
 } = require('./lib/route');
 const {
   fetchVerification,
@@ -52,15 +53,15 @@ const COOLDOWN_DAYS = 14;
 const LEDGER_REPO = 'Tessellate-Studio/litmus';
 const LEDGER_PATH = 'auto-ship-log.md';
 
-const REQUIRED_FLAGS = ['repo', 'pr', 'source', 'what', 'declare'];
+const REQUIRED_FLAGS = ['repo', 'pr', 'source', 'what'];
 
 const USAGE = `safe-merge — merge an automated fix only when the checks that exist have passed
 
   --repo     <owner/name>        required
   --pr       <number>            required
-  --source   <skill name>        required  (crash-monitor, status-check, ...)
+  --source   <skill name>        required  (crash-monitor, status-check, security-sweep, roadmap-pulse)
   --what     <one line>          required  (for the auto-ship log)
-  --declare  guard|rewrite       required  (see "declaration ratchet" in lib/route.js)
+  --declare  guard|rewrite       required  except for security-sweep / roadmap-pulse (see SOURCE_PROFILES)
   --why      <free text>         optional  (recorded, never routed on)
   --dry-run                      optional  (print the verdict, merge nothing)
 
@@ -400,7 +401,16 @@ async function main() {
       `missing required flag(s): ${missing.map(flag => `--${flag}`).join(', ')}`
     );
   }
-  if (options.declare !== 'guard' && options.declare !== 'rewrite') {
+
+  // Sources that skip the declaration ratchet (forge#86) may omit --declare.
+  // Everyone else must still declare, and a given value must still be valid.
+  const profile = SOURCE_PROFILES[options.source];
+  const declareOptional = Boolean(
+    profile && profile.skip.includes('declare-vs-shape')
+  );
+  const declareValid =
+    options.declare === 'guard' || options.declare === 'rewrite';
+  if (!declareValid && !(declareOptional && options.declare === undefined)) {
     return usageError('--declare must be exactly "guard" or "rewrite"');
   }
 
@@ -415,6 +425,7 @@ async function main() {
     ci,
     cooldown,
     deviceVerification,
+    source: options.source,
     declaredClass: options.declare,
   });
 

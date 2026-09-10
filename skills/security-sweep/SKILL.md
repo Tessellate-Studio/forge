@@ -181,16 +181,20 @@ These are safe to fix automatically:
    - Create branch: `security-sweep/<app>-deps-<date>`
    - Commit with message: `fix(deps): patch <package> — <CVE or advisory ID>`
    - Open PR with labels: `security-sweep`, `auto-generated`
-   - Merge on the gated watch:
-     `gh pr checks <pr-number> --watch >/dev/null && gh pr merge <pr-number> --squash`.
-     **Never `--auto`** — `hooks/merge-gate.mjs` denies it, and it never
-     waited here anyway (auto-merge blocks only on REQUIRED checks; no repo in
-     this org has any). That matters most in this skill, which runs
-     unattended: a silent instant-merge ships an unreviewed dependency bump
-     with nobody watching. See
+   - Merge through the confidence command — the only automated merge route:
+     `node "${CLAUDE_PLUGIN_ROOT}/tools/safe-merge/cli.js" --repo Tessellate-Studio/<repo> --pr <n> --source security-sweep --what "patch <package> — <CVE or advisory ID>"`.
+     It waits for CI, refuses unless the change is **lockfile-only**, checks
+     the 14-day revert cooldown and open device tests, and writes the
+     auto-ship-log row itself; `--declare` is not needed for this source.
+     Exit `0` merged · `10` refused — leave the PR open, label it
+     `needs-input`, and name the failed condition in the summary · `11`
+     merged but the log row failed — add it by hand. Gate on its own exit
+     status, never through a pipe. **Never `--auto`, and never a bare
+     `gh pr merge`**: this runs unattended, and an unreviewed dependency bump
+     is how alate#203 took `/api/ai` down. (Routed here 2026-09-10, forge#86 —
+     it used to merge on the gated watch, which waited for CI but skipped the
+     cooldown, the device check and the ledger.) See
      `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Merge on green".
-   - Log to `Tessellate-Studio/litmus` auto-ship-log.md:
-     `| <date> | security-sweep | <repo> | PR #<n> | patch <package> | <CVE/advisory> |`
 7. If tests regress vs baseline: **discard the lockfile change** (`git checkout
 -- package-lock.json`) and route to 2b. Do not ship a red suite to patch a
    build-time-only finding — that trade is never worth it.
@@ -444,7 +448,7 @@ origin/master` pins the branch to whatever `origin/master` was _at that
 - Verify "no patch exists" with `npm view <pkg> version` before ever writing it down
 - Count distinct advisories (objects in `via`), not npm's headline number
 - The disposition log is mandatory — it's the audit trail. Use each app's existing file
-- Auto-ship log entries are mandatory for every auto-merged PR
+- Every auto-merge goes through safe-merge, which writes the auto-ship log row — on exit `11`, add the row by hand
 - When in doubt about classification, route to 2b (tracked issue) — false negatives are worse than false positives
 - Clean up every branch this sweep created (Step 6) — and NEVER `git branch -D` one without first confirming its PR reads `MERGED`
 - Restore each checkout to the branch you found it on when the sweep finishes
