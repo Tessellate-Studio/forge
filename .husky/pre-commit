@@ -17,6 +17,17 @@ if [ ! -d node_modules ]; then
   exit 1
 fi
 
-. "$(dirname -- "$0")/_/husky.sh"
+# Source the shim only if it is there (forge#106). node_modules existing does
+# not mean `husky install` ran here: a worktree can get deps from `npm ci
+# --ignore-scripts`, a copied node_modules, or a prepare step that failed, and
+# then `_/husky.sh` is missing while everything `npm run pre-commit` needs is
+# present. Sourcing unconditionally died on ".husky/_/husky.sh: No such file
+# or directory" — the guard passed and the hook still failed on the very file
+# it sources. Same trade-off as commit-msg: without the shim, HUSKY=0 and
+# ~/.huskyrc are not honoured for this hook.
+husky_sh="$(dirname -- "$0")/_/husky.sh"
+if [ -f "$husky_sh" ]; then
+  . "$husky_sh"
+fi
 
 npm run pre-commit

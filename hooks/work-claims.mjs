@@ -67,6 +67,7 @@ async function main() {
       const where = `${r.key}#${item.number}`;
       if (item.claim) {
         const c = item.claim;
+
         // describeClaim is the one place the "who holds it, how idle, what it
         // is parked on" phrasing lives — the `wip` board and this hook must not
         // drift into two different vocabularies for the same state.
