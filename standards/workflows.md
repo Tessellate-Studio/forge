@@ -144,7 +144,7 @@ full list: [`anti-patterns.md` → "Merge on green by default"](./anti-patterns.
 
 ```bash
 # A merge you were asked for:
-gh pr checks <n> --watch >/dev/null && gh pr merge <n> --squash
+node "${CLAUDE_PLUGIN_ROOT}/tools/checks-gate/cli.js" --repo <owner/name> --pr <n> && gh pr merge <n> -R <owner/name> --squash
 
 # An automated merge (crash-monitor, status-check, security-sweep, roadmap-pulse):
 node "${CLAUDE_PLUGIN_ROOT}/tools/safe-merge/cli.js" --repo <owner/name> --pr <n> \
@@ -168,14 +168,26 @@ merely stale — it is unrunnable.
 pipe.** `gh pr checks N --watch | tail` reports tail's exit code, not the
 checks', so `&& gh pr merge` fires even when a check failed. Same trap:
 `npm audit | tail; echo $?`. Correct shape:
-`gh pr checks N --watch >/dev/null && gh pr merge N --squash`. (Precedent:
+`node …/checks-gate/cli.js --repo R --pr N && gh pr merge N --squash`. (Precedent:
 2026-07-25, forge PR #22 merged past a red Security Scan exactly this way.)
+
+**Gate on `checks-gate`, not on `gh pr checks --watch`.** `--watch`'s exit code
+is non-zero for more than a failed check, so it reads as red when nothing
+failed. alate, 2026-09-09/10: alate#752 ran seconds after `gh pr create`, and
+`--watch` failed at once on "no checks reported"; alate#791 had seven checks
+green and `mobile` pending when `--watch` exited on `net/http: TLS handshake
+timeout`. Both failed closed, but each stalled a ship chain and read as a real
+CI failure. `tools/checks-gate/` polls each check's `bucket` instead. It waits
+for checks to appear, retries a failed read, and counts only-`skipping` as
+nothing having run. It confirms green on two reads, and ends on one `RESULT:`
+line: exit 0 green · 10 red · 11 no checks ran (10 min) · 12 timed out (2 h). The
+`--watch` form is still accepted by the hook; it is just the one that cries wolf.
 
 **[enforced] A hook refuses an ungated merge — this is no longer only prose.**
 `hooks/merge-gate.mjs` runs on `PreToolUse` for `Bash` and `PowerShell` and
 denies the tool call outright unless the command is one of the two sanctioned
-routes: the `safe-merge` CLI, or a `gh pr checks … --watch` gated to the merge
-by a single `&&` with its own exit status intact. It also refuses `--auto` and
+routes: the `safe-merge` CLI, or `checks-gate` (or a `gh pr checks … --watch`)
+gated to the merge by a single `&&` with its own exit status intact. It also refuses `--auto` and
 `--admin` unconditionally, and refuses `;` / `||` sequencing, which does not
 gate at all (`||` merges precisely _because_ the check failed). The other two
 spellings of a merge — `gh api --method PUT …/pulls/N/merge` and a GraphQL

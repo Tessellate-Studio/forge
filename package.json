@@ -42,6 +42,8 @@
     "!tools/work-claim/jest.config.js",
     "!tools/safe-merge/__tests__/",
     "!tools/safe-merge/jest.config.js",
+    "!tools/checks-gate/__tests__/",
+    "!tools/checks-gate/jest.config.js",
     ".claude-plugin/"
   ],
   "exports": {
@@ -52,7 +54,7 @@
     "./integrations": "./standards-cli/lib/integrations/index.js"
   },
   "scripts": {
-    "test": "npm run test:standards && npm run test:rubric && npm run test:workflows && npm run test:hooks && npm run test:brief && npm run test:device-test && npm run test:safe-merge && npm run test:work-claim",
+    "test": "npm run test:standards && npm run test:rubric && npm run test:workflows && npm run test:hooks && npm run test:brief && npm run test:device-test && npm run test:safe-merge && npm run test:checks-gate && npm run test:work-claim",
     "test:standards": "jest --config standards-cli/jest.config.js",
     "test:rubric": "jest --config rubric/jest.config.js",
     "test:workflows": "jest --config references/jest.config.js",
@@ -60,6 +62,7 @@
     "test:brief": "jest --config tools/brief/jest.config.js",
     "test:device-test": "jest --config skills/device-test/jest.config.js",
     "test:safe-merge": "jest --config tools/safe-merge/jest.config.js",
+    "test:checks-gate": "jest --config tools/checks-gate/jest.config.js",
     "test:work-claim": "jest --config tools/work-claim/jest.config.js",
     "test:coverage": "jest --config standards-cli/jest.config.js --coverage && jest --config rubric/jest.config.js --coverage",
     "lint": "eslint --ext .js,.mjs standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/ hooks/ skills/ --fix",

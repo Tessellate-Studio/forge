@@ -368,9 +368,10 @@ good PRs and destroys feedback speed, so the bulk of E2E runs _post_-merge.
    `master` directly.
 2. **Open the PR ready (not draft) and arm the merge IMMEDIATELY — this is a
    standing directive, never a question.** Right after `gh pr create`, run
-   the gated watch:
-   `gh pr checks <n> --watch >/dev/null && gh pr merge <n> --squash` — the
-   exit-status gate, never a pipe (`| tail && ...` reports tail's exit code,
+   the gated merge:
+   `node "${CLAUDE_PLUGIN_ROOT}/tools/checks-gate/cli.js" --repo <owner/name> --pr <n> && gh pr merge <n> -R <owner/name> --squash`
+   — the exit-status gate (it waits for checks to register and retries a
+   network blip, which `gh pr checks --watch` reads as red), never a pipe (`| tail && ...` reports tail's exit code,
    not the checks'). **Do not use `--auto`.** `hooks/merge-gate.mjs` denies it
    at `PreToolUse`, so the call fails rather than merging; and it would be
    wrong even unblocked, because auto-merge waits only on REQUIRED checks and

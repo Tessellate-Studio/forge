@@ -31,6 +31,7 @@ const REASON = {
   NOT_A_MERGE: 'not-a-merge',
   SAFE_MERGE: 'safe-merge',
   GATED_WATCH: 'gated-watch',
+  GATED_CHECKS: 'gated-checks',
   UNGATED: 'ungated',
   AUTO_FLAG: 'auto-flag',
   ADMIN_FLAG: 'admin-flag',
@@ -120,6 +121,17 @@ function stripQuotedSpans(text) {
  */
 const CHECKS_WATCH = /\bgh\s+pr\s+checks\b/;
 const WATCH_FLAG = /(?:^|\s)--watch\b/;
+
+/**
+ * `node <path>/checks-gate/cli.js …` — the preferred gate, because `--watch`'s
+ * exit code also reads a network blip or not-yet-registered checks as red
+ * (tools/checks-gate/lib/gate.js). Matched on the RAW segment, since the path
+ * is usually quoted ("${CLAUDE_PLUGIN_ROOT}/…"), but only as node's FIRST
+ * argument: `echo "…checks-gate/cli.js"` or `node -e "…checks-gate/cli.js…"`
+ * mention the path without running the gate.
+ */
+const CHECKS_GATE_INVOCATION =
+  /^node\s+(?:"[^"]*checks-gate[/\\]cli\.js"|'[^']*checks-gate[/\\]cli\.js'|[^\s"'|]*checks-gate[/\\]cli\.js)(?=\s|$)/;
 
 /**
  * Does this command attempt a merge at all? Kept separate so the caller can
@@ -216,6 +228,12 @@ function disqualifyingForm(bare) {
   return null;
 }
 
+const PIPED_GATE_DETAIL =
+  'The check is piped, so `&&` tests the LAST command in the pipe, not the checks — ' +
+  '`| tail` succeeds even when a check is red (forge PR #22 merged past a red Security ' +
+  'Scan this way). Gate on the command itself, never a pipe: `node …/checks-gate/cli.js ' +
+  '--repo R --pr N && …`, or redirect: `gh pr checks N --watch >/dev/null && …`.';
+
 /**
  * The last question, once nothing disqualifying is present: is the merge
  * actually gated on a check whose exit status `&&` will test?
@@ -241,11 +259,14 @@ function gatedWatchVerdict(command, bare) {
     return { allow: false, reason: REASON.UNPARSEABLE };
   }
 
-  const gate = bareSegments
+  const gateIndex = bareSegments
     .slice(0, mergeIndex)
-    .find(segment => CHECKS_WATCH.test(segment) && WATCH_FLAG.test(segment));
-
-  if (!gate) {
+    .findIndex(
+      (segment, index) =>
+        CHECKS_GATE_INVOCATION.test(rawSegments[index]) ||
+        (CHECKS_WATCH.test(segment) && WATCH_FLAG.test(segment))
+    );
+  if (gateIndex === -1) {
     return {
       allow: false,
       reason: REASON.UNGATED,
@@ -258,18 +279,15 @@ function gatedWatchVerdict(command, bare) {
   // status. tail succeeds on a red check, so the merge fires. forge PR #22
   // (2026-07-25) merged past a red Security Scan exactly this way.
   // `>/dev/null` is a redirection, not a pipe, and is the documented form.
-  if (/\|/.test(gate)) {
-    return {
-      allow: false,
-      reason: REASON.UNGATED,
-      detail:
-        'The check is piped, so `&&` tests the LAST command in the pipe, not the checks — ' +
-        '`| tail` succeeds even when a check is red (forge PR #22 merged past a red Security ' +
-        'Scan this way). Redirect instead: `gh pr checks N --watch >/dev/null && …`.',
-    };
+  if (/\|/.test(bareSegments[gateIndex])) {
+    return { allow: false, reason: REASON.UNGATED, detail: PIPED_GATE_DETAIL };
   }
 
-  return { allow: true, reason: REASON.GATED_WATCH };
+  const viaChecksGate = CHECKS_GATE_INVOCATION.test(rawSegments[gateIndex]);
+  return {
+    allow: true,
+    reason: viaChecksGate ? REASON.GATED_CHECKS : REASON.GATED_WATCH,
+  };
 }
 
 /**
