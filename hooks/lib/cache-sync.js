@@ -32,6 +32,14 @@ const path = require('node:path');
 const SKIP = new Set(['.git', 'node_modules', '.in_use']);
 
 /**
+ * Skipped only at the root of either tree. `<clone>/.claude/` is where a session's git
+ * worktree lands when one is started inside the clone — on 2026-09-11 one held ~15,500
+ * files, which would be copied into every cache and would make every cache read as stale.
+ * forge tracks nothing under `.claude/`, so nothing a session loads lives there.
+ */
+const TOP_LEVEL_SKIP = new Set(['.claude']);
+
+/**
  * Every regular file under `dir`, keyed by POSIX-style relative path so the same
  * tree hashes identically on Windows and Linux. Symlinks and anything in SKIP are
  * left out.
@@ -49,7 +57,7 @@ function listFiles(dir) {
       .readdirSync(abs, { withFileTypes: true })
       .sort((left, right) => left.name.localeCompare(right.name, 'en'));
     for (const ent of entries) {
-      if (SKIP.has(ent.name)) {
+      if (SKIP.has(ent.name) || (!rel && TOP_LEVEL_SKIP.has(ent.name))) {
         continue;
       }
       const childAbs = path.join(abs, ent.name);
@@ -175,4 +183,4 @@ function removeExtraneous(want, have, dst, result) {
   }
 }
 
-module.exports = { SKIP, listFiles, treeHash, syncTree };
+module.exports = { SKIP, TOP_LEVEL_SKIP, listFiles, treeHash, syncTree };
