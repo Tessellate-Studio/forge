@@ -124,3 +124,40 @@ describe('syncTree', () => {
     expect(treeHash(fresh)).toBe(treeHash(clone));
   });
 });
+
+describe('a git worktree inside the clone (2026-09-11)', () => {
+  // A session's worktree at <clone>/.claude/worktrees/<name> (~15,500 files, mostly
+  // node_modules) is not plugin content. Syncing it would copy all of it into every cache,
+  // and hashing it would call every cache stale for as long as the worktree exists.
+  const STRAY = '.claude/worktrees/strange-chaplygin-34d6ee';
+
+  it('treeHash ignores a top-level .claude/', () => {
+    const before = treeHash(clone);
+    scaffold(clone, {
+      [`${STRAY}/node_modules/big/index.js`]: 'x',
+      [`${STRAY}/standards/workflows.md`]: 'an older branch',
+    });
+    expect(treeHash(clone)).toBe(before);
+  });
+
+  it("syncTree never copies the clone's top-level .claude/, and leaves the cache's own alone", () => {
+    scaffold(clone, { [`${STRAY}/standards/workflows.md`]: 'an older branch' });
+    scaffold(cache, { '.claude/settings.local.json': '{}' });
+    syncTree(clone, cache);
+    expect(fs.existsSync(path.join(cache, '.claude', 'worktrees'))).toBe(false);
+    expect(
+      fs.existsSync(path.join(cache, '.claude', 'settings.local.json'))
+    ).toBe(true);
+  });
+
+  it('still syncs a .claude/ that is not at the top level', () => {
+    scaffold(clone, { 'skills/plan/.claude/notes.md': 'plugin content' });
+    syncTree(clone, cache);
+    expect(
+      fs.readFileSync(
+        path.join(cache, 'skills', 'plan', '.claude', 'notes.md'),
+        'utf8'
+      )
+    ).toBe('plugin content');
+  });
+});

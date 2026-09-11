@@ -31,6 +31,17 @@
  *                                                            per-worktree install drifts until
  *                                                            something copies into it. This does.
  *
+ *               Before step 2 it looks for git worktrees INSIDE the clone. If there are any,
+ *               it skips `plugin update` and names them in the log and the session message:
+ *               the CLI copies the whole clone, so one there (~15,500 files, 2026-09-11) made
+ *               every extract time out and leave a version dir holding only `.claude/` while
+ *               reporting success. It never removes them — each is somebody's checkout.
+ *               Step 3 skips a top-level `.claude/` for the same reason.
+ *
+ *               After step 3 it checks every live install actually holds the plugin
+ *               (lib/clone-health.js → REQUIRED_PLUGIN_FILES). A half-extracted directory
+ *               exists, so it used to pass; now it is a failed repair, not "repair OK".
+ *
  *               Verifies the result against the filesystem rather than trusting exit codes —
  *               the whole reason this exists is that the CLI reports success while doing nothing.
  *
@@ -86,6 +97,11 @@ import { fileURLToPath } from 'node:url';
 import { shouldSpawnRepair } from './lib/spawn-decision.js';
 import { emit } from './lib/session-start.js';
 import { treeHash, syncTree } from './lib/cache-sync.js';
+import {
+  missingPluginFiles,
+  samePath,
+  strayWorktrees,
+} from './lib/clone-health.js';
 
 const MARKETPLACE = 'tessellate-forge';
 const PLUGIN = 'forge';
@@ -170,18 +186,6 @@ function installedEntries() {
   }
 }
 
-function samePath(a, b) {
-  if (!a || !b) {
-    return false;
-  }
-  const norm = p =>
-    path
-      .resolve(p)
-      .replace(/[\\/]+$/, '')
-      .toLowerCase();
-  return norm(a) === norm(b);
-}
-
 /**
  * The entry THIS session loaded. Claude Code sets CLAUDE_PLUGIN_ROOT to the directory it
  * ran the hook from, which is ground truth for "what is this session reading" — better
@@ -254,6 +258,25 @@ function cloneVersion() {
   }
 }
 
+/**
+ * Git worktrees living inside the clone. `plugin install`/`update` copy the whole clone, so
+ * one of these makes every extract slow enough to time out and leave a half-written version
+ * dir (2026-09-11). Reported, never removed: each one is somebody's checkout.
+ */
+function worktreesInClone() {
+  try {
+    return strayWorktrees(git(['worktree', 'list', '--porcelain']), clonePath);
+  } catch {
+    return [];
+  }
+}
+
+const strayAdvice = paths =>
+  `git worktree(s) inside the marketplace clone: ${paths.join(', ')}. ` +
+  `claude plugin install/update copies the whole clone, so these make it time out or ` +
+  `leave a half-extracted forge while reporting success. Remove each once its work is ` +
+  `merged: git -C "${clonePath}" worktree remove <path>`;
+
 // ---------------------------------------------------------------- worker mode
 
 function acquireLock() {
@@ -310,7 +333,7 @@ function runCli(bin, args) {
 }
 
 /** Steps 1 and 2 of the repair: the CLI's own update path, run only where it can do anything. */
-function runCliUpdates(bin, behind, entry) {
+function runCliUpdates(bin, behind, entry, strays) {
   // Marketplace FIRST. The clone is what goes stale; updating the plugin alone no-ops.
   if (behind) {
     try {
@@ -331,12 +354,23 @@ function runCliUpdates(bin, behind, entry) {
   // the content either way.
   const target = cloneVersion();
   if (target && entry && target !== entry.version) {
-    try {
-      runCli(bin, ['plugin', 'update', `${PLUGIN}@${MARKETPLACE}`]);
-      log(`ran: claude plugin update (${entry.version} -> ${target})`);
-    } catch (err) {
-      log(`plugin update FAILED: ${String(err?.message ?? err).slice(0, 300)}`);
-    }
+    updatePlugin(bin, `${entry.version} -> ${target}`, strays);
+  }
+}
+
+/** Step 2 proper — unless a worktree inside the clone guarantees it half-extracts. */
+function updatePlugin(bin, change, strays) {
+  if (strays.length > 0) {
+    // It would copy the worktree(s) too, time out, and register a version dir that holds
+    // only `.claude/`. Step 3 still brings the existing installs' content current.
+    log(`skipped claude plugin update (${change}) — ${strayAdvice(strays)}`);
+    return;
+  }
+  try {
+    runCli(bin, ['plugin', 'update', `${PLUGIN}@${MARKETPLACE}`]);
+    log(`ran: claude plugin update (${change})`);
+  } catch (err) {
+    log(`plugin update FAILED: ${String(err?.message ?? err).slice(0, 300)}`);
   }
 }
 
@@ -367,6 +401,21 @@ function syncStaleInstalls(dirs, known) {
   return synced;
 }
 
+/**
+ * Live installs that cannot load. Existing is not the same as loadable: an extract that died
+ * early leaves a directory holding only `.claude/` and `.in_use/`, which exists and which
+ * treeHash skips entirely — so neither `existsSync` nor the stale check can see it.
+ */
+function incompleteInstalls(dirs) {
+  return dirs.filter(dir => {
+    const missing = missingPluginFiles(dir);
+    if (missing.length > 0) {
+      log(`incomplete install ${dir}: missing ${missing.join(', ')}`);
+    }
+    return missing.length > 0;
+  });
+}
+
 function repair() {
   if (!acquireLock()) {
     log('repair skipped — another repair holds the lock');
@@ -389,6 +438,11 @@ function repair() {
       // Offline. Do NOT advance the throttle — recording a fetch that never happened
       // would blind the next interval on the strength of a failure.
       log('fetch failed — offline? leaving throttle unadvanced');
+    }
+
+    const strays = worktreesInClone();
+    if (strays.length > 0) {
+      log(strayAdvice(strays));
     }
 
     const behindBefore = behindCount();
@@ -426,7 +480,7 @@ function repair() {
       }) — repairing with ${bin}`
     );
 
-    runCliUpdates(bin, behindBefore, entry);
+    runCliUpdates(bin, behindBefore, entry, strays);
 
     // Re-read: `plugin update` may have added a new version directory to the manifest.
     // The marketplace update may also have moved the clone, so verdicts taken against the
@@ -451,9 +505,12 @@ function repair() {
         : cacheBehindClone(dir, digestAfter)
     );
     const versionAfter = entryAfter?.version ?? 'unknown';
+
+    const incomplete = incompleteInstalls(dirsAfter);
     const healthy =
       !behindAfter &&
       staleAfter.length === 0 &&
+      incomplete.length === 0 &&
       !!entryAfter &&
       fs.existsSync(entryAfter.installPath);
 
@@ -479,10 +536,16 @@ function repair() {
         behindBefore,
         behindAfter,
         synced: synced.length,
+        incomplete,
+        strayWorktrees: strays,
         detail: healthy
           ? `${how}${where}`
           : `repair ran but drift remains (behind=${behindAfter ?? 'n/a'}, ` +
-            `stale installs=${staleAfter.length}) — see ${logPath}`,
+            `stale installs=${staleAfter.length}, incomplete installs=${incomplete.length})` +
+            `${
+              strays.length > 0 ? ` — likely cause: ${strayAdvice(strays)}` : ''
+            }` +
+            ` — see ${logPath}`,
       },
     });
 
@@ -491,7 +554,9 @@ function repair() {
         ? `repair OK: ${how}${where}`
         : `repair INCOMPLETE (failure #${failures}): behind=${
             behindAfter ?? 'n/a'
-          } stale=${staleAfter.join(', ') || 'none'}`
+          } stale=${staleAfter.join(', ') || 'none'} incomplete=${
+            incomplete.join(', ') || 'none'
+          }`
     );
   } catch (err) {
     log(`repair threw: ${String(err?.message ?? err).slice(0, 300)}`);
@@ -568,6 +633,7 @@ function recordRepairReported(state, last, sessionId) {
 function hook() {
   const problems = [];
   const notes = [];
+  const warnings = [];
   const entry = installedEntry();
   if (!entry) {
     return { problems, notes };
@@ -608,17 +674,31 @@ function hook() {
     }
   }
 
+  // Stray worktrees are checked before any early return: the worst moment to miss one is
+  // when the advice below is "reinstall", because a reinstall copies the whole clone —
+  // worktree included — and half-extracts again. A warning, not a problem and not a
+  // liveProblem: the loaded content may be perfectly current, and no repair can remove
+  // somebody's checkout, so it must neither say "stale" nor spawn one.
+  const strays = cloneExists ? worktreesInClone() : [];
+  if (strays.length > 0) {
+    warnings.push(`${strayAdvice(strays)}.`);
+  }
+
   // A registered path that no longer exists breaks skill loading outright.
   if (installMissing) {
+    const removeFirst =
+      strays.length > 0
+        ? ' — but only after removing the git worktree(s) listed below, or it will half-extract again'
+        : '';
     problems.push(
       `forge ${entry.version} is registered at a path that does not exist (${entry.installPath}). ` +
-        `Skills will fail to load. Reinstall: claude plugin install ${PLUGIN}@${MARKETPLACE}`
+        `Skills will fail to load. Reinstall: claude plugin install ${PLUGIN}@${MARKETPLACE}${removeFirst}`
     );
-    return { problems, notes };
+    return { problems, notes, warnings };
   }
 
   if (!cloneExists) {
-    return { problems, notes };
+    return { problems, notes, warnings };
   }
 
   // Whether a repair is even worth spawning is decided BEFORE describing the drift, so the
@@ -690,7 +770,7 @@ function hook() {
     );
   }
 
-  return { problems, notes };
+  return { problems, notes, warnings };
 }
 
 // ---------------------------------------------------------------- entry
@@ -712,30 +792,43 @@ if (process.argv.includes('--repair')) {
   process.exit(0);
 }
 
-let result = { problems: [], notes: [] };
+let result = { problems: [], notes: [], warnings: [] };
 try {
   result = hook();
 } catch {
-  result = { problems: [], notes: [] }; // never let this hook be why a session starts noisily
+  result = { problems: [], notes: [], warnings: [] }; // never let this hook be why a session starts noisily
 }
 
-const { problems, notes } = result;
-if (problems.length > 0 || notes.length > 0) {
-  const lines = [...problems, ...notes].map(p => `- ${p}`).join('\n');
-  const stale = problems.length > 0;
-  await emit({
-    systemMessage: `forge plugin: ${
-      stale ? 'stale' : 'updated in background'
-    }\n${lines}`,
-    context: stale
-      ? `The forge plugin providing this session's standards and skills may be out of date. ` +
-        `Findings:\n${lines}\n` +
-        `An automatic repair runs in the background but CANNOT fix this session — the plugin ` +
-        `is already loaded. Treat forge standards read this session as possibly superseded, ` +
-        `and tell the user before relying on them for a merge, branch, or review decision.`
-      : `A background repair updated the forge plugin. This session still holds the older ` +
-        `copy loaded at startup:\n${lines}`,
-  });
+const { problems, notes, warnings = [] } = result;
+if (problems.length > 0 || notes.length > 0 || warnings.length > 0) {
+  const lines = [...problems, ...warnings, ...notes]
+    .map(p => `- ${p}`)
+    .join('\n');
+
+  // Three different things to say, and only a real problem may call the loaded copy stale:
+  // telling every session to distrust current standards over a stray worktree would teach
+  // people to ignore the alarm that matters.
+  let headline = 'updated in background';
+  let context =
+    `A background repair updated the forge plugin. This session still holds the older ` +
+    `copy loaded at startup:\n${lines}`;
+  if (problems.length > 0) {
+    headline = 'stale';
+    context =
+      `The forge plugin providing this session's standards and skills may be out of date. ` +
+      `Findings:\n${lines}\n` +
+      `An automatic repair runs in the background but CANNOT fix this session — the plugin ` +
+      `is already loaded. Treat forge standards read this session as possibly superseded, ` +
+      `and tell the user before relying on them for a merge, branch, or review decision.`;
+  } else if (warnings.length > 0) {
+    headline = 'action needed';
+    context =
+      `Nothing says the forge plugin this session loaded is out of date, but its next install ` +
+      `or update will break:\n${lines}\n` +
+      `Tell the user. Do not remove a worktree yourself unless they ask — each is somebody's checkout.`;
+  }
+
+  await emit({ systemMessage: `forge plugin: ${headline}\n${lines}`, context });
 }
 
 process.exit(0);
