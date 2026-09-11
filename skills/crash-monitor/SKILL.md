@@ -232,9 +232,13 @@ Body:
 
 Labels: `crash-monitor`, `auto-generated`.
 
-5. **Merge:** run the confidence command above. It waits for CI, refuses if
-   anything is unverified, merges on `0`, and writes the auto-ship-log row
-   itself. Never `gh pr merge --auto` — on these repos that merges instantly,
+5. **Merge:** first wait for CI, as its own step —
+   `node "${CLAUDE_PLUGIN_ROOT}/tools/checks-gate/cli.js" --repo <owner>/<repo> --pr <n>`
+   — because the confidence command does NOT wait: it reads CI once, and a
+   freshly opened PR's checks are still running, which it refuses. Any exit
+   but `0` → leave the PR open and report the `RESULT:` line. On `0`, run the
+   confidence command above. It refuses if anything is unverified, merges on
+   `0`, and writes the auto-ship-log row itself. Never `gh pr merge --auto` — on these repos that merges instantly,
    before CI has run, with a success message identical to the case where it
    genuinely waited (`${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Merge
    on green").

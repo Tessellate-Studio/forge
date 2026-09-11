@@ -76,7 +76,7 @@ describe('security-sweep — lockfile-only, through the same gate (forge#86)', (
     expect(check(verdict, 'dependencies').status).toBe('fail');
   });
 
-  it('still waits for CI', () => {
+  it('still refuses on a red CI', () => {
     const verdict = routeFix(
       state({ ...lockfilePatch, ci: { status: 'fail' } })
     );
