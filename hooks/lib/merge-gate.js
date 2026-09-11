@@ -299,8 +299,10 @@ function classifyMergeCommand(command) {
     return { allow: true, reason: REASON.NOT_A_MERGE };
   }
 
-  // safe-merge is the sanctioned automated route. It waits for CI itself and
-  // has no --auto or --force path, so nothing further needs checking here.
+  // safe-merge is the sanctioned automated route. It reads CI itself and
+  // refuses unless every check has finished green (it does not wait — a check
+  // still running refuses), and has no --auto or --force path, so nothing
+  // further needs checking here.
   if (SAFE_MERGE_INVOCATION.test(command)) {
     return { allow: true, reason: REASON.SAFE_MERGE };
   }

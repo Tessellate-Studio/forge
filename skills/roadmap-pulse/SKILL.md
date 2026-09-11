@@ -257,9 +257,13 @@ Everything built here ships to **test/preview** (OTA to the `preview` channel), 
    - Title: `feat(<scope>): <task title>`
    - Body: standard build-feature output — TLDR, what changed, test coverage, acceptance criteria verdicts
    - Labels: `pulse-auto-build`, `auto-generated`
-4. **Merge through the confidence command:**
+4. **Merge through the confidence command** — after waiting for CI as its own
+   step, because the confidence command reads CI once and a check still
+   running makes it refuse:
+   `node "${CLAUDE_PLUGIN_ROOT}/tools/checks-gate/cli.js" --repo Tessellate-Studio/<repo> --pr <n>`
+   (any exit but `0` → leave the PR open with its `RESULT:` line), then
    `node "${CLAUDE_PLUGIN_ROOT}/tools/safe-merge/cli.js" --repo Tessellate-Studio/<repo> --pr <n> --source roadmap-pulse --what "<task title>"`.
-   It waits for CI and refuses on a revert cooldown, a dependency change, an
+   It refuses on anything not green, a revert cooldown, a dependency change, an
    open device test that verifies the PR, or any sync/persistence/migration
    path. It skips the one-file and declaration checks, which cannot describe
    a feature, and prints them as `skipped`. Exit `10` → leave the PR open for

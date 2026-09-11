@@ -139,14 +139,19 @@ awaiting merge" is not an end state; either the merge is armed or a named
 carve-out applies (outward-facing / hard-to-reverse / explicit user hold —
 full list: [`anti-patterns.md` → "Merge on green by default"](./anti-patterns.md)).
 
-**Merge through a route that actually waits.** There are exactly two, and the
-`[enforced]` hook below refuses everything else:
+**Merge through a route that cannot merge before CI is green.** There are
+exactly two, and the `[enforced]` hook below refuses everything else:
 
 ```bash
 # A merge you were asked for:
 node "${CLAUDE_PLUGIN_ROOT}/tools/checks-gate/cli.js" --repo <owner/name> --pr <n> && gh pr merge <n> -R <owner/name> --squash
 
-# An automated merge (crash-monitor, status-check, security-sweep, roadmap-pulse):
+# An automated merge (crash-monitor, status-check, security-sweep, roadmap-pulse).
+# safe-merge does NOT wait: it reads CI once, and a check still running refuses
+# (exit 10). So wait first, as its OWN step — not chained with &&, because the
+# two tools' exit codes overlap (11 is "no checks ran" in one and "merged, log
+# row missing" in the other). Run safe-merge only when checks-gate exited 0:
+node "${CLAUDE_PLUGIN_ROOT}/tools/checks-gate/cli.js" --repo <owner/name> --pr <n>
 node "${CLAUDE_PLUGIN_ROOT}/tools/safe-merge/cli.js" --repo <owner/name> --pr <n> \
   --source <skill> --what "<one line>" [--declare guard|rewrite]
 # --declare is required except for security-sweep and roadmap-pulse, which skip

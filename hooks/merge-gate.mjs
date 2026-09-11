@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // PreToolUse gate: an agent in a Tessellate repo may merge a PR only through a
-// route that actually waits for CI.
+// route that cannot merge before CI is green.
 //
 // This is the enforcement layer under `standards/workflows.md` → "Merge on
 // green". Everything else forge wires at SessionStart is INFORMATIONAL; this is
@@ -167,8 +167,9 @@ const REFUSAL = detail =>
     '\n\n1. Automated merge (crash-monitor, status-check, security-sweep, roadmap-pulse) — the confidence command:',
     '\n   node "${CLAUDE_PLUGIN_ROOT}/tools/safe-merge/cli.js" --repo <owner/name> --pr <n> \\',
     '\n     --source <skill> --what "<one line>" [--declare guard|rewrite]',
-    '\n   It waits for CI, refuses on a fail, treats zero-checks and still-running as unknown',
-    '\n   rather than a pass, and writes the auto-ship ledger row itself.',
+    '\n   It does NOT wait: it reads CI once and refuses on a fail, zero checks, or a check',
+    '\n   still running. Run checks-gate (below) first, as its own step. It writes the',
+    '\n   auto-ship ledger row itself.',
     "\n\n2. A merge you were asked for — gate it on checks-gate's OWN exit status:",
     '\n   node "${CLAUDE_PLUGIN_ROOT}/tools/checks-gate/cli.js" --repo <owner/name> --pr <n> && gh pr merge <n> -R <owner/name> --squash',
     '\n   It waits for checks to appear and retries a failed read, so a network blip is not "red".',

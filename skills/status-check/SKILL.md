@@ -62,10 +62,14 @@ when not.
 - **Verify:** `gh pr checks <n> -R <owner>/<repo>`; failing log via
   `gh run view <run-id> --log-failed`.
 - **Auto-act:** diagnose from the log plus source; fix on the PR branch; push.
-  Then merge — and merge ONLY — through the confidence command, which waits for
-  CI, refuses anything it cannot verify, and writes the auto-ship-log row
-  itself:
+  Then merge — and merge ONLY — through the confidence command, which refuses
+  anything it cannot verify and writes the auto-ship-log row itself. It does
+  NOT wait for CI: it reads the checks once, and the push just restarted them,
+  so a check still running refuses. Wait first, as its own step, and run the
+  confidence command only when that exits `0` (any other exit: report its
+  `RESULT:` line, don't merge):
   ```
+  node "${CLAUDE_PLUGIN_ROOT}/tools/checks-gate/cli.js" --repo <owner>/<repo> --pr <n>
   node "${CLAUDE_PLUGIN_ROOT}/tools/safe-merge/cli.js" \
     --repo <owner>/<repo> --pr <n> \
     --source status-check --what "<one line>" --declare guard|rewrite
@@ -212,7 +216,8 @@ click through to learn what to do. Clean session → the single line
   when it exits anything other than `0`. Do not re-derive its verdict by
   reading the diff — if you disagree with it, file an issue against it.
 - NEVER gate a merge through a pipe. For an automation-authored fix (b), the
-  confidence command is the ONLY merge path — it waits for CI itself. For this
+  confidence command is the ONLY merge path — and it does not wait for CI, so
+  checks-gate runs first (see (b)). For this
   session's own PRs (a), follow Merge-on-green, and remember that `--auto` on a
   repo with no required checks merges instantly, before CI runs, with a success
   message identical to the case where it genuinely waited.

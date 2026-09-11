@@ -11,7 +11,10 @@
 //    success message it gives when it genuinely waited. On 2026-08-24 five
 //    alate PRs each merged 1-2s after `--auto` with CI still queued. The
 //    checks are not missing — alate runs nine of them and they pass — they
-//    were simply never waited for. This command waits.
+//    were simply never waited for. This command never merges before they
+//    pass — but it does NOT wait for them either. It reads CI once
+//    (observeCi), and a check still running is `unknown`, which refuses
+//    (exit 10). Callers wait first with tools/checks-gate, as its own step.
 //
 // 2. Appending the litmus auto-ship-log row was a CRITICAL-RULES-level prose
 //    obligation, and prose obligations get skipped: 2 of the 4 crash-monitor

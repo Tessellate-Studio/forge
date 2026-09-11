@@ -181,9 +181,13 @@ These are safe to fix automatically:
    - Create branch: `security-sweep/<app>-deps-<date>`
    - Commit with message: `fix(deps): patch <package> — <CVE or advisory ID>`
    - Open PR with labels: `security-sweep`, `auto-generated`
-   - Merge through the confidence command — the only automated merge route:
+   - Wait for CI first, as its own step — the confidence command does not wait,
+     and a check still running makes it refuse:
+     `node "${CLAUDE_PLUGIN_ROOT}/tools/checks-gate/cli.js" --repo Tessellate-Studio/<repo> --pr <n>`.
+     Any exit but `0` → leave the PR open and report its `RESULT:` line.
+   - Then merge through the confidence command — the only automated merge route:
      `node "${CLAUDE_PLUGIN_ROOT}/tools/safe-merge/cli.js" --repo Tessellate-Studio/<repo> --pr <n> --source security-sweep --what "patch <package> — <CVE or advisory ID>"`.
-     It waits for CI, refuses unless the change is **lockfile-only**, checks
+     It reads CI once and refuses on anything not green, refuses unless the change is **lockfile-only**, checks
      the 14-day revert cooldown and open device tests, and writes the
      auto-ship-log row itself; `--declare` is not needed for this source.
      Exit `0` merged · `10` refused — leave the PR open, label it
