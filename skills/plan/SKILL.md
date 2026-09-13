@@ -57,7 +57,7 @@ scale:
    supersede one.
 4. **Claim the item, if this planning came from one.** If the ask is attached
    to a GitHub issue or PR, read the board first (`wip`) and claim it before
-   drafting: `wip claim <repo>#<n>`. Held by a live session already → don't
+   drafting: `wip claim <repo>#<n>` (`wip` not found → run `node "${CLAUDE_PLUGIN_ROOT}/tools/work-claim/cli.js"` with the same arguments; a claim that fails is reported to the user, never skipped). Held by a live session already → don't
    draft a competing doc; resume that session or say what you need. Full rule:
    [`workflows.md` → "Work claims"](${CLAUDE_PLUGIN_ROOT}/standards/workflows.md).
    No issue/PR behind the ask → nothing to claim, carry on.

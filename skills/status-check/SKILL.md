@@ -162,7 +162,7 @@ when not.
 
 ### (i) Work claims this session took and never released
 
-- **Verify:** `wip` for the board, then match its live claims against this
+- **Verify:** `wip` for the board (`wip` not found → run `node "${CLAUDE_PLUGIN_ROOT}/tools/work-claim/cli.js"` with the same arguments; a release or sweep that fails is reported, never skipped), then match its live claims against this
   session's own id (`CLAUDE_CODE_SESSION_ID`) and the items the transcript says
   it worked. A claim is this session's loop if the session id in it is ours.
 - **Auto-act:** work finished, merged, or handed back →

@@ -39,6 +39,11 @@ const { emit, withDeadline, runHook, disabled } = require(path.join(
   'lib',
   'session-start.js'
 ));
+const { resolveWipCommand, wipNotice } = require(path.join(
+  here,
+  'lib',
+  'wip-command.js'
+));
 
 async function main() {
   if (disabled(process.env.FORGE_WORK_CLAIMS_DISABLE)) {
@@ -51,9 +56,22 @@ async function main() {
   // No `gh auth status` preflight either: every fetch already degrades to
   // `{error, items: []}` on an unauthenticated gh, and this hook skips those
   // silently — so the probe bought nothing and cost a full serial round trip.
+  // Resolve how to invoke the CLI BEFORE the network call: a missing `wip`
+  // is worth saying even when the board is empty or unreachable, because it
+  // is exactly what stops this session from ever posting a claim.
+  const pluginRoot = path.join(here, '..');
+  const wip = resolveWipCommand({ pluginRoot });
+  const notice = wipNotice(wip, pluginRoot);
+  const emitNoticeOnly = () =>
+    emit({
+      systemMessage: 'work claims: `wip` not on PATH — using the plugin copy',
+      context: notice,
+    });
+
   const results = await withDeadline(collect(), TIMEOUT_MS);
   if (!results) {
-    return; // timed out — degrade silently, never slow session start
+    // timed out — degrade silently, never slow session start
+    return notice ? emitNoticeOnly() : undefined;
   }
 
   const live = [];
@@ -90,7 +108,8 @@ async function main() {
   });
 
   if (live.length === 0 && stale.length === 0) {
-    return; // nothing in flight anywhere — a valid, quiet result
+    // nothing in flight anywhere — a valid, quiet result
+    return notice ? emitNoticeOnly() : undefined;
   }
 
   const summary = [
@@ -110,17 +129,24 @@ async function main() {
   if (stale.length) {
     sections.push(
       `Claims that have gone silent (holder presumed gone; take over with ` +
-        `\`wip claim <repo>#<n> --force\` and say so):\n${stale.join('\n')}`
+        `\`${wip.command} claim <repo>#<n> --force\` and say so):\n${stale.join(
+          '\n'
+        )}`
     );
+  }
+  if (notice) {
+    sections.push(notice);
   }
 
   await emit({
-    systemMessage: `work claims: ${summary} — run \`wip\` for the board`,
+    systemMessage: `work claims: ${summary} — run ${
+      wip.onPath ? '`wip`' : 'the plugin `wip` CLI'
+    } for the board`,
     context:
       `${sections.join('\n\n')}\n` +
       `This is informational only — don't act on it unless the user asks. ` +
-      `Run \`wip\` for the live board. When THIS session picks up an issue or ` +
-      `PR, claim it: \`wip claim <repo>#<n> --doc <planning doc>\`.`,
+      `Run \`${wip.command}\` for the live board. When THIS session picks up an issue or ` +
+      `PR, claim it: \`${wip.command} claim <repo>#<n> --doc <planning doc>\`.`,
   });
 }
 

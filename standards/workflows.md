@@ -334,6 +334,16 @@ wip sweep                            # drop labels whose claim has died
 wip scan                             # moved recently, but nobody claimed it
 ```
 
+**`wip` not on PATH → run the plugin's own copy with the same arguments:**
+`node "${CLAUDE_PLUGIN_ROOT}/tools/work-claim/cli.js" claim …`. The global
+shim is not reliable: on 2026-09-13 an `npm link` made before the `wip` bin
+existed left `dtq` installed and `wip` missing, every `wip claim` failed with
+"command not found", and alate went its entire history without one claim. The
+SessionStart hook now says so when `wip` cannot be found (and says to run
+`npm ci --omit=dev` in the plugin root if the CLI's deps are missing too). **A
+claim, touch or release that fails is reported to the user — never skipped
+silently.**
+
 That posts:
 
 ```markdown

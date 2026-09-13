@@ -337,7 +337,7 @@ untested for no stated reason.
    ([`standards/workflows.md` → "Work claims"](../../standards/workflows.md)).
    The drain takes 🔒 and needs nothing else to walk the queue — but the moment
    it stops draining and starts *fixing* a tracked issue or PR, that item gets
-   its own `wip claim <repo>#<n>`, released when the fix is handed off. A drain
+   its own `wip claim <repo>#<n>` (`wip` not found → run `node "${CLAUDE_PLUGIN_ROOT}/tools/work-claim/cli.js"` with the same arguments; a claim that fails is reported to the user, never skipped), released when the fix is handed off. A drain
    that files a failure is still draining; a drain that opens a fix PR is
    working an item someone else could pick up.
 6. **All queues empty → say so and stop.** Quiet is a correct result — don't

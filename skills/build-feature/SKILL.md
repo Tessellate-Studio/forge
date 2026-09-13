@@ -65,7 +65,7 @@ exit it by verifying yourself.
    Keep code commits separate from doc commits.
 4. **Claim the item.** If this work is attached to a GitHub issue or PR, read
    the board (`wip`) and claim it before writing code — after the branch exists,
-   so the claim names the right worktree:
+   so the claim names the right worktree (`wip` not found → run `node "${CLAUDE_PLUGIN_ROOT}/tools/work-claim/cli.js"` with the same arguments; a claim that fails is reported to the user, never skipped):
    `wip claim <repo>#<n> --doc <planning doc, once Step 0 item 8 has one>`. Already
    held by a live session → stop and resume that session (the claim carries its
    `claude --resume` id and worktree path) rather than building a second copy of

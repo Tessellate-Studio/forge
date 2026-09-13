@@ -111,7 +111,7 @@ For each revert of a crash-monitor PR:
 ## Step 1.7: Claim what you are about to work
 
 For every GitHub issue that survives triage and that you are going to
-investigate or fix, claim it before touching code: `wip claim <repo>#<n>`. An
+investigate or fix, claim it before touching code: `wip claim <repo>#<n>` (`wip` not found → run `node "${CLAUDE_PLUGIN_ROOT}/tools/work-claim/cli.js"` with the same arguments; a claim that fails is reported to the user, never skipped). An
 auto-fix cycle is exactly the case that surprises another agent — the issue
 looks untouched right up to the moment a PR appears against it. Held by a live
 session already → skip that issue this cycle and say so in the report; do not
