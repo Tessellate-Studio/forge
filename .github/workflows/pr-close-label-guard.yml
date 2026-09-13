@@ -1,0 +1,92 @@
+# Guard — no open question dies with a closed PR
+# ---------------------------------------------------------------------------
+# WHY THIS EXISTS. `needs-input` means "blocked on a human decision". On
+# 2026-09-13 three merged alate PRs still carried it. A closed PR
+# is not a place anyone looks for pending work, so the label was either a lie
+# (the decision had been made) or a lost task. Same day, three more sat on
+# merged PRs across the org (forge#110, loom#136, loom#141) — all answered,
+# but the gate gaps they exposed were untracked until forge#146.
+# First shipped in Tessellate-Studio/alate (PR #873); same logic here.
+#
+# THE RULE (owner, 2026-09-13): if an action is genuinely still needed, the PR
+# should not be closed — or the pending part moves to its own item. So when a
+# PR closes with `needs-input` still on it, this job:
+#   1. opens a follow-up issue carrying `needs-input`, linked to the PR, so
+#      the question stays visible where open work is listed;
+#   2. strips `needs-input` from the closed PR and comments the link.
+# If the question was in fact answered at merge, close the follow-up — one
+# click, versus a decision silently lost.
+#
+# `gate-blocked` is also dropped on close if present — it means nothing once
+# there is no PR left to gate.
+#
+# `claimed` is NOT touched here — `wip sweep` owns that label's lifecycle
+# (forge standards/workflows.md → "Work claims").
+#
+# SAFETY. pull_request_target with no checkout: no PR code runs. The PR title
+# only ever travels through the API as data, never through a shell.
+# ---------------------------------------------------------------------------
+
+name: Guard — labels on closed PRs
+
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  guard:
+    # Public repo: GitHub-hosted, never self-hosted (a public repo must not
+    # reach the org runners), and hosted minutes are free for public repos.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Move an open question off a closed PR
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+            const labels = pr.labels.map((l) => l.name);
+            const outcome = pr.merged ? 'merged' : 'closed without merging';
+
+            const drop = (name) =>
+              github.rest.issues.removeLabel({ owner, repo, issue_number: pr.number, name })
+                .catch((e) => core.info(`#${pr.number}: '${name}' already gone (${e.status}).`));
+
+            if (labels.includes('gate-blocked')) {
+              await drop('gate-blocked');
+              core.info(`#${pr.number}: dropped 'gate-blocked'.`);
+            }
+
+            if (!labels.includes('needs-input')) {
+              core.info(`#${pr.number}: no 'needs-input' — nothing to move.`);
+              return;
+            }
+
+            const { data: issue } = await github.rest.issues.create({
+              owner, repo,
+              title: `Decide: open question left on #${pr.number} — ${pr.title}`.slice(0, 250),
+              labels: ['needs-input'],
+              body: [
+                `#${pr.number} was ${outcome} while still labelled \`needs-input\`, so its open`,
+                'question moves here instead of disappearing with the PR.',
+                '',
+                `Read the **Decision Needed** part of #${pr.number} (description or latest comments).`,
+                '- **Still pending** → decide here, or turn it into the task it needs.',
+                '- **Already answered by the merge** → close this issue with a one-line note.',
+                '',
+                '<sub>Opened by `.github/workflows/pr-close-label-guard.yml`.</sub>',
+              ].join('\n'),
+            });
+
+            await drop('needs-input');
+            await github.rest.issues.createComment({
+              owner, repo, issue_number: pr.number,
+              body: `Removed \`needs-input\` — this PR is ${outcome}. The open question now lives in #${issue.number}.`,
+            });
+            core.warning(`#${pr.number}: 'needs-input' moved to #${issue.number}.`);
