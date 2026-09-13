@@ -298,7 +298,7 @@ These can't wait for the bi-weekly cycle — the notification ensures the user s
 A sweep that only _files_ issues has nothing to claim — filing is not working.
 But the moment this sweep starts actually fixing an issue that already exists
 (a tracked vuln from a prior cycle, an open Dependabot alert someone else may
-also be on), claim it first: `wip claim <repo>#<n>`, and
+also be on), claim it first: `wip claim <repo>#<n>` (`wip` not found → run `node "${CLAUDE_PLUGIN_ROOT}/tools/work-claim/cli.js"` with the same arguments; a claim that fails is reported to the user, never skipped), and
 `wip release <repo>#<n>` when the PR is open or the finding is dismissed. Held
 by a live session → leave it and note it in the disposition table rather than
 opening a second bump PR against the same package. Full rule:

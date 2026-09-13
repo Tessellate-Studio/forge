@@ -147,6 +147,8 @@ wip release alate#562                      # done, stalled, or handed back
 wip sweep                                  # backstop: drop labels whose claim died
 ```
 
+No `wip` on PATH (a stale `npm link` is the usual cause) → `node "${CLAUDE_PLUGIN_ROOT}/tools/work-claim/cli.js"` takes the same arguments; the SessionStart hook says so when it happens.
+
 `hooks/work-claims.mjs` puts live claims in front of every new session, which is
 where the collision actually happens — by the time an agent has read the code it
 has already decided to work the item. Quiet when nothing is claimed. Rules and
