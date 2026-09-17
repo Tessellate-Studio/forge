@@ -1,6 +1,6 @@
 ---
 name: security-sweep
-description: Dependency vulnerability sweep for a Tessellate app — runs npm audit + Dependabot, separates real advisories from chain noise, classifies each finding runtime-vs-build-time by dependency path, auto-fixes only what is semver-safe AND keeps the test suite green, files tracked issues for the rest, dismisses accepted residuals with written reasons, and maintains the app's dated disposition log. Also triages Dependabot's OWN bump PRs — not just its alerts — merging safe green minor/patch bumps and putting majors `on hold` with a 14-day review-by date. Use whenever the user asks to "run a security sweep", "check dependabot", "triage the vulns", "are we exposed", "npm audit this", "why do we have 50 vulnerabilities", "clear the dependabot PR backlog", or wants dependency alerts or PRs cleaned up or explained. Also fires on passive cues like "the alert list is getting noisy" or "should I care about these CVEs". The full audit (Steps 1-6) self-schedules weekly via the scheduled-tasks MCP; the lighter Dependabot-PR triage (Step 0) self-schedules daily. Both also fire manually. Output is a per-app disposition table (fixed / tracked / accepted-and-dismissed) with distinct-advisory counts, plus PRs, issues, and log entries.
+description: Dependency vulnerability sweep for a Tessellate app — runs npm audit + Dependabot, separates real advisories from chain noise, classifies each finding runtime-vs-build-time by dependency path, auto-fixes only what is semver-safe AND keeps the test suite green, files tracked issues for the rest, dismisses accepted residuals with written reasons, and maintains the app's dated disposition log. Also triages Dependabot's OWN bump PRs — not just its alerts — merging safe green minor/patch bumps, closing majors and broken bumps that address no open security alert, and reserving `on hold` (14-day review-by date) for the rare major that actually does. Use whenever the user asks to "run a security sweep", "check dependabot", "triage the vulns", "are we exposed", "npm audit this", "why do we have 50 vulnerabilities", "clear the dependabot PR backlog", or wants dependency alerts or PRs cleaned up or explained. Also fires on passive cues like "the alert list is getting noisy" or "should I care about these CVEs". The full audit (Steps 1-6) self-schedules weekly via the scheduled-tasks MCP; the lighter Dependabot-PR triage (Step 0) self-schedules daily. Both also fire manually. Output is a per-app disposition table (fixed / tracked / accepted-and-dismissed) with distinct-advisory counts, plus PRs, issues, and log entries.
 ---
 
 # Security sweep
@@ -67,22 +67,43 @@ fix PRs and dismisses alerts but never looked at the bot's own PR queue.
 
 For each app in scope:
 
-1. **List open Dependabot-authored PRs.**
+1. **List open Dependabot-authored PRs, and open Dependabot alerts in the same call.**
    ```bash
    gh pr list -R <owner/repo> --author "app/dependabot" --state open \
      --json number,title,createdAt,labels
+   gh api repos/<owner/repo>/dependabot/alerts --paginate \
+     -q '.[] | select(.state=="open") | .dependency.package.name'
    ```
-2. **Classify each by update type**, not by label — a repo's own
-   `dependabot-auto-merge.yml`/`Dependabot triage` workflow may label safe ones
-   `ready-to-merge` (alate, mood-layer have this; badige and litmus don't), but
-   don't rely on the label alone:
-   - **Minor/patch, single package or a `*-minor-patch` group** → merge
-     candidate.
+   The alert list is what Step 2 below uses to tell a security-driven bump
+   from routine noise — fetch it every run, don't assume it's unchanged from
+   last time.
+2. **Classify each PR by update type AND by necessity** — two separate axes,
+   both matter:
+   - **Minor/patch, single package or a `*-minor-patch` group, and the package
+     carries no open alert** → merge candidate (Step 4).
    - **Major version anywhere in the PR** (including a `github-actions` group
-     bump like `actions/setup-java` 5→6) → **always** goes to `on hold`,
-     regardless of the upstream changelog claiming no user-facing break. This
-     mirrors the standing rule against `npm audit fix --force` — a major is a
-     deliberate migration, never a routine merge.
+     bump like `actions/setup-java` 5→6) — check the package against the open
+     alert list from Step 1:
+     - **No open alert against it** → this is a routine version-update, not a
+       security fix. **Close it** (Step 5) rather than hold it indefinitely —
+       don't rely on a repo's own `ready-to-merge` label here, since that
+       workflow flags majors for review, not for holding forever. Real
+       precedent (2026-09-17): 11 of 14 open Dependabot PRs across
+       alate/badige/mood-layer were majors with zero corresponding security
+       alert — pure "keep dependencies current" noise that had been
+       accumulating under `on hold` for no reason. All 11 closed the same day
+       this rule was written.
+     - **An open alert names this exact package** → genuinely security-driven.
+       This is the one case that still goes to `on hold` (Step 6) rather than
+       closing — a human upgrade decision is actually owed here. Never
+       auto-merge a security-driven major either; the label is what keeps it
+       visible instead of getting lost in the alert list.
+   - A **minor/patch PR whose CI fails for a real reason** (not staleness —
+     see Step 3) is also a close candidate if the package carries no open
+     alert: a broken, non-security bump has nothing forcing it to stay open.
+     State the real failure in the close comment (see Step 5) rather than
+     silently closing — the next person bumping that package benefits from
+     knowing what broke.
 3. **Before trusting a minor/patch PR's CI, check how stale it is:**
    ```bash
    gh api repos/<owner/repo>/compare/<base>...<head> -q '{ahead_by,behind_by}'
@@ -100,15 +121,34 @@ For each app in scope:
 4. **Merge confirmed-safe candidates** through the sanctioned merge route (see
    Step 2a below) — `checks-gate` then merge, or `safe-merge` — never a bare
    `gh pr merge`.
-5. **Everything else gets `on hold`**, per `forge/standards/workflows.md` →
-   "On hold": add the label (create it first if the repo doesn't have it yet —
-   see that section for the exact command), and comment with a **14-day
-   review-by date** and the concrete reason (major bump / real CI failure /
-   whatever applies) — not just "on hold", state why, so the next daily pass
-   doesn't have to re-derive it.
-6. **Check existing `on hold` Dependabot PRs against their stated date.** Past
-   due → comment a reminder (and push-notify if the underlying finding is a
-   security one, not just a routine major bump); never auto-close or
+5. **Close non-necessary PRs** — the default for a major or a broken bump with
+   no open alert behind it, per Step 2. Comment before closing, every time —
+   a silent close is indistinguishable from GitHub losing the PR:
+   ```bash
+   gh pr comment <n> -R <owner/repo> --body "Closing — not a security necessity. \
+   Checked \`gh api repos/<owner/repo>/dependabot/alerts\`: no open alert against \
+   <package>. Routine version-update, not a security-driven one — security-sweep \
+   closes those rather than holding them indefinitely (forge/standards/workflows.md \
+   -> 'On hold'). If <package> picks up a real advisory later, a fresh PR gets \
+   properly scoped triage. Reopen by hand if the upgrade is wanted for non-security \
+   reasons."
+   gh pr close <n> -R <owner/repo>
+   ```
+   Don't worry about Dependabot re-opening an identical PR — if it does, this
+   step closes it again on the next daily run with the same reasoning, which
+   costs nothing. If a NEW advisory later targets that package, Dependabot
+   opens a distinct, properly-labeled security PR that this step's alert
+   cross-check will catch and route to `on hold` instead.
+6. **`on hold` is now reserved for the one case that still needs a human**:
+   a major bump where Step 2's alert cross-check found a real open advisory
+   against that exact package. Add the label (create it first if the repo
+   doesn't have it yet — see `workflows.md` → "On hold" for the exact
+   command), and comment with a **14-day review-by date** plus which alert
+   this addresses — not just "on hold", name the advisory.
+7. **Check existing `on hold` Dependabot PRs against their stated date.** Past
+   due → comment a reminder and push-notify (every remaining `on hold` case is
+   security-relevant by construction now, per Step 2 — there's no "routine
+   major" sub-case left to exempt from notifying); never auto-close or
    force-merge an expired hold — see the escalation rule in the workflows.md
    section. A hold with no date in its comment (pre-dates this step) gets one
    backfilled at 14 days from the day it's first noticed, not treated as
