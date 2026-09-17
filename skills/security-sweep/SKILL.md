@@ -1,6 +1,6 @@
 ---
 name: security-sweep
-description: Dependency vulnerability sweep for a Tessellate app — runs npm audit + Dependabot, separates real advisories from chain noise, classifies each finding runtime-vs-build-time by dependency path, auto-fixes only what is semver-safe AND keeps the test suite green, files tracked issues for the rest, dismisses accepted residuals with written reasons, and maintains the app's dated disposition log. Use whenever the user asks to "run a security sweep", "check dependabot", "triage the vulns", "are we exposed", "npm audit this", "why do we have 50 vulnerabilities", or wants dependency alerts cleaned up or explained. Also fires on passive cues like "the alert list is getting noisy" or "should I care about these CVEs". Self-schedules bi-weekly via the scheduled-tasks MCP; also fires manually. Output is a per-app disposition table (fixed / tracked / accepted-and-dismissed) with distinct-advisory counts, plus PRs, issues, and log entries.
+description: Dependency vulnerability sweep for a Tessellate app — runs npm audit + Dependabot, separates real advisories from chain noise, classifies each finding runtime-vs-build-time by dependency path, auto-fixes only what is semver-safe AND keeps the test suite green, files tracked issues for the rest, dismisses accepted residuals with written reasons, and maintains the app's dated disposition log. Also triages Dependabot's OWN bump PRs — not just its alerts — merging safe green minor/patch bumps and putting majors `on hold` with a 14-day review-by date. Use whenever the user asks to "run a security sweep", "check dependabot", "triage the vulns", "are we exposed", "npm audit this", "why do we have 50 vulnerabilities", "clear the dependabot PR backlog", or wants dependency alerts or PRs cleaned up or explained. Also fires on passive cues like "the alert list is getting noisy" or "should I care about these CVEs". The full audit (Steps 1-6) self-schedules weekly via the scheduled-tasks MCP; the lighter Dependabot-PR triage (Step 0) self-schedules daily. Both also fire manually. Output is a per-app disposition table (fixed / tracked / accepted-and-dismissed) with distinct-advisory counts, plus PRs, issues, and log entries.
 ---
 
 # Security sweep
@@ -54,6 +54,69 @@ repo root has its own lockfile too, but it audits clean; don't stop there.
   four to five branches a cycle; unless they are cleaned up they accumulate in
   every repo indefinitely.
 - alate's `master` is the default branch; so is badige's. litmus uses `main`.
+
+## Step 0: Dependabot PR triage (daily)
+
+Steps 1-6 below are the heavy weekly pass — `npm audit`, disposition logs, the
+full triage policy. This step is the lightweight one that runs **daily**: it
+does not open a worktree, does not run `npm audit`, and does not touch the
+disposition log. Its only job is to keep Dependabot's own auto-generated bump
+PRs from accumulating unreviewed — a real backlog observed 2026-09-17: 14 open
+across three apps, several 16 days old, because the weekly sweep opens its own
+fix PRs and dismisses alerts but never looked at the bot's own PR queue.
+
+For each app in scope:
+
+1. **List open Dependabot-authored PRs.**
+   ```bash
+   gh pr list -R <owner/repo> --author "app/dependabot" --state open \
+     --json number,title,createdAt,labels
+   ```
+2. **Classify each by update type**, not by label — a repo's own
+   `dependabot-auto-merge.yml`/`Dependabot triage` workflow may label safe ones
+   `ready-to-merge` (alate, mood-layer have this; badige and litmus don't), but
+   don't rely on the label alone:
+   - **Minor/patch, single package or a `*-minor-patch` group** → merge
+     candidate.
+   - **Major version anywhere in the PR** (including a `github-actions` group
+     bump like `actions/setup-java` 5→6) → **always** goes to `on hold`,
+     regardless of the upstream changelog claiming no user-facing break. This
+     mirrors the standing rule against `npm audit fix --force` — a major is a
+     deliberate migration, never a routine merge.
+3. **Before trusting a minor/patch PR's CI, check how stale it is:**
+   ```bash
+   gh api repos/<owner/repo>/compare/<base>...<head> -q '{ahead_by,behind_by}'
+   ```
+   More than a few days old is often tens of commits behind, and a red check
+   on a stale branch is not evidence of anything. Comment `@dependabot rebase`
+   and re-check rather than trusting a stale red — but if it is **still red
+   after rebasing against current base**, that is real: don't merge, and don't
+   write it off as staleness twice. (Real example, 2026-09-17: badige's
+   `@supabase/supabase-js` 2.93.3→2.116.0 was labeled a minor/patch group bump,
+   rebased clean, and still broke 3 test suites — `@supabase/realtime-js`'s
+   newer WebSocket handling needs Node 22+ or an explicit transport, which that
+   CI runner didn't have. A "minor" semver bump is not a safety guarantee by
+   itself; the test suite is what actually verifies it.)
+4. **Merge confirmed-safe candidates** through the sanctioned merge route (see
+   Step 2a below) — `checks-gate` then merge, or `safe-merge` — never a bare
+   `gh pr merge`.
+5. **Everything else gets `on hold`**, per `forge/standards/workflows.md` →
+   "On hold": add the label (create it first if the repo doesn't have it yet —
+   see that section for the exact command), and comment with a **14-day
+   review-by date** and the concrete reason (major bump / real CI failure /
+   whatever applies) — not just "on hold", state why, so the next daily pass
+   doesn't have to re-derive it.
+6. **Check existing `on hold` Dependabot PRs against their stated date.** Past
+   due → comment a reminder (and push-notify if the underlying finding is a
+   security one, not just a routine major bump); never auto-close or
+   force-merge an expired hold — see the escalation rule in the workflows.md
+   section. A hold with no date in its comment (pre-dates this step) gets one
+   backfilled at 14 days from the day it's first noticed, not treated as
+   already expired.
+
+This step does not open branches or commit anything itself — it only acts on
+PRs Dependabot already opened. Steps 1-6 (the full weekly audit) are
+unaffected and still run on their own schedule.
 
 ## Step 1: Scan for vulnerabilities
 

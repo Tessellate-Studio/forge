@@ -405,6 +405,51 @@ section**: three PRs in this series changed what the tool does and left this
 text describing the old behaviour, which is how the sweep rule here came to
 describe a bug that had already been fixed.
 
+## On hold — a label with an expiry, not a parking lot
+
+`on hold` marks a PR or issue that is deliberately not being actioned right
+now — a major dependency bump needing real review, a change parked while a
+project is on hold, anything where "not now" is a decision rather than
+neglect. It is **not** a substitute for closing something, and it is not
+indefinite: every `on hold` label carries a **14-day review-by date**, stated
+in the comment that applies it, matching the `wip` staleness window so the two
+conventions read the same way.
+
+```bash
+gh pr edit <n> -R <owner/repo> --add-label "on hold"
+gh pr comment <n> -R <owner/repo> --body "**On hold** — <why>. Review by **<date, +14 days>**."
+```
+
+Create the label per-repo if it does not exist yet (color `bfd4f2`, same
+description everywhere):
+
+```bash
+gh label create "on hold" -R <owner/repo> --color bfd4f2 \
+  --description "Deliberately paused — needs review by a set date, not indefinite (see forge/standards/workflows.md)"
+```
+
+**The rules:**
+
+- **State the review-by date in the comment, every time.** A label with no
+  date attached is indistinguishable from an abandoned PR six months later —
+  the date is what lets a future sweep (or a human) tell the two apart without
+  re-deriving context.
+- **Past the date, escalate — don't auto-close.** An automation that finds an
+  expired `on hold` item posts a reminder (and push-notifies if it is a
+  security finding) rather than closing or merging it; closing silently loses
+  the reasoning, and force-merging a deliberately-paused major is worse than
+  leaving it open. A human decides the outcome; the automation's job is to
+  make sure the expiry is seen, not to act past it.
+- **Not a rename of `wip`'s stale-claim window.** A `wip` claim going quiet
+  means the *session* went away; `on hold` means a human or a routine decided
+  *the work itself* should wait. The two can overlap (a claimed item can also
+  be on hold) but answer different questions — don't conflate them in tooling
+  or in conversation.
+- **security-sweep is the first automated consumer** — see
+  `skills/security-sweep/SKILL.md` → "Dependabot PR triage (daily)". Any other
+  skill adopting the label follows the same contract: state a date, escalate
+  on expiry, never silently close.
+
 ## Shared planning docs — check who else is in the file
 
 Worktree isolation does not prevent two branches editing the same doc or the same
