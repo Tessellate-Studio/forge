@@ -445,10 +445,24 @@ gh label create "on hold" -R <owner/repo> --color bfd4f2 \
   *the work itself* should wait. The two can overlap (a claimed item can also
   be on hold) but answer different questions — don't conflate them in tooling
   or in conversation.
+- **`on hold` is for genuine necessities, not a default parking spot.** Before
+  labeling something on hold, ask whether it needs to exist at all — if there
+  is no real reason it must eventually merge (nothing it fixes, nothing it
+  unblocks), closing it beats holding it. A backlog of `on hold` items that
+  will never actually be actioned is the same clutter the label was meant to
+  prevent, one indirection later. Real precedent (2026-09-17): the first
+  version of this rule put every major Dependabot bump `on hold`; a same-day
+  review found 11 of 14 had no open security alert behind them at all — pure
+  version-update noise with nothing forcing a decision — and all 11 were
+  closed instead. `on hold` earns its keep only on the item where a human
+  genuinely has a call to make later.
 - **security-sweep is the first automated consumer** — see
-  `skills/security-sweep/SKILL.md` → "Dependabot PR triage (daily)". Any other
-  skill adopting the label follows the same contract: state a date, escalate
-  on expiry, never silently close.
+  `skills/security-sweep/SKILL.md` → "Dependabot PR triage (daily)", which
+  closes non-necessary Dependabot PRs by default and reserves `on hold` for
+  the one case that still needs a human: a major bump addressing a real open
+  advisory. Any other skill adopting the label follows the same contract:
+  close what isn't a necessity, state a date on what's genuinely held,
+  escalate on expiry, never silently close something already on hold.
 
 ## Shared planning docs — check who else is in the file
 
