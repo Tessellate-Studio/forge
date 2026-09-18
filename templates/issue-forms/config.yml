@@ -1,0 +1,3 @@
+# Canonical copy — synced from Tessellate-Studio/forge templates/issue-forms/
+# (RFD 004 §3). Hides the blank-issue option for non-maintainers.
+blank_issues_enabled: false

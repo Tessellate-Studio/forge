@@ -1,0 +1,43 @@
+# Canonical copy — synced from Tessellate-Studio/forge templates/issue-forms/
+# by tools/issue-forms (RFD 004 §3). Edit it in forge, never in the app repo:
+# the code-inspection check fails when this file drifts from forge's.
+name: Feature
+description: New functionality or a user-visible improvement
+labels: ["feature", "needs-triage"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What
+      description: "The work, written so a session can start it cold."
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why / evidence
+      description: "User impact and where it came from — regression row, Sentry id, user quote, decision doc."
+    validations:
+      required: true
+  - type: textarea
+    id: done-when
+    attributes:
+      label: Done when
+      description: "Acceptance criteria, ideally a runnable **Verify:** block. The honesty pass executes it."
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context & history
+      description: "Rejected options, links, memory/decisions docs, briefs. Progress notes go in comments, not here."
+  - type: dropdown
+    id: effort
+    attributes:
+      label: Effort (person-days)
+      options: ["unknown", "0.5", "1", "2", "3", "5", "10", "20"]
+  - type: dropdown
+    id: reach
+    attributes:
+      label: Reach
+      options: ["unknown", "1 — just me / internal", "10 — early testers", "100 — all current users", "1000 — future users at scale"]

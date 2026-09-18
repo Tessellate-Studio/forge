@@ -250,7 +250,7 @@ apart, and forms cannot turn a dropdown into a label anyway.
 |---|---|---|---|
 | Priority | `P0` blocker / pre-launch · `P1` do next · `P2` soon · `P3` later | **Exactly one** on every open work issue | Human or filing skill. The pulse *proposes* changes and changes one only on a manual run with the owner's yes |
 | Type | `bug` · `feature` · `chore` · `refactor` (`enhancement` read as an alias of `feature`) | At most one | Issue form / filing skill |
-| Area | Per repo, existing sets (loom: `admin-ui api sdk extension supabase infra`; mood-layer: `data ui circle notifications build infra`) | 0–n | Optional. alate and badige have none and get none (owner, Q6); the migration never infers area |
+| Area | loom and alate only (owner, Q6 as amended 2026-09-19). loom keeps `admin-ui api sdk extension supabase infra`; alate gets `mobile backend scraper fit-engine infra` (in bootstrap's config, created when alate is bootstrapped in step 5). mood-layer's existing `data ui circle notifications build infra` are left untouched, not deleted, and never applied by the migration; badige has none | 0–n | Optional. The migration infers area for loom and alate only, on a confident path/keyword match, else leaves it empty |
 | Lifecycle | `decision` · `on hold` · `claimed` · `needs-input` · `needs-triage` | See matrix | See matrix |
 | Queues (separate systems) | `device-test` + `needs-human` `needs-build` `parked` `failed` (RFD-003) | n/a | device-test skill |
 | Provenance | `migrated-from-backlog` (new), `crash-monitor`, `security-sweep`, `auto-generated`, `ci-failure`, `ops-alert` | n/a | The filing tool |
@@ -553,7 +553,7 @@ The parser reads `BACKLOG.md` at a pinned SHA (`git show <sha>:BACKLOG.md`), plu
 Other inferred fields: **type** (`bug` when the title/body leads with broken /
 fails / crash / regression / 5xx; `chore` for CI / deps / lint / runner /
 timeouts; `refactor` for consolidate / retire / collapse / extract; else
-`feature`; low confidence → none, left to triage). **area** is never inferred (Q6). **`needs-input`** when the body contains `Blocking on the user`,
+`feature`; low confidence → none, left to triage). **area** is inferred for loom and alate only, and only on a confident path/keyword match; otherwise it is left empty (Q6 as amended 2026-09-19). **`needs-input`** when the body contains `Blocking on the user`,
 `Decision needed`, `Needs input`, or `Owner: user (decision)`. **Target repo** is
 the repo named in an entry that says it lives elsewhere ("(alate repo)",
 "loom#", "litmus fast-follow"). Owner ruling (Q5): file in the repo that owns the code; an entry that names no other repo stays in the source repo.
@@ -917,5 +917,5 @@ All resolved by the owner on 2026-09-18.
 - [x] **Q3. Resolved-with-residual entries.** File an issue for the residual only (device checks still route to the device-test queue).
 - [x] **Q4. Old priority labels.** P labels only. Relabel loom's and mood-layer's `critical`/`high`/`medium`/`low` issues to P0–P3, then delete those four labels in each repo. 4b (watcher notification settings) dropped; pacing in §5.6 stands.
 - [x] **Q5. Cross-repo entries.** File each in the repo that owns the code; litmus and tessellate-pages get the label set via bootstrap.
-- [x] **Q6. Area labels.** None added. alate and badige get no area labels; loom's and mood-layer's existing ones stay. The migration never infers area.
+- [x] **Q6. Area labels.** *Amended by the owner 2026-09-19, superseding the 2026-09-18 "none added" ruling:* area labels are used **only in loom and alate**. loom keeps its existing set (`admin-ui api sdk extension supabase infra`); alate gets a new set, `mobile backend scraper fit-engine infra`, defined in `tools/labels` and created when alate is bootstrapped (step 5). mood-layer and badige get no area labels from the migration; mood-layer's existing area labels are left untouched, not deleted. The migration infers area only for loom and alate, and only on a confident path/keyword match; otherwise it leaves area empty.
 - [x] **Q7. alate's `docs/backlog/` briefs.** Move to `docs/briefs/` and link each from its issue.

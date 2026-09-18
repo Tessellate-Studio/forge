@@ -11,7 +11,9 @@
     "dtq": "skills/device-test/scripts/status-board.js",
     "brief": "tools/brief/cli/index.js",
     "wip": "tools/work-claim/cli.js",
-    "forge-wip": "tools/work-claim/cli.js"
+    "forge-wip": "tools/work-claim/cli.js",
+    "wi": "tools/work-item/cli.js",
+    "forge-issue-forms": "tools/issue-forms/cli.js"
   },
   "files": [
     "index.js",
@@ -28,6 +30,13 @@
     "hooks/",
     "tools/work-claim/lib/",
     "tools/work-claim/cli.js",
+    "tools/issue-forms/lib/",
+    "tools/issue-forms/cli.js",
+    "templates/issue-forms/",
+    "tools/work-item/lib/",
+    "tools/work-item/cli.js",
+    "tools/labels/lib/",
+    "tools/backlog-migrate/lib/",
     "standards/",
     "skills/",
     "references/",
@@ -44,6 +53,16 @@
     "!tools/safe-merge/jest.config.js",
     "!tools/checks-gate/__tests__/",
     "!tools/checks-gate/jest.config.js",
+    "!tools/backlog-migrate/__tests__/",
+    "!tools/backlog-migrate/__fixtures__/",
+    "!tools/backlog-migrate/test-support/",
+    "!tools/backlog-migrate/jest.config.js",
+    "!tools/labels/__tests__/",
+    "!tools/labels/jest.config.js",
+    "!tools/work-item/__tests__/",
+    "!tools/work-item/jest.config.js",
+    "!tools/issue-forms/__tests__/",
+    "!tools/issue-forms/jest.config.js",
     ".claude-plugin/"
   ],
   "exports": {
@@ -54,7 +73,7 @@
     "./integrations": "./standards-cli/lib/integrations/index.js"
   },
   "scripts": {
-    "test": "npm run test:standards && npm run test:rubric && npm run test:workflows && npm run test:hooks && npm run test:brief && npm run test:device-test && npm run test:safe-merge && npm run test:checks-gate && npm run test:work-claim",
+    "test": "npm run test:standards && npm run test:rubric && npm run test:workflows && npm run test:hooks && npm run test:brief && npm run test:device-test && npm run test:safe-merge && npm run test:checks-gate && npm run test:work-claim && npm run test:backlog-migrate && npm run test:labels && npm run test:work-item && npm run test:issue-forms",
     "test:standards": "jest --config standards-cli/jest.config.js",
     "test:rubric": "jest --config rubric/jest.config.js",
     "test:workflows": "jest --config references/jest.config.js",
@@ -64,6 +83,10 @@
     "test:safe-merge": "jest --config tools/safe-merge/jest.config.js",
     "test:checks-gate": "jest --config tools/checks-gate/jest.config.js",
     "test:work-claim": "jest --config tools/work-claim/jest.config.js",
+    "test:backlog-migrate": "jest --config tools/backlog-migrate/jest.config.js",
+    "test:labels": "jest --config tools/labels/jest.config.js",
+    "test:work-item": "jest --config tools/work-item/jest.config.js",
+    "test:issue-forms": "jest --config tools/issue-forms/jest.config.js",
     "test:coverage": "jest --config standards-cli/jest.config.js --coverage && jest --config rubric/jest.config.js --coverage",
     "lint": "eslint --ext .js,.mjs standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/ hooks/ skills/ --fix",
     "lint:check": "eslint --ext .js,.mjs standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/ hooks/ skills/",
