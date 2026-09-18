@@ -2,6 +2,10 @@
 
 This file is the operational manual for Step 1 of the roadmap-pulse workflow — the honesty pass that strips ghost items before Step 2 onward operates on them. Read this before you start verifying — the gotchas matter, especially around squash merges.
 
+**Two modes.** A migrated repo's open work is GitHub issues (**issue mode**); a repo that hasn't migrated off `BACKLOG.md` yet is read from the file (**file mode**). SKILL.md → "Per-repo mode" says how to tell. Each failure mode below gives the issue-mode check first, then the file-mode check. The probes themselves (git log, `branch --contains`, live-system queries) are the same in both; what changes is where the claim is read and where the verdict is written.
+
+**Unattended runs only comment and report.** In issue mode a cron run never closes or reopens an issue and never changes a P label; it posts or edits one evidence comment and lists the item in the Artifact. The state change happens on a manual run, on the owner's word.
+
 ## Table of contents
 
 1. [Already-shipped-but-still-open](#already-shipped-but-still-open)
@@ -9,16 +13,40 @@ This file is the operational manual for Step 1 of the roadmap-pulse workflow —
 3. [Deferred-without-source](#deferred-without-source)
 4. [Stale file:line citations](#stale-fileline-citations)
 5. [**Still-pending-but-actually-live**](#still-pending-but-actually-live)
-6. [Cross-failure cases](#cross-failure-cases)
-7. [MCP-tracked state (Supabase, etc.)](#mcp-tracked-state)
+6. [Label hygiene (issue mode)](#label-hygiene-issue-mode)
+7. [Cross-failure cases](#cross-failure-cases)
+8. [MCP-tracked state (Supabase, etc.)](#mcp-tracked-state)
 
 ---
 
 ## Already-shipped-but-still-open
 
+### Issue mode
+
+**Symptom:** the issue is open, but the work merged. Usually the PR said "fixes the thing" without the `Closes #N` keyword, or it closed a sibling issue.
+
+**The check, cheapest first:**
+
+1. `closedByPullRequestsReferences` (already in the list call) holds a **merged** PR while the issue is still open. That PR said `Closes #N` and merged, but the close didn't happen (merged into a non-default branch, for example).
+2. The issue timeline has a `cross-referenced` event from a merged PR:
+   ```bash
+   gh api "repos/<owner>/<repo>/issues/<N>/timeline" --paginate \
+     --jq '.[] | select(.event=="cross-referenced") | .source.issue | select(.pull_request.merged_at != null) | "\(.number) \(.title) \(.pull_request.merged_at)"'
+   ```
+   A cross-reference is only a mention. Read the PR before concluding it shipped the item.
+3. The file-mode grep below, with a distinctive phrase from the issue title, against `origin/<default>`.
+
+**Verdict:** post **one** evidence comment, starting with the hidden marker `<!-- pulse:suspect-shipped -->` (template: `rewrite-patterns.md` → "Issue rewrites"). On later runs, **edit** that comment rather than posting another. Find it with
+`gh api "repos/<owner>/<repo>/issues/<N>/comments" --paginate --jq '.[] | select(.body | contains("pulse:suspect-shipped")) | .id'`
+and update it with `gh api -X PATCH "repos/<owner>/<repo>/issues/comments/<id>" -f body=…`. List the issue under "Close these?". A manual run closes it with `--reason completed` and the proof, once the owner confirms.
+
+The partial-implementation gotcha below applies in full: if only part shipped, the verdict is "narrow the body", not "close".
+
+### File mode
+
 **Symptom:** Entry sits in `## P0`, `## P1`, etc. with no strikethrough. The work has actually shipped — usually as a squash-merge under a different SHA than the entry might naively predict.
 
-**Why this happens:** Most repos use squash-merge for PRs. The entry's underlying work gets a fresh squash SHA, and the BACKLOG entry never gets updated because the PR description didn't include "closes BACKLOG entry X."
+**Why this happens:** Most repos use squash-merge for PRs. The entry's underlying work gets a fresh squash SHA, and the BACKLOG entry never gets updated because nothing links a PR to a paragraph. (Issues fix this at the root: `Closes #N` closes the item on merge. That is half the reason RFD 004 moved work into issues.)
 
 **The check:**
 
@@ -39,6 +67,16 @@ This file is the operational manual for Step 1 of the roadmap-pulse workflow —
 ---
 
 ## Shipped-from-orphan-branch
+
+### Issue mode
+
+**Symptom:** an issue was closed `completed` since the last run (the closed-issues list call), but no merged PR is in its timeline and no SHA reachable from the default branch is cited in its closing comment. A session closed it on the strength of a commit that never merged.
+
+**The check:** `closedByPullRequestsReferences` is empty **and** the timeline has no merged cross-referencing PR **and** every SHA cited in the closing comment fails the file-mode `branch --contains` check below against `origin/<default>`.
+
+**Verdict:** a comment with the evidence and an Artifact flag on a cron run; on a manual run, reopen with a history note (`rewrite-patterns.md`). An issue closed `not_planned` is a decision, not a claim of shipping, and is never flagged here.
+
+### File mode
 
 **Symptom:** Entry has strikethrough + a "LANDED" / "FIXED" marker, often with a cited SHA. But the SHA is on a stranded branch (e.g. `claude/<adjective>-<noun>-<hash>` from a prior session) that never merged to master.
 
@@ -63,6 +101,14 @@ This file is the operational manual for Step 1 of the roadmap-pulse workflow —
 
 ## Deferred-without-source
 
+### Issue mode
+
+**Symptom:** an open `P3` or `on hold` issue whose body has no reason: no *because* clause, no link to a decision doc or brief, no `Deferred until: <trigger>` line (the form a migrated `P4` takes), and, for `on hold`, no applying comment with a review-by date.
+
+**The check:** the same scan as file mode below, over the issue body and, for `on hold`, the comment that applied the label. **Verdict:** Artifact flag; a manual run adds the rationale to the body.
+
+### File mode
+
 **Symptom:** Entry contains `parked` / `deferred to v2` / `out of scope` / `for later` / `dismissed` — but no reasoning, no link to a successor BACKLOG entry, no rationale paragraph.
 
 **Why this matters:** A bare deferral is unactionable in v2 planning. Six months later, nobody can tell why it was parked.
@@ -73,7 +119,7 @@ This file is the operational manual for Step 1 of the roadmap-pulse workflow —
 2. Look for any of:
    - A "because" / "since" / "due to" / "this requires" clause
    - A markdown link to another BACKLOG entry: `[see ...](#anchor)`
-   - A markdown link to a successor doc: `[backlog/<name>.md](...)`
+   - A markdown link to a successor doc (`[backlog/<name>.md](...)`, `docs/briefs/<name>.md`) or to an issue (`#N`, `repo#N`)
    - A paragraph that contains a verb-form clause explaining the gating constraint (e.g. "needs merchant consent", "post-launch only", "depends on X partnership")
 3. If none are present, the entry is **deferred-without-source**. Verdict: `propose adding a rationale paragraph`.
 
@@ -89,17 +135,21 @@ This file is the operational manual for Step 1 of the roadmap-pulse workflow —
 
 ## Stale file:line citations
 
+**Issue mode:** run the algorithm below over each open issue body. A confirmed drift is fixed by **editing the body in place** (`gh issue edit N -R <repo> --body-file <file>`; GitHub keeps the edit history), plus **one** comment naming the old → new citation, so the change is visible to anyone watching the issue. This is the one body edit a cron run makes on its own: it changes no state, only a pointer. Read the body fresh right before editing, and change only the citation, so a human's concurrent edit isn't overwritten.
+
+**File mode:**
+
 **Symptom:** Entry cites a path like `mobile/src/screens/FitResultScreen.tsx:1055`, but the file has been refactored — the line number no longer points at the symbol the surrounding text implies.
 
 **The check:**
 
 1. Extract all `path:line` patterns from the doc.
 2. For each path: verify the file exists (Glob).
-3. For each `path:line`: Read the file at that offset (5 lines context). Compare the symbol the BACKLOG prose implies with the symbol actually there.
+3. For each `path:line`: Read the file at that offset (5 lines context). Compare the symbol the item's prose (issue body or BACKLOG entry) implies with the symbol actually there.
 4. Mismatches:
    - **File moved / renamed:** `git log --follow --oneline -- <path>` shows the rename. Update the citation.
    - **Line drifted within file:** `git grep -n "<symbol>" -- <path>` to find the new line. Update.
-   - **Symbol deleted:** surface as "Citation points at code that no longer exists. Either the BACKLOG entry is itself stale, or the prose needs updating."
+   - **Symbol deleted:** surface as "Citation points at code that no longer exists. Either the item is itself stale, or the prose needs updating."
 
 **Gotchas:**
 
@@ -173,6 +223,8 @@ gh api repos/<org>/<repo>/actions/runs/<id>/jobs --jq '.jobs[]|"\(.name) \(.runn
 gh repo list <org> --limit 30 --json name   # does the cited repo exist at all?
 ```
 
+**Where the claim lives:** in issue mode, the body's "Done when" / `**Verify:**` block and any "what's left"; in file mode, the entry text. On a cron run, the probe output goes in a comment and "Done when" is narrowed in the body; closing waits for a manual run.
+
 **Grading the result — three outcomes, not two:**
 
 | Probe says | Entry becomes |
@@ -194,13 +246,31 @@ user, not something to do unattended.
 
 ---
 
+## Label hygiene (issue mode)
+
+GitHub labels have no mutual exclusion, so the P scheme is enforced here and by the filing helper (`wi new`). Check every open issue in scope (except `device-test`) and every open `decision` PR:
+
+| Finding | Rule | Cron action |
+|---|---|---|
+| **No P label, or more than one** | Every open work issue has exactly one of `P0`–`P3` | List it; propose one P with the reason |
+| **Stale `P0`** | No activity (`updatedAt`) for 14 days on a blocker | List it: either it isn't a P0 or it is stuck |
+| **`needs-input` > 14 days** | The question has gone unanswered | List it under "needs you", flagged |
+| **`on hold` past its review-by date** | Read the date from the comment that applied the label | **Post a reminder comment**. Never close, never merge (`workflows.md` → "On hold") |
+| **Dead `claimed`** | The claim's last touch is older than `wip`'s staleness window | Run `wip sweep` (it owns that label) |
+| **`needs-input` on a `decision` PR** | Closing a decision PR is a valid answer, so it must not also carry `needs-input` | List it |
+| **`decision` PR open > 14 days** | The owner hasn't answered | List it under "awaiting your yes/no", flagged |
+| **Retired `BACKLOG.md` grew** | The pointer file has more than its one line | List it: the freeze guard missed a PR |
+
+Only a manual run changes labels, with the owner.
+
 ## Cross-failure cases
 
 Handle in this order:
 
 1. **Citation-stale entries that are also already-shipped** → fix the shipped-claim rewrite; don't bother updating the citation (entry will be struck-through).
 2. **Orphan-shipped entries with stale citations** → fix both: reopen the entry AND update the citation.
-3. **Deferred-without-source entries with citations to a future BACKLOG entry that doesn't exist** → surface as a dependency: "Defers to entry X, but X is not in BACKLOG."
+3. **Deferred-without-source items that defer to a successor that doesn't exist** (a future entry or issue nobody filed) → surface as a dependency: "Defers to X, but no open issue (or entry) X exists."
+4. **Suspect-shipped issues with stale citations** → post the evidence comment; don't edit the citation (the issue is likely to close).
 
 ---
 

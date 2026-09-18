@@ -8,9 +8,9 @@ description: >-
   libs (rubric-sdk, code-standards, litmus) + the forge plugin, seeds CLAUDE.md
   from the canonical base + the platform standards + app-specific memory, registers
   the weekly roadmap-pulse cron, and lands it as ONE initial commit + ONE setup PR
-  (clean history). Seeds essentials only — no pre-built backlog (roadmap-pulse does
-  that later). Always confirms name / package-id / platform before scaffolding;
-  never guesses them.
+  (clean history). Seeds essentials only — no pre-filed issues (work items are
+  GitHub issues, filed as real work appears). Always confirms name / package-id /
+  platform before scaffolding; never guesses them.
 ---
 
 # /new-app — scaffold a platform-wired app from a brief
@@ -72,6 +72,15 @@ sibling of the other app repos.
 6. **Ignore worktree dirs** — the app's `.gitignore` must exclude `.worktrees/`
    and `.claude/worktrees/` (per the concurrent-session isolation rule: tasks run
    in throwaway worktrees that must never be committed).
+7. **Work-item labels + issue forms** — work items are GitHub issues
+   (`standards/workflows.md` → "Work items are GitHub issues"). Run
+   `node "${CLAUDE_PLUGIN_ROOT}/tools/labels/bootstrap.js" --repo Tessellate-Studio/<name>`
+   (`--dry-run` first) so P0–P3, the type and lifecycle labels and the
+   device-test set exist. Issue forms silently drop labels a repo lacks. Then
+   copy the canonical forms from `${CLAUDE_PLUGIN_ROOT}/templates/issue-forms/`
+   into `.github/ISSUE_TEMPLATE/`, unchanged: the code-inspection gate fails a
+   copy whose hash differs from forge's. No area labels unless the owner asks
+   for them.
 
 ## Step 3 — Seed the docs (essentials only)
 
@@ -87,8 +96,9 @@ sibling of the other app repos.
   (app-specific only; the shared eleven live in forge), seeded with any
   domain anti-patterns the brief named.
 - `README.md` — purpose + how to install the forge plugin + run tests.
-- **No** BACKLOG / RELEASE / WEEKLY_DIGEST — roadmap-pulse creates the digest on
-  its first run; BACKLOG appears when there's real out-of-scope work.
+- **No** BACKLOG / RELEASE / WEEKLY_DIGEST. Work items are issues, filed when
+  real out-of-scope work appears. The weekly digest is the roadmap Artifact,
+  which roadmap-pulse publishes on its first run.
 
 ## Step 4 — Register the weekly cron
 

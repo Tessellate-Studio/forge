@@ -7,7 +7,7 @@ Every Tessellate app's documentation follows one structure so readers (humans + 
 ## The Rule
 
 **Every Tessellate app must have a `PROJECT_DOCS.md` file at the repo root** that maps every documentation type to its location. This file is the single source of truth for:
-- Where each kind of doc belongs (root, `docs/`, `memory/`, `backlog/`, subsystem directories)
+- Where each kind of doc belongs (root, `docs/`, `docs/briefs/`, `memory/`, subsystem directories) — and that work items are GitHub issues, not a file
 - When each doc is updated and by whom
 - When to create a new doc vs. add to an existing one
 - How to trim shipped features to status + lesson (implementation details belong in git history, not persistent docs)
@@ -47,7 +47,7 @@ Copy and adapt the template:
 | File | Purpose | Audience | Update Frequency |
 |---|---|---|---|
 | **CLAUDE.md** | Working rules for Claude Code (communication, security, testing, branching) | Claude Code | When project rules change |
-| **BACKLOG.md** | Out-of-scope work tracker (P0–P4 sections) | Product team | Weekly (if using roadmap-pulse) |
+| **Work items** → GitHub issues, `P0`–`P3` | Open work, one issue per item (`BACKLOG.md` is a retired one-line pointer; see `workflows.md` → "Work items are GitHub issues") | Everyone | Continuously; roadmap-pulse lints and scores weekly |
 | **RELEASE_V2.md** | Feature completion tracker | Product team | When feature ships |
 | ... (add others specific to your project) |
 
@@ -77,10 +77,10 @@ Copy and adapt the template:
 
 **When to add:** Anti-patterns, design decisions, bug logs, recurring issues.
 
-### `backlog/`: Out-of-Scope Features
-*Parked features with detail — linked from `BACKLOG.md` entries.*
+### `docs/briefs/`: Long Product Briefs
+*Long-form product briefs (tens of KB, many sections), each linked from its issue. The issue carries the priority and the state; the brief carries the detail.*
 
-**When to add:** Feature specs for P2–P4 items.
+**When to add:** A work item whose spec is too long to live comfortably in an issue body. Give the brief a `**Tracking:** <repo>#N` header and link it from the issue.
 
 ### Module-Specific (backend/, mobile/ subdirectories)
 *Setup, architecture, testing specific to that subsystem.*
@@ -97,7 +97,8 @@ Copy and adapt the template:
 | "This is a bug + root cause + lesson" | → `memory/project_regression_log.md` |
 | "This is a recurring pattern (3+ similar bugs)" | → `memory/project_anti_patterns.md` |
 | "This is an external setup checklist" | → `docs/[SETUP_PLATFORM].md` |
-| "This is a parked feature spec" | → `backlog/[feature].md` + link from `BACKLOG.md` |
+| "This is a parked feature spec" | → an issue (`wi new --priority P3`, plus a `Deferred until:` line), and `docs/briefs/[feature].md` linked from it if the spec is long |
+| "This is open work / a follow-up" | → an issue (`wi new --priority P0..P3`) — never a `BACKLOG.md` entry |
 | "This is a design decision (locked)" | → `memory/project_[topic].md` |
 
 ---
@@ -122,7 +123,7 @@ Copy and adapt the template:
 
 When adding or updating any documentation:
 1. **Check `PROJECT_DOCS.md` first** — does this doc type already have a home? If yes, update that file instead of creating a new one.
-2. **Never create root-level .md files** unless they're project-wide decisions or rules (same tier as `BACKLOG.md`, `RELEASE_V2.md`).
+2. **Never create root-level .md files** unless they're project-wide decisions or rules (same tier as `RELEASE_V2.md`).
 3. **Trim shipped features to status + lesson** — implementation prose lives in git history, not persistent docs.
 4. **Link across docs** — if a `memory/` file relates to a root rule, cross-link.
 5. **Update this guide** if a new doc category emerges, so the next session knows.

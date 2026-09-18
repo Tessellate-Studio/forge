@@ -338,7 +338,8 @@ A feature that promises richer output (a warning with a cm range, a new card
 field, a badge) is **not shipped** until the value renders on a real device.
 Backend rule / new response field = plumbing, not the feature. Scope the PR
 end-to-end (source → backend → API → mobile parser → component → pixel); don't
-close the BACKLOG/regression entry on the plumbing PR.
+put `Closes #N` on the plumbing PR (use `Refs #N`), and don't close the
+regression row on it.
 **Why:** every layer passes its own tests while the user sees nothing because one
 hop didn't pass the value through. *Precedent: a sleeve-cm warning shipped
 "done" backend-only; users saw it two PRs later when the mobile wire landed.*
@@ -377,13 +378,14 @@ deps-bootstrap guard live in code-standards.
 
 Worktree isolation stops branches corrupting each other's *git state*. It does
 nothing about two branches editing the same *content*. Before editing a shared
-planning doc (regression log, BACKLOG, weekly digest, manual runbook,
-CHANGELOG) — or starting a fix in an area someone else is already in — list who
-else is in that file:
+planning doc (regression log, manual runbook, RELEASE doc, CHANGELOG) — or
+starting a fix in an area someone else is already in — list who else is in that
+file. (Work items are no longer a shared file: each is its own issue, so claim it
+with `wip claim` instead. See `workflows.md` → "Work items are GitHub issues".)
 
 ```bash
 gh pr list --state open --json number,headRefName,files \
-  --jq '.[] | select(any(.files[]; .path=="BACKLOG.md")) | "#\(.number) \(.headRefName)"'
+  --jq '.[] | select(any(.files[]; .path=="memory/project_regression_log.md")) | "#\(.number) \(.headRefName)"'
 ```
 
 - **Commit boundaries follow the logical change, not the file type.** This is
@@ -392,7 +394,7 @@ gh pr list --state open --json number,headRefName,files \
   altered, the comment describing new behaviour, the README line your flag made
   wrong — belongs **in that commit**. Splitting it out makes the commit
   incomplete and ships a moment where the docs contradict the code. A doc edit
-  that is *its own* concern — a regression-log row, a BACKLOG status, an
+  that is *its own* concern — a regression-log row, a runbook status, an
   unrelated fix you want to ride along — is a separate commit, and may sit in the
   same PR.
   *(Corrected 2026-07-29. This rule twice demanded a doc/code split — first by PR,
