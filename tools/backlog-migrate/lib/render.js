@@ -50,8 +50,15 @@ function entryKey(repo, title) {
   return sha1(`${repo}\n${normalizeTitle(title)}`).slice(0, 12);
 }
 
+/**
+ * The issue title. An entry written `**Title.**` puts the sentence's full stop
+ * inside the bold, so the parsed title ends in "." (the loom pilot fixed two
+ * by hand). One trailing full stop is dropped; an ellipsis is kept. The KEY
+ * (normalizeTitle) is left alone on purpose: changing it would make a re-run
+ * over an already-migrated repo miss its own markers and file duplicates.
+ */
 function renderTitle(title) {
-  const t = stripMarkdown(title);
+  const t = stripMarkdown(title).replace(/(?<!\.)\.$/, '');
   return t.length > TITLE_MAX ? `${t.slice(0, TITLE_MAX - 1)}…` : t;
 }
 
@@ -250,6 +257,16 @@ function renderTotals(rows) {
   return `Totals: ${VERDICT_ORDER.map(v => `${v} ${n[v]}`).join(' · ')}`;
 }
 
+// The line put on top of a retired WEEKLY_DIGEST.md (RFD 004 §4.6, Q2).
+const DIGEST_RETIRED_RE = /^> \*\*Retired [^*]*\(RFD 004 §4\.6\):\*\*/m;
+
+function digestPointer(date, url) {
+  const where = url
+    ? `the [roadmap Artifact](${url})`
+    : 'the roadmap Artifact (its URL is `artifactUrl` in `.roadmap-pulse-state.json`, set by the next pulse run)';
+  return `> **Retired ${date} (RFD 004 §4.6):** the digest is now ${where}. This file is no longer appended to; its history stays in git.\n`;
+}
+
 function pointerFile(repo, lastSha) {
   const q = encodeURIComponent(
     'is:issue is:open label:P0,P1,P2,P3 sort:created-asc'
@@ -278,4 +295,6 @@ module.exports = {
   renderTotals,
   totals,
   pointerFile,
+  digestPointer,
+  DIGEST_RETIRED_RE,
 };

@@ -19,6 +19,7 @@ const {
   markerKeys,
   bodyHash,
 } = require('./render');
+const { AREA: CONFIGURED_AREAS } = require('../../labels/lib/labels');
 
 const KNOWN_REPOS = [
   'alate',
@@ -93,7 +94,7 @@ function inferType(title) {
 // ── area (owner amendment to Q6, 2026-09-19) ────────────────────────────────
 // Only loom and alate carry area labels. mood-layer's existing ones are left
 // untouched and never inferred; badige has none.
-const AREA_RULES = {
+const AREA_KEYWORDS = {
   loom: {
     'admin-ui': { paths: [/^admin\//], words: /\b(admin|UI|dashboard)\b/i },
     api: { paths: [/^api\//], words: /\b(endpoints?|API)\b/ },
@@ -141,6 +142,21 @@ const AREA_RULES = {
     },
   },
 };
+
+// Rules count only for areas in that repo's CONFIGURED label set
+// (tools/labels AREA): a keyword rule for a repo or an area bootstrap does
+// not create can never produce a label the repo cannot have.
+const AREA_RULES = Object.fromEntries(
+  Object.entries(CONFIGURED_AREAS).map(([r, set]) => [
+    r,
+    Object.fromEntries(
+      set
+        .map(l => l.name)
+        .filter(a => AREA_KEYWORDS[r] && AREA_KEYWORDS[r][a])
+        .map(a => [a, AREA_KEYWORDS[r][a]])
+    ),
+  ])
+);
 const AREA_SETS = Object.fromEntries(
   Object.entries(AREA_RULES).map(([r, rules]) => [r, Object.keys(rules)])
 );
@@ -402,6 +418,21 @@ function classifyEntries(parsed, opts) {
     if (targetRepo !== repo) {
       row.notes.push(`target inferred: ${targetRepo}`);
     }
+
+    // An inferred area the TARGET repo does not carry yet (loom's alate
+    // entry, before alate's bootstrap) would make apply refuse. Dropped here,
+    // in the reviewed table, rather than guessed at apply time.
+    const targetLabels =
+      remote && remote[targetRepo] && remote[targetRepo].labels;
+    if (row.area && targetLabels) {
+      const have = new Set(
+        targetLabels.map(l => String(l.name || l).toLowerCase())
+      );
+      if (!have.has(row.area.toLowerCase())) {
+        row.notes.push(`area ${row.area} dropped: ${targetRepo} lacks it`);
+        row.area = null;
+      }
+    }
     if (e.tombstones) {
       row.notes.push(`${e.tombstones} tombstone paragraph(s) in body`);
     }
@@ -441,6 +472,20 @@ function classifyEntries(parsed, opts) {
       }
       if (o.split) {
         row.split = o.split;
+      }
+
+      // An entry written before its decision PR existed may not match it by
+      // title (mood-layer's analytics entry vs "decision: … (ADR-002)").
+      if (o.decisionPr) {
+        row.decisionPr = Number(o.decisionPr);
+        if (!row.labels.includes('needs-input')) {
+          row.labels.push('needs-input');
+        }
+      }
+
+      // A residual filed below its section's priority (Q3) keeps its trigger.
+      if (o.deferredUntil) {
+        row.deferredUntil = o.deferredUntil;
       }
       row.notes.push('override applied');
     }

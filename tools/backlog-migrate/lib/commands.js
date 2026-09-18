@@ -10,6 +10,7 @@ const { parseBacklog } = require('./parse');
 const { classifyEntries } = require('./classify');
 const R = require('./render');
 const { versionAtLeast, MIN_GH } = require('./github');
+const { canonicalFor, AREA } = require('../../labels/lib/labels');
 
 const MIGRATED_LABEL = 'migrated-from-backlog';
 const ACTIONABLE = new Set(['create', 'link']);
@@ -28,7 +29,11 @@ function requireGh(gh) {
 function fetchRemote(gh, repos) {
   const remote = {};
   for (const r of repos) {
-    remote[r] = { issues: gh.listIssues(r), prs: gh.listPrs(r) };
+    remote[r] = {
+      issues: gh.listIssues(r),
+      prs: gh.listPrs(r),
+      labels: gh.listLabels(r),
+    };
   }
   return remote;
 }
@@ -160,12 +165,26 @@ async function apply({
   const targets = [...new Set(rows.map(r => r.targetRepo))];
 
   const markerIndex = {};
+  const labelFixes = [];
   for (const t of targets) {
     const have = new Set(gh.listLabels(t).map(l => l.name));
     const need = new Set(
       rows.filter(r => r.targetRepo === t).flatMap(labelsFor)
     );
-    const missing = [...need].filter(n => !have.has(n));
+    let missing = [...need].filter(n => !have.has(n));
+
+    // A cross-repo target (loom's alate entry) was never bootstrapped for
+    // this run, and the pilot created its provenance + type labels by hand.
+    // Create the canonical, non-area ones here, with the canonical colour
+    // and description; area and anything non-canonical still refuse.
+    if (t !== doc.repo) {
+      const short = t.includes('/') ? t.split('/')[1] : t;
+      const areas = new Set((AREA[short] || []).map(l => l.name));
+      const canon = new Map(canonicalFor(t).map(l => [l.name, l]));
+      const fixable = missing.filter(n => canon.has(n) && !areas.has(n));
+      labelFixes.push(...fixable.map(n => [t, canon.get(n)]));
+      missing = missing.filter(n => !fixable.includes(n));
+    }
     if (missing.length) {
       throw new Error(
         `${t} lacks label(s) ${missing.join(
@@ -181,6 +200,7 @@ async function apply({
   }
 
   const summary = {
+    labelsCreated: [],
     created: 0,
     linked: 0,
     alreadyMigrated: 0,
@@ -202,6 +222,16 @@ async function apply({
   // A dry run makes no writes, so it counts the ones it would make — that
   // is what lets `--dry-run --max N` show exactly what a real run would do.
   let dryWrites = 0;
+  for (const [t, l] of labelFixes) {
+    if (dryRun) {
+      dryWrites++;
+      summary.planned.push(`label ${t}: create ${l.name}`);
+      continue;
+    }
+    await pacer.write(() => gh.createLabel(t, l));
+    summary.labelsCreated.push(`${t}:${l.name}`);
+    log(`label ${t}: created ${l.name}`);
+  }
   const atMax = () => (dryRun ? dryWrites : pacer.writes) >= max;
 
   async function linkRow(row) {
@@ -441,15 +471,81 @@ function walkMd(dir, fs, out = []) {
   return out;
 }
 
+// Non-markdown files that talk about BACKLOG in comments or echo lines: CI
+// workflows and git hooks (loom's ops-watchdog.yml and .husky/pre-commit were
+// found by hand in the pilot). Reported only: a comment rewrite needs the
+// issue number a human picks.
+function walkCode(dir, fs) {
+  const out = [];
+  const wf = path.join(dir, '.github', 'workflows');
+  if (fs.existsSync(wf)) {
+    for (const name of fs.readdirSync(wf)) {
+      if (/\.ya?ml$/.test(name)) {
+        out.push(path.join(wf, name));
+      }
+    }
+  }
+  const husky = path.join(dir, '.husky');
+  if (fs.existsSync(husky)) {
+    for (const name of fs.readdirSync(husky)) {
+      const p = path.join(husky, name);
+      if (name !== '_' && !fs.statSync(p).isDirectory()) {
+        out.push(p);
+      }
+    }
+  }
+  return out;
+}
+
 const FREEZE_GUARD =
   'grep -q \'backlog-retired\' BACKLOG.md && [ "$(grep -cv \'^\\s*$\' BACKLOG.md)" -le 1 ] || { echo "::error::BACKLOG.md is retired — file an issue (wi new) instead"; exit 1; }';
+
+/**
+ * Insert the freeze guard as a step right after the first
+ * `actions/checkout` step of a workflow, at that step's indentation. Returns
+ * null when there is no checkout step to anchor on, and the text unchanged
+ * when a guard is already there.
+ *
+ * FREEZE_GUARD contains `'^\s*$'`, and `$'` in a String#replace replacement
+ * STRING means "the text after the match": a string replacer silently pastes
+ * the rest of the file into the step. Always a function replacer here.
+ */
+function insertFreezeGuard(yaml) {
+  if (/backlog-retired/.test(yaml)) {
+    return yaml;
+  }
+  const re = /^([ \t]*)- uses: actions\/checkout@[^\n]*\n(?:\1 {2}[^\n]*\n)*/m;
+  if (!re.test(yaml)) {
+    return null;
+  }
+  return yaml.replace(re, (m, indent) =>
+    [
+      m.replace(/\n$/, ''),
+      `${indent}# RFD 004 §5.7 freeze guard: BACKLOG.md is a one-line pointer to the`,
+      `${indent}# issue list. A PR that adds an entry fails here, with the fix in the`,
+      `${indent}# message, instead of merging into a dead file.`,
+      `${indent}- name: BACKLOG.md is retired`,
+      `${indent}  run: ${FREEZE_GUARD}`,
+      '',
+    ].join('\n')
+  );
+}
 
 /**
  * Local-only (§5.7): pointer file, docs/backlog → docs/briefs with a
  * Tracking header, and docs-link rewrites. It touches no GitHub state and
  * makes no commit — the migration PR carries the result.
  */
-function rewrite({ repo, dir, ledger, plan: doc = null, fs = nodeFs }) {
+function rewrite({
+  repo,
+  dir,
+  ledger,
+  plan: doc = null,
+  date = new Date().toISOString().slice(0, 10),
+  digestUrl = null,
+  guardWorkflow = null,
+  fs = nodeFs,
+}) {
   // Rolled-back records point at issues closed as not planned — never retire
   // BACKLOG.md or write a Tracking header against those.
   const recs = ledger.records.filter(r => r.issue && !r.rolledBack);
@@ -477,6 +573,9 @@ function rewrite({ repo, dir, ledger, plan: doc = null, fs = nodeFs }) {
     untracked: [],
     rewritten: [],
     mentions: [],
+    codeMentions: [],
+    digest: null,
+    guard: null,
     freezeGuard: FREEZE_GUARD,
   };
 
@@ -533,10 +632,49 @@ function rewrite({ repo, dir, ledger, plan: doc = null, fs = nodeFs }) {
       }
     });
   }
+  for (const file of walkCode(dir, fs)) {
+    const rel = path.relative(dir, file).split(path.sep).join('/');
+    fs.readFileSync(file, 'utf8')
+      .split('\n')
+      .forEach((line, i) => {
+        if (/BACKLOG(\.md)?\b/.test(line)) {
+          report.codeMentions.push(`${rel}:${i + 1}`);
+        }
+      });
+  }
+
+  // §4.6 / Q2: the digest is the roadmap Artifact. The old file keeps its
+  // history and gets a pointer on top, once. Prepended by concatenation, not
+  // String#replace, so nothing in the URL or text is read as a `$` pattern.
+  const digest = path.join(dir, 'WEEKLY_DIGEST.md');
+  if (fs.existsSync(digest)) {
+    const text = fs.readFileSync(digest, 'utf8');
+    if (R.DIGEST_RETIRED_RE.test(text)) {
+      report.digest = 'already retired';
+    } else {
+      fs.writeFileSync(digest, `${R.digestPointer(date, digestUrl)}\n${text}`);
+      report.digest = digestUrl ? 'pointer added' : 'pointer added (no URL)';
+    }
+  }
+
+  if (guardWorkflow) {
+    const wf = path.join(dir, guardWorkflow);
+    const text = fs.readFileSync(wf, 'utf8');
+    const next = insertFreezeGuard(text);
+    if (next === null) {
+      report.guard = `no actions/checkout step in ${guardWorkflow}: add the guard step by hand`;
+    } else if (next === text) {
+      report.guard = 'already present';
+    } else {
+      fs.writeFileSync(wf, next);
+      report.guard = `inserted in ${guardWorkflow}`;
+    }
+  }
   return report;
 }
 
 module.exports = {
+  insertFreezeGuard,
   plan,
   apply,
   rollback,
