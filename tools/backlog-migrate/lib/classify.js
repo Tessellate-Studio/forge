@@ -473,6 +473,20 @@ function classifyEntries(parsed, opts) {
       if (o.split) {
         row.split = o.split;
       }
+
+      // An entry written before its decision PR existed may not match it by
+      // title (mood-layer's analytics entry vs "decision: … (ADR-002)").
+      if (o.decisionPr) {
+        row.decisionPr = Number(o.decisionPr);
+        if (!row.labels.includes('needs-input')) {
+          row.labels.push('needs-input');
+        }
+      }
+
+      // A residual filed below its section's priority (Q3) keeps its trigger.
+      if (o.deferredUntil) {
+        row.deferredUntil = o.deferredUntil;
+      }
       row.notes.push('override applied');
     }
     return row;

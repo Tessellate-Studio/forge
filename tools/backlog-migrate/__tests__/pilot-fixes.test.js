@@ -98,6 +98,28 @@ describe('2. area: only the target repo configured set, only if it has the label
   });
 });
 
+describe('+ overrides: decisionPr and deferredUntil', () => {
+  test('a residual can be tied to its decision PR and carry a deferral trigger', () => {
+    const rows0 = classifyEntries(parseBacklog(LOOM), {
+      repo: 'loom',
+      sourceSha: 'abc1234',
+    });
+    const key = rows0.find(r => r.startLine === 63).key;
+    const [row] = classifyEntries(parseBacklog(LOOM), {
+      repo: 'loom',
+      sourceSha: 'abc1234',
+      overrides: {
+        [key]: { decisionPr: 129, deferredUntil: 'the cadence feels slow' },
+      },
+    }).filter(r => r.key === key);
+    expect(row.decisionPr).toBe(129);
+    expect(row.labels).toContain('needs-input');
+    const body = R.renderBody(row, { date: 'd' });
+    expect(body).toContain('Blocked on decision PR #129 — merge = approve');
+    expect(body).toContain('Deferred until: the cadence feels slow');
+  });
+});
+
 describe('+ apply creates canonical labels on a cross-repo target', () => {
   test('missing provenance / type / P labels in alate are created, then the issue is filed', async () => {
     const gh = new FakeGitHub({ labels: { loom: LOOM_ALL, alate: [] } });
