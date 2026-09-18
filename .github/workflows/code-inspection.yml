@@ -9,6 +9,7 @@
 #       with:
 #         fail_on_error: false   # advisory; flip to true once tuned
 #         runner: '["self-hosted","linux","ci-light"]'   # optional; see below
+#         check_issue_forms: true   # optional; after `forge-issue-forms sync` (RFD 004)
 #
 # RUNNER: `runs-on` belongs to the CALLED workflow, so a caller cannot override
 # it — which left every consumer pinned to hosted `ubuntu-latest` and unable to
@@ -66,6 +67,16 @@ on:
         required: false
         type: string
         default: 'ubuntu-latest'
+      check_issue_forms:
+        description: >-
+          Fail when .github/ISSUE_TEMPLATE/{bug,chore,feature,refactor,config}.yml
+          differ from forge's canonical templates/issue-forms/ (RFD 004 §3).
+          Off by default: no repo has synced the forms yet, so default-on would
+          turn every caller red on the day this merges. A repo opts in in the
+          same PR that runs `forge-issue-forms sync` (its migration PR).
+        required: false
+        type: boolean
+        default: false
     outputs:
       inspection_score:
         description: 'Overall inspection score (0-100)'
@@ -117,6 +128,12 @@ jobs:
           fi
           # Install the standards CLI straight from the forge repo (no npm publish needed)
           npm install -g github:Tessellate-Studio/forge
+
+      # Blocking when enabled, independent of fail_on_error: a drifted form is
+      # a one-command fix (`forge-issue-forms sync`), not a tuning question.
+      - name: Issue forms match forge (RFD 004)
+        if: inputs.check_issue_forms
+        run: forge-issue-forms check --dest .
 
       - name: Run Code Inspection
         id: inspect

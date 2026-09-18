@@ -1,0 +1,27 @@
+{
+  "_comment": "Real BACKLOG.md snapshots taken 2026-09-19 with `git show origin/<default>:BACKLOG.md` from each app checkout. `sha` is origin/<default> at snapshot time; `backlogCommit` is the last commit that touched BACKLOG.md. The RFD measured alate 35a69e1, badige b2a0408, loom ab17d1b, mood-layer a6516bf; loom's HEAD has since moved but its BACKLOG.md is unchanged since 7ae990b. `blob` is the git blob id of each snapshot; __tests__/fixtures.test.js fails if a fixture is ever edited or reformatted.",
+  "alate": {
+    "defaultBranch": "master",
+    "sha": "35a69e1",
+    "backlogCommit": "938ad98",
+    "blob": "858d630dbb276583b7ecfba8a32074368265fa3f"
+  },
+  "badige": {
+    "defaultBranch": "master",
+    "sha": "b2a0408",
+    "backlogCommit": "27c818d",
+    "blob": "4aab30b5ee70aa36264782bffe851a9cd93f9480"
+  },
+  "loom": {
+    "defaultBranch": "main",
+    "sha": "ca729de",
+    "backlogCommit": "7ae990b",
+    "blob": "8d691130568d47f415d4b2c1711dc62846dcf8da"
+  },
+  "mood-layer": {
+    "defaultBranch": "master",
+    "sha": "a6516bf",
+    "backlogCommit": "873d8a5",
+    "blob": "701dcd6cf2736137cae4f9fc7b117ad5cfcefc36"
+  }
+}

@@ -13,3 +13,7 @@ standards-cli/templates/
 # Workflow-runtime payload: these ship to the Claude Code Workflow sandbox and
 # are kept pristine as templates, not reformatted to forge house style.
 references/workflows/
+
+# Real BACKLOG.md snapshots used as parser fixtures. Byte-exact on purpose:
+# tests pin line numbers and git blob ids (tools/backlog-migrate/__tests__).
+tools/backlog-migrate/__fixtures__/
