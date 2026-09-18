@@ -20,6 +20,13 @@
 # `gate-blocked` is also dropped on close if present — it means nothing once
 # there is no PR left to gate.
 #
+# `decision` PRs are SKIPPED (RFD 004 §2). A draft `decision` PR is an owner
+# yes/no: merge = approve, close = reject. Closing one IS the answer, so there
+# is no open question left to move — and turning it into a follow-up issue
+# would reopen a decision the owner just made. `needs-input` should never sit
+# on a `decision` PR in the first place (workflows.md → "Work items are GitHub
+# issues"); if it does, the skip logs it and leaves the label for a human.
+#
 # `claimed` is NOT touched here — `wip sweep` owns that label's lifecycle
 # (forge standards/workflows.md → "Work claims").
 #
@@ -61,6 +68,12 @@ jobs:
             if (labels.includes('gate-blocked')) {
               await drop('gate-blocked');
               core.info(`#${pr.number}: dropped 'gate-blocked'.`);
+            }
+
+            if (labels.includes('decision')) {
+              const stray = labels.includes('needs-input') ? " (it also carries 'needs-input', which a decision PR never should — left for a human)" : '';
+              core.info(`#${pr.number}: 'decision' PR ${outcome} — that is the owner's answer, nothing to move${stray}.`);
+              return;
             }
 
             if (!labels.includes('needs-input')) {
