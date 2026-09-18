@@ -8,7 +8,9 @@
 //   apply    --repo <r> --plan plan.json [--max 25] [--dry-run]
 //            creates / links, paced (≥3 s, ≤400/h), ledger flushed after every write.
 //   rewrite  --repo <r> --map memory/backlog-migration.json [--plan plan.json]
-//            local only: pointer BACKLOG.md, docs/backlog → docs/briefs, link rewrites.
+//            local only: pointer BACKLOG.md, docs/backlog → docs/briefs, link rewrites,
+//            WEEKLY_DIGEST.md pointer, BACKLOG mentions in docs + workflows + .husky
+//            (reported), and with --guard <workflow> the freeze-guard step.
 //   rollback --repo <r> --map memory/backlog-migration.json [--dry-run]
 //            closes created issues as not planned. Never deletes.
 //
@@ -27,6 +29,7 @@ const USAGE = `usage: backlog-migrate <plan|apply|rewrite|rollback> --repo <name
   plan     [--dir .] [--source-sha origin/HEAD] [--out backlog-plan.<repo>.json] [--overrides f] [--offline]
   apply    --plan plan.json [--dir .] [--ledger memory/backlog-migration.json] [--max N] [--dry-run]
   rewrite  [--dir .] [--map memory/backlog-migration.json] [--plan plan.json]
+           [--guard .github/workflows/ci.yml] [--digest-url <roadmap Artifact URL>]
   rollback [--dir .] [--map memory/backlog-migration.json] [--max N] [--dry-run]`;
 
 function parseArgs(argv) {
@@ -79,6 +82,36 @@ function refuseMainCheckout(git, opts) {
 }
 
 const readJson = f => JSON.parse(fs.readFileSync(f, 'utf8'));
+
+/**
+ * The roadmap Artifact URL for the WEEKLY_DIGEST.md pointer: `artifactUrl`
+ * in `.roadmap-pulse-state.json`. That file is untracked, so a fresh worktree
+ * lacks it; the main checkout (the parent of the common git dir) is read too.
+ */
+function digestUrlFor(dir, git) {
+  const places = [dir];
+  try {
+    places.push(
+      path.dirname(
+        path.resolve(dir, git(['rev-parse', '--git-common-dir']).trim())
+      )
+    );
+  } catch {
+    // not a git checkout: the worktree's own copy is all there is
+  }
+  for (const p of places) {
+    const f = path.join(p, '.roadmap-pulse-state.json');
+    try {
+      const url = readJson(f).artifactUrl;
+      if (url) {
+        return url;
+      }
+    } catch {
+      // missing or unreadable: try the next place
+    }
+  }
+  return null;
+}
 const today = () => new Date().toISOString().slice(0, 10);
 
 async function main(argv) {
@@ -173,10 +206,25 @@ async function main(argv) {
     refuseMainCheckout(git, opts);
     const ledger = new Ledger(map);
     const plan = opts.plan ? readJson(opts.plan) : null;
-    const r = commands.rewrite({ repo, dir, ledger, plan });
+    const r = commands.rewrite({
+      repo,
+      dir,
+      ledger,
+      plan,
+      date: today(),
+      digestUrl:
+        typeof opts['digest-url'] === 'string'
+          ? opts['digest-url']
+          : digestUrlFor(dir, git),
+      guardWorkflow: typeof opts.guard === 'string' ? opts.guard : null,
+    });
     console.log(JSON.stringify(r, null, 2));
     console.log(
-      '\nStill by hand in the same PR: code/CI comments saying "tracked in BACKLOG …" (grep -rn BACKLOG .github scripts) → "tracked in <repo>#N", and the freezeGuard step above in the PR gate.'
+      `\nStill by hand in the same PR: each codeMentions / mentions line saying "tracked in BACKLOG …" → "tracked in <repo>#N"${
+        r.guard && r.guard.startsWith('inserted')
+          ? ''
+          : ', and the freezeGuard step above in the PR gate (--guard <workflow>)'
+      }.`
     );
     return 0;
   }
