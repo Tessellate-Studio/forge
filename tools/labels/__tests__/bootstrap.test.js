@@ -15,7 +15,7 @@ const MOOD = [
   {
     name: 'P0',
     color: 'B60205',
-    description: 'Priority 0 — blocker / pre-launch',
+    description: 'blocker / pre-launch', // drifted: the owner's text keeps the 'Priority N — ' prefix
   },
   {
     name: 'critical',
@@ -39,10 +39,14 @@ const MOOD = [
 describe('canonical set', () => {
   test('P0–P3 carry the owner-specified colours and descriptions', () => {
     expect(L.PRIORITY).toEqual([
-      { name: 'P0', color: 'B60205', description: 'blocker / pre-launch' },
-      { name: 'P1', color: 'D93F0B', description: 'do next' },
-      { name: 'P2', color: 'FBCA04', description: 'soon' },
-      { name: 'P3', color: 'C5DEF5', description: 'later' },
+      {
+        name: 'P0',
+        color: 'B60205',
+        description: 'Priority 0 — blocker / pre-launch',
+      },
+      { name: 'P1', color: 'D93F0B', description: 'Priority 1 — do next' },
+      { name: 'P2', color: 'FBCA04', description: 'Priority 2 — soon' },
+      { name: 'P3', color: 'C5DEF5', description: 'Priority 3 — later' },
     ]);
   });
 
@@ -122,7 +126,9 @@ describe('bootstrap', () => {
     expect(gh.writes).toBe(0);
     expect(plan.edit.map(l => l.name)).toEqual(['P0']); // description aligned
     expect(plan.create.map(l => l.name)).toContain('P1');
-    expect(lines.join('\n')).toMatch(/would create P1 #D93F0B "do next"/);
+    expect(lines.join('\n')).toMatch(
+      /would create P1 #D93F0B "Priority 1 — do next"/
+    );
     expect(lines.join('\n')).toMatch(
       /legacy priority labels present .*critical, high/
     );
