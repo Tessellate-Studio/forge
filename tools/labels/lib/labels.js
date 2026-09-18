@@ -11,11 +11,18 @@ const {
   CLAIM_LABEL_DESC,
 } = require('../../work-claim/lib/claim');
 
+// Owner ruling 2026-09-19: the descriptions keep the "Priority N — " prefix
+// that the P labels were created with on 2026-09-18 in every repo, so
+// bootstrap is a no-op for them instead of rewriting five repos' labels.
 const PRIORITY = [
-  { name: 'P0', color: 'B60205', description: 'blocker / pre-launch' },
-  { name: 'P1', color: 'D93F0B', description: 'do next' },
-  { name: 'P2', color: 'FBCA04', description: 'soon' },
-  { name: 'P3', color: 'C5DEF5', description: 'later' },
+  {
+    name: 'P0',
+    color: 'B60205',
+    description: 'Priority 0 — blocker / pre-launch',
+  },
+  { name: 'P1', color: 'D93F0B', description: 'Priority 1 — do next' },
+  { name: 'P2', color: 'FBCA04', description: 'Priority 2 — soon' },
+  { name: 'P3', color: 'C5DEF5', description: 'Priority 3 — later' },
 ];
 
 const TYPE = [
