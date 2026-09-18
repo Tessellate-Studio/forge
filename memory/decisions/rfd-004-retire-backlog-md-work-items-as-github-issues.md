@@ -1,7 +1,7 @@
 # RFD 004: Retire BACKLOG.md. Work items become GitHub issues
 
 **Date:** 2026-09-18
-**State:** discussion
+**State:** discussion — all open questions answered by the owner 2026-09-18; awaiting merge of the decision PR
 **Author:** Saptami Ram (with Claude)
 **Decided upstream (not reopened here):** on 2026-09-18 the owner decided to
 retire `BACKLOG.md` across the Tessellate repos. Work items become GitHub
@@ -222,7 +222,7 @@ validation). Tiers follow the research protocol.
 | Bug root cause + lesson | `memory/project_regression_log.md` (unchanged) | Append |
 | Exact console steps for a human | `docs/manual-runbook.md` (unchanged) | Per runbook rule |
 | A long product brief (tens of KB, many sections) | `docs/briefs/<name>.md`, linked from its issue | Edited like any doc |
-| Weekly priority history | **Pinned pulse-digest issue** (§4.6) | One comment per run |
+| Weekly priorities | **The roadmap Artifact** (§4.6) | Refreshed in place each run; previous scores embedded |
 
 **Rules for sub-entries:**
 
@@ -250,7 +250,7 @@ apart, and forms cannot turn a dropdown into a label anyway.
 |---|---|---|---|
 | Priority | `P0` blocker / pre-launch · `P1` do next · `P2` soon · `P3` later | **Exactly one** on every open work issue | Human or filing skill. The pulse *proposes* changes and changes one only on a manual run with the owner's yes |
 | Type | `bug` · `feature` · `chore` · `refactor` (`enhancement` read as an alias of `feature`) | At most one | Issue form / filing skill |
-| Area | Per repo, existing sets (loom: `admin-ui api sdk extension supabase infra`; mood-layer: `data ui circle notifications build infra`) | 0–n | Optional. alate and badige have none today (open question 6) |
+| Area | Per repo, existing sets (loom: `admin-ui api sdk extension supabase infra`; mood-layer: `data ui circle notifications build infra`) | 0–n | Optional. alate and badige have none and get none (owner, Q6); the migration never infers area |
 | Lifecycle | `decision` · `on hold` · `claimed` · `needs-input` · `needs-triage` | See matrix | See matrix |
 | Queues (separate systems) | `device-test` + `needs-human` `needs-build` `parked` `failed` (RFD-003) | n/a | device-test skill |
 | Provenance | `migrated-from-backlog` (new), `crash-monitor`, `security-sweep`, `auto-generated`, `ci-failure`, `ops-alert` | n/a | The filing tool |
@@ -275,8 +275,8 @@ Concrete consequences:
 - **Retire loom's and mood-layer's `critical` / `high` / `medium` / `low`
   labels.** They collide with P0–P3. The existing issue forms' "Priority:
   critical/high/normal" dropdown writes only to the body. Mapping:
-  critical→P0, high→P1, medium→P2, low→P3. Relabel first, then delete only with
-  the owner's yes (open question 4).
+  critical→P0, high→P1, medium→P2, low→P3. Relabel first, then delete the four
+  labels (owner approved, Q4).
 - **P-label exclusivity is enforced in two places:** by the filing helper at
   write time, and by the pulse's lint weekly (GitLab's scoped-label rule, done
   in tooling because GitHub can't). No Action runs on `issues: labeled`,
@@ -379,8 +379,7 @@ gh pr list    -R <repo> --state open -L 200 --label decision --json number,title
 alate. Comments are fetched only for the issues the honesty pass inspects
 (`gh issue view N --json comments`), not for all of them. `RELEASE_V2.md`,
 `USER_PATHS.md`, the regression log and the anti-patterns files stay file
-inputs, unchanged. Out of scope: any issue labelled `device-test`, and any
-issue that is itself a pulse-digest issue.
+inputs, unchanged. Out of scope: any issue labelled `device-test`.
 
 **Dual mode during rollout.** A repo whose `BACKLOG.md` still has entries is
 read the old way. A repo whose `BACKLOG.md` is the one-line pointer (it
@@ -472,27 +471,24 @@ calibration corpus the digest was already meant to be.
 - Step 6's "Docs updated" item becomes "Issues touched" (comments posted,
   bodies edited, links added) plus the digest link.
 
-#### 4.6 The digest: a pinned issue, not a file
+#### 4.6 The digest: the roadmap Artifact only (owner, Q2)
 
-One pinned issue per pulse scope (`[roadmap-pulse] Weekly digest`, labelled
-`roadmap-pulse`, in the scope's home repo: alate for alate+loom, and one each in
-mood-layer and badige). Each run does two things:
+The pulse already publishes its prioritized list as an Artifact page and
+refreshes the same URL every run (`artifactUrl` in
+`.roadmap-pulse-state.json`). The owner ruled that page is the whole digest:
+**no `WEEKLY_DIGEST.md`, no digest issue, no weekly PR.**
 
-1. It **posts one comment** in today's `digest-format.md` section shape
-   (top-10 table, what changed, run metadata, needs-confirmation), plus
-   `<!-- roadmap-pulse:scores {…all scores…} -->`.
-2. It **edits the issue body** to hold only the current top-10, so opening the
-   issue shows this week's priorities.
-
-Why not keep `WEEKLY_DIGEST.md`: alate's `CLAUDE.md` requires every doc
-change, cron-driven ones included, to go through a PR, because the husky hook
-refuses commits on `master` (alate `CLAUDE.md:99-111`). A file digest is
-therefore one PR per week per scope, and it is one of the shared planning docs
-that collide. A comment needs no PR, cannot conflict, and is readable with
-`gh issue view N --comments --json comments`. Existing `WEEKLY_DIGEST.md` files
-(alate 237 lines, loom 53, mood-layer 112) are frozen with a pointer line on
-top. Their history stays in git. This is open question 2, because the owner
-may prefer the file.
+- The scores the next run diffs against are embedded in the page as
+  `<script type="application/json" id="roadmap-pulse-scores">{…}</script>`,
+  read back at the start of each run with the Artifact tool's `read` action.
+  If the read fails, the run falls back to a `lastScores` copy in
+  `.roadmap-pulse-state.json` and says so in its summary.
+- Existing `WEEKLY_DIGEST.md` files (alate 237 lines, loom 53, mood-layer 112)
+  get a pointer line to the Artifact on top, in the same PR as that repo's
+  migration, and are never appended to again. Their history stays in git.
+- Trade-off accepted: week-over-week history is no longer a readable log. Only
+  the latest page plus the previous run's scores survive. Git history keeps the
+  old digest.
 
 ### 5. Migration script: `tools/backlog-migrate/` (Node, no Python)
 
@@ -515,7 +511,7 @@ The parser reads `BACKLOG.md` at a pinned SHA (`git show <sha>:BACKLOG.md`), plu
 `docs/backlog/*.md` for alate.
 
 - **Section priority** comes from `## ` headings: `P0`–`P3` → that label;
-  **`P4` → `P3`** with a `Deferred until: <trigger>` line (open question 1).
+  **`P4` → `P3`** with a `Deferred until: <trigger>` line (owner, Q1).
   mood-layer's `Post-launch — verify after v0.2.0 is live` → `P2`, and each
   entry is checked for device-test shape (below). loom's `P1 — needs the user` →
   `P1` + `needs-input`. `Done`, `Done / retired`, `Dismissed / out of scope` →
@@ -548,7 +544,7 @@ The parser reads `BACKLOG.md` at a pinned SHA (`git show <sha>:BACKLOG.md`), plu
 | Verdict | Rule |
 |---|---|
 | `skip-resolved` | The title starts `~~` or contains `~~P\d~~`, `RESOLVED`, `CLOSED`, `SHIPPED`, `SUPERSEDED`, `DONE` **as a status word** (not "code half DONE", "partly done"), **and** neither the title nor the body contains an open residual (`Still open`, `Remaining:`, `What's left`, `PARTIAL`, `open)`) |
-| `review` | A resolved marker **and** an open residual. These are the 4 measured cases. The default proposal is "create an issue for the residual only" (open question 3) |
+| `review` | A resolved marker **and** an open residual. These are the 4 measured cases. Owner ruling (Q3): create an issue for the residual only |
 | `device-test` | The entry is a manual on-device check ("Manual device tests pending", "Verify … on a real device"). It is routed to `dtq enqueue` rather than a work issue. badige's two numbered flows are the measured case |
 | `link #N` | See §5.3 |
 | `create` | Everything else in a P-section |
@@ -557,11 +553,10 @@ The parser reads `BACKLOG.md` at a pinned SHA (`git show <sha>:BACKLOG.md`), plu
 Other inferred fields: **type** (`bug` when the title/body leads with broken /
 fails / crash / regression / 5xx; `chore` for CI / deps / lint / runner /
 timeouts; `refactor` for consolidate / retire / collapse / extract; else
-`feature`; low confidence → none, left to triage). **area** only where the repo has area labels and a path
-prefix matches (loom `api/` → `api`). **`needs-input`** when the body contains `Blocking on the user`,
+`feature`; low confidence → none, left to triage). **area** is never inferred (Q6). **`needs-input`** when the body contains `Blocking on the user`,
 `Decision needed`, `Needs input`, or `Owner: user (decision)`. **Target repo** is
 the repo named in an entry that says it lives elsewhere ("(alate repo)",
-"loom#", "litmus fast-follow"). The default is the source repo (open question 5).
+"loom#", "litmus fast-follow"). Owner ruling (Q5): file in the repo that owns the code; an entry that names no other repo stays in the source repo.
 
 #### 5.3 Dedupe, idempotency, and links
 
@@ -669,7 +664,7 @@ rather than tuned in the abstract.
 3. alate only: move `docs/backlog/*.md` to `docs/briefs/`. Each brief gets a
    `**Tracking:** alate#N` header, and its issue links the brief. Open parts of
    a shipped brief (the widget brief's §8e "Still-open hardening") become the
-   issue's "What's left" (open question 7).
+   issue's "What's left" (owner, Q7).
 4. Rewrite links in other docs that point at `BACKLOG.md` or `docs/backlog/`:
    `PROJECT_DOCS.md`, `CLAUDE.md`, `memory/decisions/*`, `docs/*`. Code and CI
    comments that say "tracked in BACKLOG P1 …" (alate `ci.yml:105`,
@@ -715,17 +710,17 @@ name are listed too, so none looks missed.
 | `references/CLAUDE.base.md:50-56` | The shared-docs bullet drops BACKLOG |
 | `references/CLAUDE.base.md:62-63` | Status update → "came from an issue? `Closes #N` in the PR body. From a regression-log / runbook entry? Update it in the same PR" |
 | `references/CLAUDE.base.md:68` | "History, context and rejected options go in BACKLOG" → "… go in the issue (decided designs: `memory/decisions/`)" |
-| `references/CLAUDE.base.md:108-111` Planning docs | The `BACKLOG.md` line becomes "**Work items** — GitHub issues, P0–P3 (`gh issue list -l P1`). Owner yes/no → draft `decision` PRs". The `WEEKLY_DIGEST.md` line → "pinned `[roadmap-pulse]` digest issue" |
+| `references/CLAUDE.base.md:108-111` Planning docs | The `BACKLOG.md` line becomes "**Work items** — GitHub issues, P0–P3 (`gh issue list -l P1`). Owner yes/no → draft `decision` PRs". The `WEEKLY_DIGEST.md` line is deleted (the digest is the roadmap Artifact) |
 | `skills/roadmap-pulse/SKILL.md` (15 hits) | Rewrite per §4: description frontmatter ("scans open GitHub issues (P0–P3) plus RELEASE notes and the regression log"), doc-target table, inventory, Steps 1/3/4/5/5.5/6, "What this skill does NOT do", dual mode. The worktree-harness warning is kept but loses its BACKLOG example |
 | `skills/roadmap-pulse/references/staleness-detection.md` (9) | Per §4.2 table. The squash-merge gotchas become "timeline cross-reference + `closedByPullRequestsReferences`". Add the label-hygiene checks |
 | `skills/roadmap-pulse/references/rewrite-patterns.md` (6) | The BACKLOG section → "Issue rewrites" (§4.2). The regression-log and anti-pattern sections are unchanged |
 | `skills/roadmap-pulse/references/scoring-contract.md` (3) | The input `title` = issue title and `description` = the "What" section. Add §4.4's input-source table and the P-band floor. "references to bands in BACKLOG.md entries" is deleted |
 | `skills/roadmap-pulse/references/dependency-inference.md` (3) | Per §4.3: native `blockedBy`/`blocking` is the persisted form. Suggestions go in the digest. `**Depends on:**` persistence is deleted. Sub-issue rollup is added |
-| `skills/roadmap-pulse/references/digest-format.md` (3) | Per §4.6: location = pinned issue comment. Header = issue body. Add the hidden-scores block. "rest can stay in the BACKLOG" → "rest stay in the issue list" |
+| `skills/roadmap-pulse/references/digest-format.md` (3) | Per §4.6: location = the roadmap Artifact page. Scores live in the embedded JSON block. Drop the append-to-file instructions. "rest can stay in the BACKLOG" → "rest stay in the issue list" |
 | `skills/roadmap-pulse/scripts/invoke_rubric.sh` | No change. It takes JSON on stdin |
 | `skills/build-feature/SKILL.md:421-427, 485, 537` | "a BACKLOG.md entry" → "a GitHub issue (`Closes #N` in the PR body)". "land a runbook/BACKLOG entry" → "file an issue (`wi new --priority …`)" |
 | `skills/status-check/SKILL.md:144` | "a BACKLOG status line per 'Status update on completion'" → "a runbook status line". Closing an issue a merged PR forgot is already its job |
-| `skills/new-app/SKILL.md:11, 90-91` | "no pre-built backlog" → "no pre-filed issues". "BACKLOG appears when there's real out-of-scope work" → "work items are issues. Scaffold runs `labels/bootstrap.js` and syncs the issue forms". The no-WEEKLY_DIGEST line becomes "roadmap-pulse opens the digest issue on its first run" |
+| `skills/new-app/SKILL.md:11, 90-91` | "no pre-built backlog" → "no pre-filed issues". "BACKLOG appears when there's real out-of-scope work" → "work items are issues. Scaffold runs `labels/bootstrap.js` and syncs the issue forms". The no-WEEKLY_DIGEST line stays; add "roadmap-pulse publishes its Artifact on its first run" |
 | `skills/new-app/references/new-app-brief.md:27` | "Don't pre-write a backlog or feature list" → "Don't pre-file issues or a feature list" |
 | `skills/crash-monitor/SKILL.md:67, 68, 149, 320` | English ("Sentry's standing backlog"), so no wording change. **But** filed issues gain a P label: an unresolved production crash → `P0` if it's fatal on a user path, else `P1`, and 4b `needs-input` issues → `P1` |
 | `skills/security-sweep/SKILL.md:3, 64` | English ("Dependabot PR backlog"), so no wording change. Tracked-advisory issues gain a P label: runtime-reachable high/critical → `P1`, other runtime → `P2`, build-time only → `P3` |
@@ -749,7 +744,7 @@ consume. Renaming it would be an API break with no benefit. The one change is
 |---|---|
 | alate `CLAUDE.md:89-90` | The shared-docs check command targets `memory/project_regression_log.md`, not `BACKLOG.md` |
 | alate `CLAUDE.md:96` | "BACKLOG status" → "runbook status" |
-| alate `CLAUDE.md:99-111` | Keep the history. Add "the digest is now a pinned issue, so the pulse needs no doc PR for it" |
+| alate `CLAUDE.md:99-111` | Keep the history. Add "the digest is now the roadmap Artifact, so the pulse needs no doc PR for it" |
 | alate `CLAUDE.md:123` | Status update → `Closes #N` |
 | alate `CLAUDE.md:134` | "History and findings go in BACKLOG" → "go in the issue" |
 | alate `CLAUDE.md:212` | "BACKLOG + roadmap-pulse span ALL related repos" → "roadmap-pulse spans ALL related repos' issues". An item is filed **in the repo that owns the code** |
@@ -793,8 +788,8 @@ consume. Renaming it would be an API break with no benefit. The one change is
 5. **mood-layer, then badige.** mood-layer tests the residual `review` cases.
    badige tests the heading-as-entry style and the device-test routing.
 6. **alate last.** It is the largest (32 + 1 + 3 briefs) and has the most PRs in
-   flight (#924 #926 #927 #928). Its digest moves to the pinned issue in the
-   same PR.
+   flight (#924 #926 #927 #928). Its `WEEKLY_DIGEST.md` gets the Artifact pointer
+   line in the same PR.
 7. **forge PR C.** Remove BACKLOG file mode from roadmap-pulse, bump `plugin.json`.
 
 **Freeze protocol for live sessions.** Before `plan` in a repo:
@@ -829,7 +824,7 @@ pinned SHA, and every issue permalinks it.
 |---|---|---|
 | **Losing context from long entries** (alate's 5 KB entries, mood-layer's 3 KB narratives) | Medium / high | The text is migrated verbatim, with only links rewritten. Every issue permalinks its exact source lines at a fixed SHA. The body cap is not reached (max 8,192 of 65,536). Nothing is summarised by the script. Trimming to current state happens later, by humans or the pulse, with the original one click away |
 | **Parser mis-splits** (the 3 measured hazards) | High for alate / medium | Dry-run table reviewed in the PR before `apply`, `overrides.json`, and `review` verdicts instead of guesses. The fixture tests pin each measured hazard |
-| **Notification spam** | Low / low | ~63 creates spread over four separate runs, no assignees, `@` neutralised, labels in the create call. The owner's own actions don't notify the owner by default. If any other account watches these repos, open question 4b applies |
+| **Notification spam** | Low / low | ~63 creates spread over four separate runs, no assignees, `@` neutralised, labels in the create call. The owner's own actions don't notify the owner by default. If any other account watches these repos, they will see the creates |
 | **Duplicates on re-run or crash** | Medium without design / high | List-based marker index (never search), a per-write ledger, source-SHA pinning, and the pilot's "re-run creates 0" acceptance test |
 | **Live sessions mid-edit on BACKLOG.md** (10 open PRs today) | High / medium | Freeze protocol + proven-red guard + dual-mode pulse. Migration is per repo, so one repo's freeze doesn't block the others |
 | **Secondary rate limits** | Low at ~80 writes / high if hit | Serial ≥3 s, a 400/hour budget, retry-after, backoff, and a stop that the ledger makes safe |
@@ -874,9 +869,9 @@ second place where state lives. A read-only Project view can be added later
 without changing anything here.
 
 **D. Keep `WEEKLY_DIGEST.md` as a file.** It is diffable and greppable in the
-checkout. It lost (provisionally, open question 2) because in alate it costs
-one PR per week, the file is itself a collision surface, and the digest's
-consumers (the pulse's own diff and the owner) read an issue just as well.
+checkout. It lost (owner, Q2) because in alate it costs one PR per week and the file
+is itself a collision surface. A pinned digest issue lost too: the owner
+reads the roadmap Artifact, and one digest surface is enough.
 
 **E. Native issue types instead of type labels.** The org has Task/Bug/Feature.
 This lost because type labels already exist and are used by filters in three
@@ -908,39 +903,19 @@ Each step is one PR (or one per repo). Effort estimates are hypotheses.
    rewrite → guard sequence. Acceptance is in §7, step 4.
 4. **mood-layer** (≈0.5 day), then **badige** (≈0.5 day). Same sequence.
 5. **alate** (≈1 day): the same sequence plus the `docs/briefs/` move, the
-   digest moving to the pinned issue, CI-comment rewrites, and the CLAUDE.md
+   `WEEKLY_DIGEST.md` Artifact pointer, CI-comment rewrites, and the CLAUDE.md
    rows in §6.
 6. **forge — remove file mode** (≈0.25 day): drop the BACKLOG path from
    roadmap-pulse and bump `plugin.json`.
 
 ## Open Questions
 
-Every question needs input from the owner. The recommended default is in bold.
+All resolved by the owner on 2026-09-18.
 
-- [ ] **Q1. P4 entries** (alate has 3: the niche-fit directory,
-  `sendNoreply()` flows, wardrobe integration). Map them to **`P3` with a
-  `Deferred until: <trigger>` line in the body**, or add a fifth label `P4`?
-  (`on hold` doesn't fit, because it expires in 14 days.)
-- [ ] **Q2. Digest location.** **A pinned `[roadmap-pulse]` issue with one
-  comment per run** (no weekly PR, no collisions), or keep `WEEKLY_DIGEST.md`
-  as a file updated through a weekly PR?
-- [ ] **Q3. Resolved-with-residual entries** (4: mood-layer's two Circle
-  entries and "Hold-to-learn", alate's Supabase advisors). **Create an issue for
-  the residual only**, route it to the device-test queue when it is a
-  device check, or leave it in git history?
-- [ ] **Q4. Old priority labels.** May loom's and mood-layer's
-  `critical`/`high`/`medium`/`low` labels be **relabelled to P0–P3 and then
-  deleted**? (Deleting a label is irreversible, so it needs your yes.) 4b: does
-  any account other than yours watch these repos? If so, do you want to switch
-  them to "Participating" for the migration window? That is your setting to
-  change, not an agent's.
-- [ ] **Q5. Cross-repo entries in alate's BACKLOG** (items that say they live
-  in loom, litmus or tessellate-pages). **File them in the repo that owns the
-  code** (litmus and tessellate-pages would get the label set via bootstrap),
-  or keep everything in alate?
-- [ ] **Q6. Area labels for alate and badige** (neither has any). Define a small
-  set during their migrations (proposal for alate: `mobile backend scraper fit-engine infra`),
-  or **leave area empty until it's needed**?
-- [ ] **Q7. alate's `docs/backlog/` briefs.** **Move them to `docs/briefs/`
-  and link each from its issue**, or inline them into issue bodies (they fit
-  the size limit, but they lose PR-reviewable diffs)?
+- [x] **Q1. P4 entries.** Map to `P3` with a `Deferred until: <trigger>` line. No `P4` label.
+- [x] **Q2. Digest location.** The roadmap Artifact only. No digest issue, no `WEEKLY_DIGEST.md`, no weekly PR (§4.6).
+- [x] **Q3. Resolved-with-residual entries.** File an issue for the residual only (device checks still route to the device-test queue).
+- [x] **Q4. Old priority labels.** P labels only. Relabel loom's and mood-layer's `critical`/`high`/`medium`/`low` issues to P0–P3, then delete those four labels in each repo. 4b (watcher notification settings) dropped; pacing in §5.6 stands.
+- [x] **Q5. Cross-repo entries.** File each in the repo that owns the code; litmus and tessellate-pages get the label set via bootstrap.
+- [x] **Q6. Area labels.** None added. alate and badige get no area labels; loom's and mood-layer's existing ones stay. The migration never infers area.
+- [x] **Q7. alate's `docs/backlog/` briefs.** Move to `docs/briefs/` and link each from its issue.
