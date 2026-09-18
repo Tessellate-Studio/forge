@@ -47,11 +47,11 @@ All in `forge/standards/workflows.md` unless noted:
 - **Orphan-branch fixes** — port to a fresh branch off default automatically.
 - **Concurrent sessions** — worktree-isolate every task; SHA-explicit git;
   verify `HEAD` before every commit/push (`anti-patterns.md`).
-- **Shared docs & duplicate work** — before editing a regression log / BACKLOG /
+- **Shared docs & duplicate work** — before editing a regression log / RELEASE doc /
   runbook, list the open PRs already in that file; before starting anything, scan open
   PR titles for your intent (a duplicate wastes a whole branch). Commit boundaries
   follow the logical change as usual — a doc edit that is part of the change goes in
-  its commit; a separate concern (regression-log row, BACKLOG status) gets its own,
+  its commit; a separate concern (regression-log row, runbook status) gets its own,
   same PR is fine. Date-key new log rows, never a sequential number
   (`anti-patterns.md`).
 - **Bug-fix pre-flight** — read `memory/project_regression_log.md` BEFORE any
@@ -59,14 +59,19 @@ All in `forge/standards/workflows.md` unless noted:
 - **TDD** — failing test first, suite green before commit.
 - **Quality pass** — before committing any non-trivial diff (UI or not):
   `/code-review`, then `/simplify`, re-run tests, commit cleanups separately.
-- **Status update** — change came from a BACKLOG / regression-log / runbook
-  entry? Update that entry (status, PR, SHA) in the same PR.
+- **Status update** — change came from an issue? `Closes #N` in the PR body
+  (`Refs #N` for a plumbing-only PR). From a regression-log / runbook entry?
+  Update that entry (status, PR, SHA) in the same PR.
+- **Work items are GitHub issues** — file new work with `wi new --priority P0..P3`
+  (exactly one P label), never a `BACKLOG.md` entry. Owner yes/no → a draft
+  `decision` PR (`forge/standards/workflows.md` → "Work items are GitHub issues").
 - **External-tool decisions** — decided setups go in
   `docs/manual-runbook.md` before the session ends, in a fixed format:
   **What's left:** [one line] · **Steps:** [numbered, copy-pasteable] ·
   **Verify:** [how to confirm it worked]. Finished setups move to a `## Done`
-  one-liner. History, context and rejected options go in BACKLOG; the runbook
-  holds exactly-how, nothing else (`forge/standards/workflows.md`).
+  one-liner. History, context and rejected options go in the issue (decided
+  designs: `memory/decisions/`); the runbook holds exactly-how, nothing else
+  (`forge/standards/workflows.md`).
 - **Doc placement** — one location per doc type: `forge/standards/doc-placement.md`.
 - **Standalone runbooks** — a procedure big enough to need its own file (rather
   than a `manual-runbook.md` section) follows `docs/_USER_DOC_TEMPLATE.md`: what
@@ -105,10 +110,9 @@ optional and discovered from the repo when absent.
 
 ## Planning docs
 
-- `BACKLOG.md` — durable record of out-of-scope work (P0–P4); check before
-  proposing "should we build X?"
+- **Work items** — GitHub issues, P0–P3 (`gh issue list -l P1`); check them
+  before proposing "should we build X?". Owner yes/no → draft `decision` PRs.
 - `USER_PATHS.md` — happy + edge + uncovered user flows.
-- `WEEKLY_DIGEST.md` — append-only weekly priority history (roadmap-pulse).
 - `docs/manual-runbook.md` — every decided external-tool setup, exact steps.
 - `memory/` — app-specific regression log, anti-patterns, design vision.
 

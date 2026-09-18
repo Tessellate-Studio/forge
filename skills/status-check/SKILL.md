@@ -141,11 +141,12 @@ when not.
 - **Verify:** every "I'll do X later", "TODO", "in a follow-up" the assistant
   wrote. Check whether X actually happened — later turns first, then live
   state.
-- **Auto-act:** small and in-scope (a doc tombstone, a BACKLOG status line per
+- **Auto-act:** small and in-scope (a doc tombstone, a runbook status line per
   "Status update on completion", a promised comment) → just do it now; the
   usual same-PR housekeeping rules apply.
 - **Escalate when:** the promise is feature- or investigation-sized → manual
-  row, or offer to file a tracked issue while the context is warm.
+  row, or offer to file a tracked issue (`wi new --priority P0..P3`) while the
+  context is warm.
 
 ### (h) Uncommitted / unpushed work
 

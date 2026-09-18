@@ -24,5 +24,5 @@ package id, or platform.
 
 ## What the skill does NOT need
 
-Don't pre-write a backlog or feature list — roadmap-pulse builds that later. The
+Don't pre-file issues or a feature list — roadmap-pulse scores them later. The
 brief is for *standing up the repo*, not planning the product.

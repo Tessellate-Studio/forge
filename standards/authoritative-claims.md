@@ -136,9 +136,9 @@ unproven · not proven · unverified · still unobserved · never been run
 inferred rather than observed · does not cover · worth carrying · caveat
 ```
 
-"I'll flag it" and "worth revisiting" are not homes. An issue number, a queue
-item, or a backlog row is a home. If the caveat does not deserve one, it did
-not deserve writing down either — say nothing and move on.
+"I'll flag it" and "worth revisiting" are not homes. An issue number or a queue
+item is a home. If the caveat does not deserve one, it did not deserve writing
+down either — say nothing and move on.
 
 ### If this fails again
 

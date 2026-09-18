@@ -103,7 +103,7 @@ git log --grep="Revert" --since=24h --oneline
 
 For each revert of a crash-monitor PR:
 
-- File an issue in `Tessellate-Studio/litmus` titled `[crash-monitor] Auto-fix reverted: <original PR title>`, describing what was reverted and why it needs investigation
+- File an issue in `Tessellate-Studio/litmus` titled `[crash-monitor] Auto-fix reverted: <original PR title>`, labelled `crash-monitor` and `P1`, describing what was reverted and why it needs investigation
 - Push-notify: `"Auto-fix reverted — <repo>: <short description>. Cooldown active for 2 weeks on <module>."`
 
 **You do not record the cooldown anywhere.** The confidence command derives it at merge time from the repo's own commit history — any revert touching the changed paths in the last 14 days refuses the merge. This replaces the old `COOLDOWN_UNTIL` marker in the auto-ship log, which was never actually writable: that table has no column for a module path, so no cooldown was ever recorded and the condition silently passed on every run from the skill's creation until 2026-09-04. A revert is evidence the gate was wrong about that code once; deriving it from git is what makes the loop-breaker real, because a revert cannot forget to record itself.
@@ -194,6 +194,31 @@ Two things it does **not** decide, which stay your judgement and stay here in pr
 
 **Every automation merges through it.** `security-sweep` and `roadmap-pulse` do too since forge#86, with the conditions that cannot describe their changes printed as `skipped` rather than silently dropped.
 
+### Priority labels on everything this skill files
+
+Work items are GitHub issues labelled `P0`–`P3`, and roadmap-pulse ranks them
+by that label (`${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Work items
+are GitHub issues"). So every issue this skill **files** carries exactly one P
+label in the create call, and so does a 4b PR:
+
+| What | P label |
+|---|---|
+| An unresolved production crash that is **fatal on a user path** (the app closes, a screen won't render, a user-facing request fails) | `P0` |
+| Any other unresolved production crash, including a config/environment fault (4c) and a reverted auto-fix (Step 1.6) | `P1` |
+| A 4b fix waiting on a human (`needs-input`) | `P1` |
+
+When the crash came from an existing GitHub issue that has **no** P label,
+add the same label to it. An issue that already carries one keeps it: a human
+set it, and this skill doesn't overrule a human's priority.
+
+**A missing label fails the whole `gh issue create`.** 4c and revert issues go
+to `Tessellate-Studio/litmus`, which had no P labels on 2026-09-19. Check
+`gh label list -R <repo> -L 200` before filing into a repo; missing → run
+`node "${CLAUDE_PLUGIN_ROOT}/tools/labels/bootstrap.js" --repo <repo>`. If that
+isn't possible, file with `needs-triage` instead and name the intended P in the
+body. Never skip the filing over a label (`standards/workflows.md` → "Filing an
+issue").
+
 ### 4a. CODE BUG — confident fix (auto-merge)
 
 1. Branch: `crash-monitor/{issue-id}` (e.g. `crash-monitor/ALATE-42`, `crash-monitor/issue-17`)
@@ -250,7 +275,7 @@ Labels: `crash-monitor`, `auto-generated`.
 ### 4b. CODE BUG — ambiguous / risky / multi-file (needs-input)
 
 This is where exit `10` lands you. Same as 4a, except:
-- Add label `needs-input`
+- Add labels `needs-input` and `P1`
 - Do NOT merge — the command already refused, and re-running it will refuse again
 - Paste the command's printed reasons into the PR body so the human sees the blocker without re-running anything
 - Add to the PR body:
@@ -295,7 +320,8 @@ Body:
 {How to confirm the fix worked — what to check in Sentry/logs}
 ```
 
-Labels: `crash-monitor`, `needs-triage`.
+Labels: `crash-monitor`, plus `P0` or `P1` per "Priority labels" above. No
+`needs-triage`: this run has already triaged it.
 
 **A manual step that sends the human to a vendor's support channel must name
 a channel that exists for the account.** Check the tier with one call before

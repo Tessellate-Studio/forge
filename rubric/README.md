@@ -31,7 +31,7 @@ Each task is scored 0–3 on four dimensions:
 rubric init [--profile startup|enterprise|research]   # set scoring weights
 rubric evaluate "Task description" --interactive       # score one task
 rubric compare --file tasks.json                       # rank multiple tasks
-rubric report --format markdown --output backlog.md    # export a prioritized list
+rubric report --format markdown --output prioritized.md # export a prioritized list
 ```
 
 ## Programmatic

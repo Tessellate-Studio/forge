@@ -299,7 +299,7 @@ the output will be short or you need to pipe it into something else.
 
 ## Orphan-branch fixes — port AUTOMATICALLY, do not ask
 
-If a regression-log/BACKLOG entry or an audit reveals a needed fix already
+If a regression-log row, an issue or an audit reveals a needed fix already
 exists on an unmerged orphan branch (typically `claude/<adjective>-<noun>-<hash>`
 from a prior session), port it to a fresh branch off the default branch without
 asking:
@@ -307,8 +307,9 @@ asking:
 1. Cherry-pick or replay the diff on the new branch.
 2. Run the full test suite — orphan-branch tests should pass on the default
    branch too; if not, fix forward, don't skip.
-3. Update BACKLOG / regression-log entries to the new merged SHA — an entry is
-   "shipped" only when `git branch --contains <sha>` lists the default branch.
+3. The port PR carries `Closes #N` for the tracking issue, and regression-log
+   rows get the new merged SHA — a fix is "shipped" only when
+   `git branch --contains <sha>` lists the default branch.
 
 ## Concurrent sessions — isolate the checkout
 
@@ -316,6 +317,142 @@ Assume multiple agents may drive one repo at the same time. Worktree-isolated
 sessions, `npm ci` before the commit gate, SHA-explicit git, verify `HEAD`
 before every commit/push. Full rule:
 [`anti-patterns.md` → "Isolate concurrent sessions"](./anti-patterns.md).
+
+## Work items are GitHub issues — `BACKLOG.md` is retired
+
+Open work lives in **GitHub issues labelled `P0`–`P3`**, one issue per item,
+in the repo that owns the code. Not in a `BACKLOG.md`. A single shared file
+could not be claimed, labelled, linked as blocked, closed by a PR keyword or
+queried, and three sessions rewrote the same paragraph of it in one day.
+Decided in
+[RFD 004](../memory/decisions/rfd-004-retire-backlog-md-work-items-as-github-issues.md);
+this section is the operating rule.
+
+**Rollout.** Each app repo migrates in its own PR. A migrated repo's
+`BACKLOG.md` is a one-line pointer that carries `<!-- backlog-retired -->`, and
+a CI guard fails any PR that adds to it. A repo that has not migrated yet keeps
+its existing entries until its migration PR (`roadmap-pulse` still reads them
+there). **New work goes to an issue in every repo, migrated or not.** Don't add
+entries to a `BACKLOG.md`.
+
+### Where each kind of content lives
+
+| Content | Home |
+|---|---|
+| A work item: what, why, done-when, what's left **now** | The **issue body**, edited in place so it stays true |
+| Progress notes, findings, status changes, "tried X, didn't work" | **Issue comments**: append-only, one per event |
+| A piece that has its own done state and could close on its own | A **sub-issue** (`gh issue create --parent N`, ≤100 per parent) |
+| A small checklist with no separate lifecycle | `- [ ]` lines in the body |
+| "Does the owner approve X?" | A **draft PR labelled `decision`** that adds or edits a doc in `memory/decisions/`. Merge = approve, close = reject |
+| A decided design, and rejected alternatives worth keeping | `memory/decisions/` (ADR / pitch / RFD) |
+| Bug root cause + lesson | `memory/project_regression_log.md` (unchanged) |
+| Exact console steps for a human | `docs/manual-runbook.md` (unchanged) |
+| A long product brief (tens of KB, many sections) | `docs/briefs/<name>.md`, linked from its issue |
+| Weekly priorities | The **roadmap Artifact** that `roadmap-pulse` refreshes each run. There is no `WEEKLY_DIGEST.md` |
+
+A `####` sub-section stays in the body. It becomes a sub-issue only when it
+passes the "could close on its own" test **and** someone decides so. A dated
+narrative goes in comments from now on; the body is trimmed to the current
+state by whoever changes the state.
+
+### Labels
+
+Labels are the only store for priority and type. There is no Priority field in
+the body, because a field and a label drift apart.
+
+| Family | Values | Rule |
+|---|---|---|
+| Priority | `P0` blocker / pre-launch · `P1` do next · `P2` soon · `P3` later | **Exactly one** on every open work issue. There is no `P4`: "someday" is `P3` plus a `Deferred until: <trigger>` line in the body |
+| Type | `bug` · `feature` · `chore` · `refactor` (`enhancement` reads as `feature`) | At most one |
+| Area | loom: `admin-ui api sdk extension supabase infra` · alate: `mobile backend scraper fit-engine infra` | Optional, 0–n, **loom and alate only**. Every other repo gets no area labels. Never inferred by a tool |
+| Lifecycle | `decision` · `on hold` · `claimed` · `needs-input` · `needs-triage` | See the matrix below |
+| Queues | `device-test` + `needs-human` `needs-build` `parked` `failed` | A separate system ("Device-test queue" below). `device-test` issues carry **no** P label |
+| Provenance | `migrated-from-backlog`, `crash-monitor`, `security-sweep`, `auto-generated`, `ci-failure`, `ops-alert` | Set by the filing tool |
+
+`tools/labels/bootstrap.js --repo <r> [--dry-run]` creates the canonical set
+in a repo, idempotently. Issue forms silently drop a label the repo doesn't
+have, so run it before relying on a form. The old `critical` / `high` /
+`medium` / `low` labels map to `P0` / `P1` / `P2` / `P3` and are deleted after
+relabelling.
+
+**How the lifecycle labels interact:**
+
+| Label | Goes on | Means | roadmap-pulse | Expiry |
+|---|---|---|---|---|
+| `decision` | **PRs only** (draft) | A plan awaiting the owner's yes/no | Not scored. Listed under "awaiting your yes/no", oldest first | Surfaced after 14 days open |
+| `needs-input` | Issues (and non-decision PRs) | Blocked on a human answer that is *not* a doc approval, or on an open decision PR (`Blocked on decision #N` in the body) | Scored, listed under "needs you", never auto-built | Surfaced after 14 days |
+| `on hold` | Issues, PRs | "Not now" was decided. The applying comment states a review-by date (see "On hold" below) | Scored, ranked after every non-held item, never auto-built | Past the date → reminder comment, never closed |
+| `claimed` | Issues, PRs | A live session owns it (`wip`) | Scored normally; skipped by auto-build unless the claim is the pulse's own | `wip sweep` |
+| `device-test` | Issues | A queued on-device test | Excluded (different queue) | device-test skill |
+| `needs-triage` | Issues | Filed without a P label | Scored provisionally; a P is proposed | Listed every week until it has exactly one P |
+
+- **Never put `needs-input` on a `decision` PR.** Closing a decision PR is a
+  valid answer (reject). `pr-close-label-guard.yml` skips `decision`-labelled
+  PRs so that answer isn't turned into a follow-up issue.
+- **P-label exclusivity is enforced twice:** by the filing helper at write
+  time, and by roadmap-pulse's weekly lint (0 or >1 P labels is reported).
+
+### Filing an issue
+
+Skills and sessions file through **`wi new`** (`tools/work-item/cli.js`), which
+renders the shared body sections, requires exactly one `--priority P0..P3`,
+and lists the open issues before it creates (`gh issue list -L 1000`, never the
+search API, which lags by minutes and has filed duplicates elsewhere).
+`wi new --dry-run` prints the body without creating anything. `wi` not on
+PATH → `node "${CLAUDE_PLUGIN_ROOT}/tools/work-item/cli.js" new …`. If this
+forge predates the tool, do the same by hand: list the open issues
+(`gh issue list -R <repo> --state open -L 1000 --json number,title`), check
+for a duplicate, then `gh issue create -R <repo> --label <P> --label <type> …`
+with every label in the create call (one write, one notification).
+
+**A missing label fails the whole create.** `gh issue create --label P1`
+refuses outright in a repo that has no `P1` label, and not every repo has the
+set yet (litmus had none on 2026-09-19). Before filing into a repo for the
+first time, check `gh label list -R <repo> -L 200`. Missing → run
+`tools/labels/bootstrap.js --repo <repo>` (idempotent). If that isn't possible,
+file with the labels that do exist plus `needs-triage`, and say which P it
+should carry in the body. Never drop the issue because a label is missing:
+the weekly lint lists anything without a P.
+
+The body uses the headings the issue forms and roadmap-pulse share. Every
+section is optional to the parser, but a good item has them:
+
+```markdown
+### What
+The work, written so a session can start it cold.
+
+### Why / evidence
+User impact and where it came from: regression row, Sentry id, user quote, decision doc.
+
+### Done when
+Acceptance criteria, ideally a runnable **Verify:** block. roadmap-pulse executes it.
+
+### Context & history
+Rejected options, links, memory/decisions docs, briefs. Progress goes in comments.
+
+### Effort (person-days)
+unknown | 0.5 | 1 | 2 | 3 | 5 | 10 | 20
+
+### Reach
+unknown | 1 — just me / internal | 10 — early testers | 100 — all current users | 1000 — future users at scale
+```
+
+A human filing on the web uses the repo's issue form (canonical copies live in
+forge `templates/issue-forms/`). The form applies `needs-triage`; set the P
+label in the sidebar in the same step.
+
+### Closing, and linking decisions
+
+- **A PR that ships an issue says `Closes #N`** in its body. The merge is the
+  status update; the issue keeps its whole body and comments. See "Status
+  update on completion" below.
+- **A PR that only lays plumbing for an issue says `Refs #N`.** So does a
+  **decision PR**: approving a plan is not shipping it.
+- **Link a decision to its issue in both directions.** The decision doc gets a
+  `**Tracking:** <repo>#N` line; the issue body links the doc.
+- **"Strike-through, don't delete" becomes "close with a reason, never
+  delete".** `gh issue close N --reason completed|not_planned --comment "<why>"`.
+  Deleting an issue is irreversible and is never an agent action.
 
 ## Work claims — say who is on an issue/PR, before you start
 
@@ -357,7 +494,7 @@ That posts:
 - **Started at:** <ISO 8601 UTC>
 - **Last touch:** <ISO 8601 UTC — rewritten at each checkpoint>
 - **Related:** <the issue a PR implements, the PRs carrying an issue, or —>
-- **Docs:** <RFD / ADR / pitch / backlog entry this is built against, or —>
+- **Docs:** <RFD / ADR / pitch / brief this is built against, or —>
 - **Waiting on:** — <or: human — what you handed them>
 - **Claim:** HELD
 ```
@@ -467,12 +604,14 @@ gh label create "on hold" -R <owner/repo> --color bfd4f2 \
 ## Shared planning docs — check who else is in the file
 
 Worktree isolation does not prevent two branches editing the same doc or the same
-lane. Before touching a regression log, BACKLOG, digest or runbook — or starting a
+lane. Before touching a regression log, RELEASE doc or runbook — or starting a
 fix in a busy area — list the open PRs already in that file, and fix any claim your
 own change makes stale rather than handing it to another session. Commit
 boundaries follow the logical change as usual: a doc edit that is part of the
-change goes in its commit; a separate concern (a regression-log row, a BACKLOG
-status) gets its own commit, same PR is fine. Full rule:
+change goes in its commit; a separate concern (a regression-log row, a runbook
+status) gets its own commit, same PR is fine. Work items don't collide in
+content any more, because each is its own issue: claim it (`wip claim`)
+instead of checking a file. Full rule:
 [`anti-patterns.md` → "Concurrent branches collide in content"](./anti-patterns.md).
 
 ## Bug-fix pre-flight — read the regression log FIRST
@@ -521,8 +660,14 @@ for a true one-liner:
 
 ## Status update on completion — close the loop on source docs
 
-If the feature or fix originated from a tracked item — a BACKLOG.md entry, a
-regression-log row, a RELEASE checklist line, a runbook TODO — **update that
+**Came from an issue? `Closes #N` in the PR body *is* the status update.** The
+merge closes the issue, and the issue keeps its body, comments and the link to
+the PR that closed it. A PR that only lays plumbing for the issue (a helper, a
+migration the feature will use) says `Refs #N` instead, so the issue stays
+open until the user-facing change lands.
+
+If the change also originated from — or changes the truth of — a
+regression-log row, a RELEASE checklist line or a runbook TODO, **update that
 entry in the same PR** that ships the change: status (DONE + date), the PR
 number, and the merged SHA once it lands. A tracked item whose fix shipped but
 whose entry still says "open" is how work gets re-done and users re-ask.
@@ -530,8 +675,7 @@ whose entry still says "open" is how work gets re-done and users re-ask.
 branch — see "Speak from authority" in
 [`authoritative-claims.md`](./authoritative-claims.md).)
 
-**If the fix also has a tracked GitHub issue, close it the same way — via a
-keyword in the PR body, not a follow-up edit.** GitHub only auto-closes an
+**Use the keyword, not a follow-up edit.** GitHub only auto-closes an
 issue on merge when the PR body (or a commit message) contains a closing
 keyword — `Fixes #<n>` / `Closes #<n>` / `Resolves #<n>` — immediately
 followed by the issue number. A plain reference like `[#<n>](url)` does
@@ -799,11 +943,14 @@ verification); planning docs are for OPEN work. So when an item ships, don't
 leave its full body in the doc — **collapse the entry to one line**:
 `~~<title>~~ — shipped <date>, PR #<n> (<SHA>)`. Delete the body (acceptance
 criteria, design notes, discussion): anyone who needs it follows the PR link.
-Long-form docs in `backlog/` for shipped items get deleted outright, with the
-tombstone line in BACKLOG.md pointing at the PR. This applies to every repo;
-roadmap-pulse's honesty pass enforces it weekly (it tombstones confirmed-shipped
-entries as part of Step 1). A doc that keeps growing after its work ships is a
-word block nobody reads — the failure mode this rule exists to prevent.
+This applies to RELEASE docs, the manual runbook and every other planning doc
+in every repo; roadmap-pulse's honesty pass enforces it weekly. A doc that
+keeps growing after its work ships is a word block nobody reads — the failure
+mode this rule exists to prevent.
+
+**Work items need no tombstone: closing is the tombstone.** A closed issue
+keeps its whole body and comments, so nothing is collapsed and nothing is
+lost. See "Work items are GitHub issues" above.
 
 **Shipped-ness alone is not grounds to collapse. What the text is FOR decides.**
 Two carve-outs, both learned by breaking them (alate PRs
@@ -816,8 +963,9 @@ Two carve-outs, both learned by breaking them (alate PRs
    false belief, external research, a "don't try this again" finding. That
    content was never in a commit, so collapsing it destroys it permanently —
    the PR link goes to a diff that never contained it. Keep those lines next to
-   the tombstone; a few surviving sentences are cheaper than re-running the
-   investigation. _(What was lost the first time: a full-branch history search
+   the tombstone — or, for a work item, in its issue (a closed issue keeps
+   them) or in `memory/decisions/` when it is a decided design; a few
+   surviving sentences are cheaper than re-running the investigation. _(What was lost the first time: a full-branch history search
    establishing that a feature believed to be a "re-plug" had never existed.
    The search was real work and left no commit.)_
 2. **Test artefacts are not planning docs.** Coverage maps, user-path audits,
@@ -977,8 +1125,9 @@ email, OAuth app, CI secret, …), an entry lands in it **before the session
 ends** — actual provider,
 actual values, numbered copy-pasteable steps (never "if you choose A vs B"
 branches), verification command(s), and a "where to look" diagnostic. Not an
-evaluation of options (that's BACKLOG); only the decided outcome. BACKLOG holds
-_what + why_; the runbook holds _exactly how_. Cross-link, don't copy.
+evaluation of options (that's the issue, or the decision doc in
+`memory/decisions/`); only the decided outcome. The issue holds _what + why_;
+the runbook holds _exactly how_. Cross-link, don't copy.
 
 ### The runbook's shape — same in every repo
 
@@ -1010,8 +1159,8 @@ fine in a Done one-liner; a whole section is not. If half an item is still
 running, split it.
 
 **What does NOT belong:** why the decision was made, what was evaluated and
-rejected, what changed in which PR, narrated findings. That is BACKLOG's job and
-git history's job. If a paragraph would still read fine with _"probably"_ in it,
+rejected, what changed in which PR, narrated findings. That is the issue's job
+(or the decision doc's) and git history's job. If a paragraph would still read fine with _"probably"_ in it,
 or if it tells a story rather than issuing an instruction, it is not runbook
 content. A reader should be able to scan the table, find their one action, and
 do it without reading a word of context.

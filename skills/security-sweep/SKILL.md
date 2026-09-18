@@ -317,7 +317,23 @@ These can't be auto-fixed safely:
 1. Open a GitHub issue in the **app repo** (not litmus):
    - Title: `[security-sweep] Upgrade <package> to <version> — <severity> vuln`
    - Body: advisory details, what breaks on upgrade, suggested migration path
-   - Labels: `security`, `needs-triage`
+   - Labels: `security` plus **exactly one P label**, from the table below,
+     all in the create call. No `needs-triage`: the sweep has already
+     triaged it.
+
+   | Finding | P label |
+   |---|---|
+   | Runtime-reachable, **high or critical** | `P1` |
+   | Runtime-reachable, moderate or low | `P2` |
+   | Build-time only (a 2d fix routed here because it broke the suite) | `P3` |
+
+   Work items are GitHub issues labelled `P0`–`P3`, and roadmap-pulse ranks
+   them by that label (`${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Work
+   items are GitHub issues"). An issue filed with no P label reads as
+   untriaged in every weekly lint. Before creating, list the repo's open
+   issues (`gh issue list -R <repo> --state open -L 1000 --json number,title`)
+   and comment on a matching one instead of filing a second. Never use the
+   search API for this check, because its index lags by minutes.
 2. Send a push notification if severity is HIGH or CRITICAL:
    `"Security: <severity> vuln in <package> (<repo>) requires major upgrade. Issue filed — <1-2 sentence what's at risk>."`
 
@@ -390,7 +406,8 @@ If npm audit reports a **critical or high severity** vulnerability in a **runtim
 1. Open a GitHub issue in the app repo immediately:
    - Title: `[URGENT] [security-sweep] <severity> vuln in <package> — no patch available`
    - Body: full advisory, what's at risk, workaround options if any, alternative packages
-   - Labels: `security`, `urgent`, `needs-triage`
+   - Labels: `security`, `urgent`, `P1` (a runtime-reachable high/critical
+     finding, per the 2b table)
 2. Send a push notification:
    `"URGENT: <severity> runtime vuln in <package> (<repo>) — no patch exists. <1-2 sentence what's exposed and what the workaround options are>."`
 

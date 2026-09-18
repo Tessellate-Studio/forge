@@ -417,10 +417,11 @@ good PRs and destroys feedback speed, so the bulk of E2E runs _post_-merge.
    output's commit/build-id line against the actual merge SHA before
    reporting done. A publish that "succeeds" from the wrong commit is a
    silent miss, not an error the tooling will surface.
-4. **Update the source doc in the SAME PR.** If this feature/fix originated
-   from a tracked item — a BACKLOG.md entry, a regression-log row, a RELEASE
-   checklist line, a runbook TODO — update that entry before reporting done:
-   status (DONE + date) + PR number, and the merged SHA once it lands. A shipped
+4. **Close the loop on the source in the SAME PR.** Came from a GitHub issue?
+   Put `Closes #N` in the PR body — the merge closes it (`Refs #N` for a
+   plumbing-only PR). Came from a regression-log row, a RELEASE checklist
+   line or a runbook TODO? Update that entry before reporting done: status
+   (DONE + date) + PR number, and the merged SHA once it lands. A shipped
    change whose entry still says "open" is how work gets re-done and the user
    has to re-ask. Full rule: `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` →
    "Status update on completion".
@@ -482,8 +483,9 @@ way to know).
 
 Route the answers, don't just state them: an unexercised seam worth
 protecting → regression log or a test; a user-invisible systemic risk → fix it
-or land a runbook/BACKLOG entry; an efficiency lesson that generalizes →
-promote into the relevant skill or standard so the next build inherits it.
+or file an issue (`wi new --priority P0..P3`) or a runbook entry; an
+efficiency lesson that generalizes → promote into the relevant skill or
+standard so the next build inherits it.
 
 ---
 
@@ -534,8 +536,9 @@ promote into the relevant skill or standard so the next build inherits it.
   device screenshot against the design vision; fix + re-verify.
 - `/frontend-design` — during build (Step 2, NEW web/screen surfaces): design
   guidance for the initial implementation, not a post-hoc check.
-- Status update (Step 6): BACKLOG / regression-log / runbook entry that spawned
-  this work gets its status + PR + SHA updated in the same PR.
+- Status update (Step 6): came from an issue → `Closes #N` in the PR body;
+  a regression-log / runbook entry that spawned this work gets its status + PR +
+  SHA updated in the same PR.
 - Worktree cleanup (Step 6): `git worktree list` → remove stale → `git worktree prune`.
 - Closing retro (Step 7, mandatory): least-confident seams / what the user
   can't see / what would've been faster — answered with evidence, then routed

@@ -531,8 +531,9 @@ For each OPEN item on the current app:
    it** — even if it surfaced on a step that wasn't under test, or on an
    item that had already failed. "No mid-drain fixes" is about not *fixing*;
    it has never been about not *looking*. File it (regression-log row or
-   issue, per the app's rules), link it from the per-step table, and carry
-   on with the remaining steps if the app relaunches.
+   issue, per the app's rules — an issue gets `bug` + `P1`, as in step 3),
+   link it from the per-step table, and carry on with the remaining steps if
+   the app relaunches.
 
    **A verdict is an issue operation now, not a Status edit.** Tick each
    step's checkbox as you RUN it, pass or fail — a step nobody reached stays
@@ -557,7 +558,11 @@ For each OPEN item on the current app:
    (screenshot/logcat; the user's words for a `HUMAN:` step), file it where
    the app's rules say — regression-log row via PR, or a GitHub issue — and
    **label the test `failed`, leaving it OPEN**, with a comment linking the
-   bug:
+   bug. A bug filed as an issue gets `bug` and `P1` in the create call: it
+   is a work item like any other (`${CLAUDE_PLUGIN_ROOT}/standards/workflows.md`
+   → "Work items are GitHub issues"), and a failed on-device path is "do
+   next". The `device-test` issue itself stays **outside** the P scheme — no
+   P label on a test, ever; roadmap-pulse excludes that queue:
    ```bash
    gh issue edit <n> -R Tessellate-Studio/<repo> --add-label failed
    ```

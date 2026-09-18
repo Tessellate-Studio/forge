@@ -4,14 +4,109 @@ Use these as templates. Match the doc's existing house style — don't introduce
 
 ## Table of contents
 
-1. [BACKLOG.md rewrites](#backlog-md-rewrites)
-2. [Regression log rewrites](#regression-log-rewrites)
-3. [Anti-pattern memory rewrites](#anti-pattern-memory-rewrites)
-4. [General markdown planning doc](#general-markdown-planning-doc)
+1. [Issue rewrites](#issue-rewrites) (issue mode)
+2. [BACKLOG.md rewrites](#backlog-md-rewrites) (file mode, until the repo migrates)
+3. [Regression log rewrites](#regression-log-rewrites)
+4. [Anti-pattern memory rewrites](#anti-pattern-memory-rewrites)
+5. [General markdown planning doc](#general-markdown-planning-doc)
 
 ---
 
+## Issue rewrites
+
+An issue has two surfaces, and each has one job: the **body** says what is true
+**now** (edited in place; GitHub keeps the edit history), and **comments** say
+what happened (append-only, one per event). A rewrite either corrects the body
+or records an event, never both in one place.
+
+Every comment the pulse writes starts with a hidden marker, so a later run can
+find its own comment and **edit it instead of posting another**. Re-posting
+the same evidence every Sunday is notification noise that teaches people to
+mute the issue.
+
+Nothing here is ever deleted. "Strike-through, don't delete" became "close
+with a reason, never delete".
+
+### Suspect shipped → evidence comment (cron and manual)
+
+```markdown
+<!-- pulse:suspect-shipped -->
+**This may already be shipped** (roadmap pulse, <date>).
+
+- Merged PR: #<n> "<title>" (merged <date>), which <what it changed that matches this issue>.
+- Default branch: `git branch -r --contains <sha>` lists `origin/<default>`.
+
+If that covers everything under "Done when", this can close. If part is still
+open, say which, and the body will be narrowed to it.
+```
+
+On a later run, edit this comment's evidence and date. Don't post a second one.
+
+### Close with a reason (manual run, owner confirmed)
+
+```bash
+gh issue close <n> -R <owner>/<repo> --reason completed \
+  --comment "Shipped in #<pr> (<sha7>, on <default> per `git branch -r --contains <sha7>`). Confirmed by <owner> in the <date> roadmap pulse."
+```
+
+For "won't do": `--reason not_planned` with the decision and where it was made
+(a decision PR, a conversation date). The body stays as it is. A closed issue
+is its own tombstone.
+
+### Narrow the body (partly done, or still pending but partly live)
+
+Edit the body so it says only what is left, and keep one line recording what
+was verified done, so the item isn't re-listed next week:
+
+```markdown
+### Done when
+- [ ] Round-trip with a real order: email received for a restocked item.
+
+Verified done <date>: the pg_cron job runs every 6 h and the endpoint returns 200
+(probe output in the comment of <date>). The send path has never executed
+with real data (`sent: 0`), which is what's left.
+```
+
+Post one comment with the probe output that justified the narrowing.
+
+### Stale citation → body edit + one comment
+
+Edit only the citation in the body (read the body fresh first, so a human's
+concurrent edit survives), then comment:
+
+```markdown
+<!-- pulse:citation -->
+Updated a stale citation in the body: `mobile/src/screens/FitResultScreen.tsx:1055`
+→ `mobile/src/screens/fit/FitResult.tsx:412` (file moved in #<n>; symbol
+`renderRangeWarning`).
+```
+
+### Orphan-shipped → reopen with a history note (manual run)
+
+```bash
+gh issue reopen <n> -R <owner>/<repo> --comment "Reopened: closed as shipped on <date>, but the cited fix `<sha7>` is only on `<branch>` — `git branch -r --contains <sha7>` does not list origin/<default>. To close it for real: port `<sha7>` to a fresh branch off <default> and merge a PR that says Closes #<n>."
+```
+
+### Deferred without a source → add the rationale (manual run)
+
+Add a `### Why this is deferred` section (or a `Deferred until: <trigger>`
+line) to the body, with the reason and its source: the decision doc, the
+conversation date, the dependency. The cron run only flags it.
+
+### On hold past its review-by date → reminder comment (cron)
+
+```markdown
+<!-- pulse:hold-expired -->
+**On hold past its review-by date** (<date> in the comment of <date>). Still
+not now? Re-apply the hold with a new date. Otherwise remove `on hold`, or
+close it with a reason. (Nothing is closed automatically.)
+```
+
 ## BACKLOG.md rewrites
+
+**File mode only.** These templates apply to a repo that has not migrated off
+`BACKLOG.md` yet, and are removed with file mode in a later forge release.
+Rewrites go in one PR to that repo, as before.
 
 ### Already-shipped → strike + tombstone
 
@@ -134,7 +229,7 @@ This rule is fully subsumed by AP#20. New precedents go to AP#20.
 
 ## General markdown planning doc
 
-For docs that aren't BACKLOG / regression log / anti-pattern, match the doc's existing structure:
+For docs that aren't issues, BACKLOG, the regression log or anti-patterns, match the doc's existing structure:
 
 - Strikethrough convention → use it.
 - Status badges (`[DONE]`, `[OPEN]`) → use them.
@@ -147,6 +242,6 @@ Default if no convention: strikethrough + `— LANDED <date>` marker.
 
 ## Cross-doc consistency
 
-If a rewrite in BACKLOG.md changes the status of an item that's also referenced in the regression log, **update both atomically**. Same for anti-pattern references. A roadmap-pulse run should leave the corpus internally consistent.
+If a rewrite changes the status of an item that's also referenced in the regression log (an issue closed or narrowed, a BACKLOG entry tombstoned), **update both in the same run**: the regression-log row in the repo's doc PR, and the issue's comment citing that PR. Same for anti-pattern references. A roadmap-pulse run should leave the corpus internally consistent.
 
 The regression log + domain anti-patterns live in-repo under `<repo-root>/memory/`, so edits to them are normal in-repo doc changes (same PR/commit as the planning-doc rewrites). The shared cross-app guardrails live in `forge/standards/` and are changed via a forge PR, not here.

@@ -69,7 +69,7 @@ artifact — APKs are never built on a laptop.
 - A path row counts as ✓ only when the value reaches a rendered pixel on the
   device (same bar as the end-to-end anti-pattern).
 - Findings triage: crash/data-loss → block the release; degraded-but-usable →
-  regression log + BACKLOG with priority; cosmetic → BACKLOG.
+  regression log + an issue (`P1`/`P2`); cosmetic → an issue (`P3`).
 - Sign-off is the human's — never claim UAT passed on the user's behalf.
 
 ## Measuring test performance (do this before optimising anything)
