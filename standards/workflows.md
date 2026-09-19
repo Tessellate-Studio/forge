@@ -130,14 +130,25 @@ pruning marker can't exist. What actually generated a contradiction at every
 merge was pairing a mandatory rename with auto-delete, and naming the repo
 setting as the deciding input removes it.
 
-## Merge on green — a STANDING directive, not a per-task instruction
+## Draft first, then merge on green — the owner decides when a PR is ready
 
-Open PRs ready (not draft) and merge as soon as CI is green — **without being
-told, without asking, on every PR** (user directive 2026-08-19: merge-on-green
-is a build directive, not something to be requested each time). "PR open,
-awaiting merge" is not an end state; either the merge is armed or a named
-carve-out applies (outward-facing / hard-to-reverse / explicit user hold —
-full list: [`anti-patterns.md` → "Merge on green by default"](./anti-patterns.md)).
+**Open PRs as DRAFT.** Get CI green on the draft and hand it back; the draft
+is where work continues until the owner is ready to test it and take a real
+look. **Promoting a draft to ready is the owner's call, never the agent's.**
+Once the owner marks it ready or says "merge", merge as soon as CI is green,
+through the gated routes below, without asking again. (Owner decision
+2026-09-11, confirmed 2026-09-18, reversing the 2026-08-19 "open ready, merge
+without being told" directive. The reason: the owner wants a real look before
+anything lands, and merge-on-green skipped it.)
+
+"Draft, CI green, handed back" IS an end state. Say it plainly and name the
+PR. Don't ask "should I merge?" on every turn: the owner will say when. Keep
+a waiting draft current (see [`anti-patterns.md` → "Draft first"](./anti-patterns.md)).
+
+**Automated sources are unchanged for now.** crash-monitor, status-check,
+security-sweep and roadmap-pulse still merge through `safe-merge` under
+their own confidence gates. Whether they should also stop at draft is an open
+owner question, not decided here.
 
 **Merge through a route that cannot merge before CI is green.** There are
 exactly two, and the `[enforced]` hook below refuses everything else:
