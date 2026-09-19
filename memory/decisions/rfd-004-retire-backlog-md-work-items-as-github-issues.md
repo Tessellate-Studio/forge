@@ -934,7 +934,8 @@ pointer with a freeze guard. Step 6 removed the pulse's file mode (forge 0.16.0)
 | 3. loom pilot | loom#175 |
 | 4. mood-layer, badige | mood-layer#141, badige#96 |
 | 5. alate | alate#959 |
-| 6. forge: remove file mode | the PR that set this State |
+| 6. forge: remove file mode | forge#156 (0.16.0) |
+| Cleanup: alate code comments repointed at issues | alate#960 |
 
 **Issues filed:**
 
@@ -960,8 +961,7 @@ pointer with a freeze guard. Step 6 removed the pulse's file mode (forge 0.16.0)
    before 05:30 wrote yesterday's date. They now use the local calendar day
    (`localDate()` in `lib/commands.js`).
 6. **Open.** `rewrite` doesn't scan source-code comments for BACKLOG pointers.
-   alate's ~17 `see BACKLOG.md` code comments were repointed by hand in a
-   follow-up PR.
+   alate's 18 BACKLOG code comments were repointed by hand in alate#960.
 
 The tool is kept for any other app that still has a `BACKLOG.md`. Check the
 open bugs above against its output before applying.
