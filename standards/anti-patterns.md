@@ -437,22 +437,23 @@ stale within hours; and every open PR in the repo at that moment touched at leas
 shared planning doc.* Content sibling of the checkout-isolation rule above — that one
 is don't-corrupt-the-op, this one is don't-collide-at-merge.
 
-## Merge on green by default — don't let PRs sit stale
+## Draft first; merge on green once the owner says ready — and keep drafts fresh
 
-Open PRs **ready, not draft**, and **merge as soon as CI is green**. A
-green PR left parked for a manual look is the default failure mode: while
-it sits, `master` moves under it, it drifts out of sync, collects
-conflicts, and the work goes cold. Draft is for genuine WIP, not for
-"done but waiting."
-**Carve-outs (hold for a human):** the change is outward-facing or
-hard-to-reverse (a public API, a destructive migration, anything users
-see), it needs review the CI can't give (product/security judgment), or
-the user explicitly asked to hold it. Everything else merges on green.
-**Why:** a stale branch costs a rebase-and-reverify cycle and risks
-shipping from a conflicted tree. *Precedent: a fully-green, fully-tested
-size-finder PR sat as a draft across several hourly check-ins purely
-because no one said "merge" — pure waste, and every commit landing on
-master meanwhile widened the gap it would have to reconcile.* Sibling of
+Open PRs as **draft**. The owner decides when a draft is ready to test and
+take a real look (owner decision 2026-09-11, confirmed 2026-09-18, reversing
+the earlier "open ready, merge without asking" rule). Once it is marked ready
+or the owner says merge, **merge as soon as CI is green**, without asking again.
+**The anti-pattern that remains is letting a draft rot.** While a draft
+waits, `master` moves under it and it collects conflicts. So a draft you
+pick back up gets `master` merged in and CI re-run before it is handed back.
+Never report a draft that is red or behind as ready to look at.
+**Hold even after "ready"** when the change is outward-facing or
+hard-to-reverse (a public API, a destructive migration, a published page)
+and the owner hasn't named that specific PR, or when the owner asked to hold it.
+*History: the 2026-08-19 rule was the opposite, and was set because a green
+size-finder PR sat as a draft across several hourly check-ins. The owner has
+since chosen the look over the speed. The fix for staleness is keeping drafts
+current, not merging them unseen.* Sibling of
 the concurrent-session rule (that's don't-corrupt-the-op; this is
 don't-let-it-rot).
 

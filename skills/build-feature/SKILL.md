@@ -366,9 +366,10 @@ good PRs and destroys feedback speed, so the bulk of E2E runs _post_-merge.
    says what changed and why (end with the repo's Co-Authored-By trailer). Only
    commit/push when the change is verified and the user is happy — don't push to
    `master` directly.
-2. **Open the PR ready (not draft) and arm the merge IMMEDIATELY — this is a
-   standing directive, never a question.** Right after `gh pr create`, run
-   the gated merge:
+2. **Open the PR as a DRAFT, get CI green, and hand it back.** The owner
+   decides when it is ready to test and take a real look (owner decision
+   2026-09-11, confirmed 2026-09-18). Do not mark it ready yourself. **When the
+   owner marks it ready or says merge**, run the gated merge:
    `node "${CLAUDE_PLUGIN_ROOT}/tools/checks-gate/cli.js" --repo <owner/name> --pr <n> && gh pr merge <n> -R <owner/name> --squash`
    — the exit-status gate (it waits for checks to register and retries a
    network blip, which `gh pr checks --watch` reads as red), never a pipe (`| tail && ...` reports tail's exit code,
@@ -379,12 +380,11 @@ good PRs and destroys feedback speed, so the bulk of E2E runs _post_-merge.
    merges instantly while reporting the same success it gives when it genuinely
    waited. There is no repo-capability probe to run any more — the branch that
    check used to select is unreachable.
-   Do not ask the user whether to merge, do not park a green PR waiting
-   for a manual look, do not report "PR open, awaiting merge" as an end
-   state. Hold only for the carve-outs (outward-facing / hard-to-reverse, or
-   an explicit user hold), and say which carve-out applies when you do. Full
-   rule: `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Merge on green" /
-   `${CLAUDE_PLUGIN_ROOT}/standards/anti-patterns.md` → "Merge on green by default".
+   "Draft, CI green, handed back" is the normal end state. Name the PR and
+   say it's ready for the owner's look. Don't hand back a draft that is red or
+   behind `master`. Full rule: `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` →
+   "Draft first, then merge on green" / `${CLAUDE_PLUGIN_ROOT}/standards/anti-patterns.md`
+   → "Draft first; merge on green once the owner says ready".
 3. **Ship it — publish the production OTA right after merge, without being
    asked.** If the app ships JS via over-the-air update and the merged diff
    is JS/asset-only, publishing it to the app's live channel is

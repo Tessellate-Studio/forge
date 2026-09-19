@@ -110,8 +110,9 @@ Run roadmap-pulse's first-run registration so this app gets the Sunday pulse
 Stage everything and make **one** initial commit; open **one** setup PR (don't
 push a flurry of small commits — history hygiene is a platform rule). Run the test
 suite green before the PR. End commit/PR with the Co-Authored-By trailer. Open it
-**ready, not draft, and merge on green** — don't leave the setup PR parked (see
-`${CLAUDE_PLUGIN_ROOT}/standards/anti-patterns.md` → "Merge on green by default").
+as a **draft**, get CI green, and hand it back; merge on green once the owner
+says it's ready (see `${CLAUDE_PLUGIN_ROOT}/standards/anti-patterns.md` →
+"Draft first; merge on green once the owner says ready").
 
 ## Step 6 — Verify, then report
 

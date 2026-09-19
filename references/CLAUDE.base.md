@@ -42,7 +42,7 @@ All in `forge/standards/workflows.md` unless noted:
 
 - **Branch placement** — task doesn't fit the current branch → cut
   `fix|feat|docs|chore/<slug>` off the default branch automatically; don't ask.
-- **Merge on green** — PRs open ready (not draft), merge when CI passes
+- **Draft first** — PRs open as DRAFT; the owner marks ready, then merge when CI passes
   (carve-outs in `anti-patterns.md`).
 - **Orphan-branch fixes** — port to a fresh branch off default automatically.
 - **Concurrent sessions** — worktree-isolate every task; SHA-explicit git;
