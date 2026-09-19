@@ -28,7 +28,7 @@ The skill composes ONE input object per open task:
 ```json
 {
   "title": "Set up email aliases on tessellate.co.in",
-  "description": "Truncated to 500 chars. The issue body's ### What section (or, in file mode, the BACKLOG entry's first paragraph) — what the task is, why it matters, the gate it unblocks.",
+  "description": "Truncated to 500 chars. The issue body's ### What section — what the task is, why it matters, the gate it unblocks.",
   "context": {
     "goals": [
       "Closed beta live — acquisition gates loom",
@@ -47,8 +47,8 @@ The skill composes ONE input object per open task:
 
 **Conventions:**
 
-- `title` is the **issue title** verbatim (file mode: the entry's section heading).
-- `description` is the issue body's `### What` section, else the first 500 characters of the body (file mode: the entry's first paragraph, or the densest one if the first is fluff). Truncated to 500 chars either way.
+- `title` is the **issue title** verbatim.
+- `description` is the issue body's `### What` section, else the first 500 characters of the body. Truncated to 500 chars either way.
 - `context.goals` is the list from Step 2 (user-confirmed).
 - `context.dependencies.this_task_depends_on` is the confirmed dependencies that this task is waiting on. Empty = ready to start.
 - `context.dependencies.this_task_unblocks` is the confirmed dependencies where OTHER tasks are waiting on THIS task. Many = high dependency-unblock value.
@@ -64,12 +64,10 @@ advisory: it ranks items within and across the P bands, and it can justify a
 | Reach, Effort | The issue body's `### Reach` / `### Effort (person-days)` sections, **when a human filled them** (any answer but `unknown`). Otherwise the rubric's heuristic, as today | These are the two axes a human knows better than a keyword heuristic, and the form's dropdowns keep them on this contract's scale. When used, recompute `rice_score` with them and say "from the issue" in `reasoning` |
 | Impact, Confidence | rubric `evaluateFromContext` (contract unchanged) | The heuristic is what exists. *Proposed, not built:* pass the type label and the "Why / evidence" section into `context`, so a bug with a Sentry id or a repro can earn Confidence 1.0 |
 | Goals overlay | Step 2 (RELEASE_V2 + owner overrides) | Unchanged |
-| Dependency-unblock overlay | `blocking.totalCount ≥ 1` (native link); file mode: another entry's `**Depends on:**` names it | Replaces the parsed `Depends on:` lines for migrated repos |
+| Dependency-unblock overlay | `blocking.totalCount ≥ 1` (native link) | Replaced the parsed BACKLOG `Depends on:` lines (RFD 004) |
 | Reusability overlay | Unchanged keyword rule | |
 | P label | **Band floor and tie-break** (below) | P is the owner's decision; RICE only proposes |
 
-File-mode entries have no Reach/Effort sections, so they always use the
-heuristic, as before.
 
 ---
 

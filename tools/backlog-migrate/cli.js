@@ -112,7 +112,7 @@ function digestUrlFor(dir, git) {
   }
   return null;
 }
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => commands.localDate();
 
 async function main(argv) {
   const opts = parseArgs(argv);

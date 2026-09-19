@@ -328,12 +328,12 @@ Decided in
 [RFD 004](../memory/decisions/rfd-004-retire-backlog-md-work-items-as-github-issues.md);
 this section is the operating rule.
 
-**Rollout.** Each app repo migrates in its own PR. A migrated repo's
-`BACKLOG.md` is a one-line pointer that carries `<!-- backlog-retired -->`, and
-a CI guard fails any PR that adds to it. A repo that has not migrated yet keeps
-its existing entries until its migration PR (`roadmap-pulse` still reads them
-there). **New work goes to an issue in every repo, migrated or not.** Don't add
-entries to a `BACKLOG.md`.
+**Rollout: complete (2026-09-19).** Every app repo migrated in its own PR.
+Its `BACKLOG.md` is a one-line pointer that carries `<!-- backlog-retired -->`,
+and a CI guard fails any PR that adds to it. `roadmap-pulse` reads issues only.
+A new app gets no `BACKLOG.md` at all. **New work goes to an issue.** Don't add
+entries to a `BACKLOG.md`. (Another app that still has one migrates with
+`tools/backlog-migrate/`.)
 
 ### Where each kind of content lives
 

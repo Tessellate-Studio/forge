@@ -4,11 +4,13 @@ Use these as templates. Match the doc's existing house style — don't introduce
 
 ## Table of contents
 
-1. [Issue rewrites](#issue-rewrites) (issue mode)
-2. [BACKLOG.md rewrites](#backlog-md-rewrites) (file mode, until the repo migrates)
-3. [Regression log rewrites](#regression-log-rewrites)
-4. [Anti-pattern memory rewrites](#anti-pattern-memory-rewrites)
-5. [General markdown planning doc](#general-markdown-planning-doc)
+1. [Issue rewrites](#issue-rewrites)
+2. [Regression log rewrites](#regression-log-rewrites)
+3. [Anti-pattern memory rewrites](#anti-pattern-memory-rewrites)
+4. [General markdown planning doc](#general-markdown-planning-doc)
+
+(The BACKLOG.md templates were removed with the file mode in RFD 004 step 6.
+Work items are issues; a closed issue is its own tombstone.)
 
 ---
 
@@ -102,99 +104,6 @@ not now? Re-apply the hold with a new date. Otherwise remove `on hold`, or
 close it with a reason. (Nothing is closed automatically.)
 ```
 
-## BACKLOG.md rewrites
-
-**File mode only.** These templates apply to a repo that has not migrated off
-`BACKLOG.md` yet, and are removed with file mode in a later forge release.
-Rewrites go in one PR to that repo, as before.
-
-### Already-shipped → strike + tombstone
-
-> **Before collapsing, apply the two carve-outs** in
-> `standards/workflows.md` → "Docs stay lean". Shipped-ness alone is not
-> grounds to collapse:
-> 1. **Keep what no diff can give back** — a rejected alternative and why it
->    lost, an investigation that corrected a false belief, external research.
->    The PR link goes to a diff that never contained it.
-> 2. **Never collapse test artefacts** — coverage maps, user-path audits, E2E
->    contracts, regression tables. A shipped fix there keeps its full
->    `Was` / `Now` split; both halves are the test.
->
-> When in doubt, keep the lines next to the tombstone and say so in the run
-> notes. Over-collapsing is unrecoverable; over-keeping costs a few lines.
-
-**Before** (entry sits under `## P1`, no strikethrough):
-
-```markdown
-### Apply the Supabase migration for `blocked_brands`
-**Path:** `backend/supabase/migrations/blocked_brands.sql`
-
-Migration file exists but hasn't been applied. Until applied,
-`/api/brand-optout` returns 500 and the scraper's blocklist check
-fails open (no-op).
-```
-
-**After:**
-
-```markdown
-### ~~Apply the Supabase migration for `blocked_brands`~~ — ALREADY APPLIED, verified <date>
-**Path:** `backend/supabase/migrations/blocked_brands.sql`
-
-Verified live on project `alate` (`<project-id>`) via MCP
-`list_tables`: `public.blocked_brands` exists with the expected
-columns, RLS enabled, "Service role only" policy active.
-
-Provenance note: the project's `supabase_migrations` table only
-tracks one row, so `list_migrations` did not surface this one.
-Trust `list_tables` over `list_migrations` when verifying applied
-state on this project.
-```
-
-### Orphan-shipped → reopen with history note
-
-**Before:**
-
-```markdown
-### ~~Share-intent route fails where direct paste succeeds (Armani)~~ — LANDED <date>
-Fix commit: `b9269e4` on branch `claude/<adjective>-<noun>-<hash>`.
-```
-
-**After:**
-
-```markdown
-### Share-intent route fails where direct paste succeeds (Armani) — reopened, fix needs porting
-
-**Status:** the fix exists as commit `b9269e4` on the orphan branch
-`claude/<adjective>-<noun>-<hash>` but `git branch --contains b9269e4`
-does NOT list `master`. The fix was prematurely marked LANDED.
-
-**To close this for real:** cherry-pick `b9269e4` onto a fresh
-`fix/share-intent-normalise` branch off master, run jest, open a PR.
-Update this entry with the new merge SHA on completion.
-```
-
-### Deferred-without-source → add rationale
-
-**After (add a `Why this exists in BACKLOG` block):**
-
-```markdown
-### Build the Shopify merchant plugin
-Longer-term play. Not a launch blocker.
-
-**Why this exists in BACKLOG (rationale added <date>):**
-
-The merchant plugin is the consent path for reading brand metadata
-that the public storefront pages don't expose. Specific use cases:
-
-- Brand-defined material / fabric metafields — canonical example is
-  Oshin Sarin's `custom.material` per-product metafield.
-- Brand-uploaded size charts + fit notes — public Shopify JSON gives
-  availability per variant but NOT brand-uploaded fit metadata.
-
-Anything that needs brand metadata which is NOT on the public
-storefront pages eventually routes through here.
-```
-
 ---
 
 ## Regression log rewrites
@@ -229,7 +138,7 @@ This rule is fully subsumed by AP#20. New precedents go to AP#20.
 
 ## General markdown planning doc
 
-For docs that aren't issues, BACKLOG, the regression log or anti-patterns, match the doc's existing structure:
+For docs that aren't issues, the regression log or anti-patterns (e.g. `RELEASE_V2.md`, `USER_PATHS.md`), match the doc's existing structure:
 
 - Strikethrough convention → use it.
 - Status badges (`[DONE]`, `[OPEN]`) → use them.
@@ -238,10 +147,23 @@ For docs that aren't issues, BACKLOG, the regression log or anti-patterns, match
 
 Default if no convention: strikethrough + `— LANDED <date>` marker.
 
+> **Before collapsing a shipped section, apply the two carve-outs** in
+> `standards/workflows.md` → "Docs stay lean". Shipped-ness alone is not
+> grounds to collapse:
+> 1. **Keep what no diff can give back** — a rejected alternative and why it
+>    lost, an investigation that corrected a false belief, external research.
+>    The PR link goes to a diff that never contained it.
+> 2. **Never collapse test artefacts** — coverage maps, user-path audits, E2E
+>    contracts, regression tables. A shipped fix there keeps its full
+>    `Was` / `Now` split; both halves are the test.
+>
+> When in doubt, keep the lines next to the tombstone and say so in the run
+> notes. Over-collapsing is unrecoverable; over-keeping costs a few lines.
+
 ---
 
 ## Cross-doc consistency
 
-If a rewrite changes the status of an item that's also referenced in the regression log (an issue closed or narrowed, a BACKLOG entry tombstoned), **update both in the same run**: the regression-log row in the repo's doc PR, and the issue's comment citing that PR. Same for anti-pattern references. A roadmap-pulse run should leave the corpus internally consistent.
+If a rewrite changes the status of an item that's also referenced in the regression log (an issue closed or narrowed), **update both in the same run**: the regression-log row in the repo's doc PR, and the issue's comment citing that PR. Same for anti-pattern references. A roadmap-pulse run should leave the corpus internally consistent.
 
-The regression log + domain anti-patterns live in-repo under `<repo-root>/memory/`, so edits to them are normal in-repo doc changes (same PR/commit as the planning-doc rewrites). The shared cross-app guardrails live in `forge/standards/` and are changed via a forge PR, not here.
+The regression log + domain anti-patterns live in-repo under `<repo-root>/memory/`, so edits to them are normal in-repo doc changes (one PR/commit per repo for the doc rewrites of a run). The shared cross-app guardrails live in `forge/standards/` and are changed via a forge PR, not here.

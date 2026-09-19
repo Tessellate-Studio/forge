@@ -41,6 +41,7 @@ inherits it — interchangeable, inter-usable, self-learning (via reviewed PRs).
 | `tools/brief/`                          | The `brief` CLI: run any command, print a token-cheap summary of its output instead of the raw dump. See `standards/workflows.md`.                                             |
 | `tools/checks-gate/`                    | The merge gate for a requested merge: exit 0 only when a PR's checks are green, from bucket state rather than `gh pr checks --watch`'s exit code. See `standards/workflows.md` → "Merge on green". |
 | `tools/work-claim/`                     | The `wip` CLI: who is working on which issue/PR — post, heartbeat and release the 🚧 work claim, and print the cross-repo board. See `standards/workflows.md` → "Work claims". |
+| `tools/backlog-migrate/`                | Moves a repo's `BACKLOG.md` entries into P-labelled GitHub issues (RFD 004 §5): `plan` → `apply` → `rewrite`, plus `rollback`. **Migrations are complete** — loom, mood-layer, badige and alate all moved on 2026-09-19 (outcome in the RFD). Kept for any other app that still has a `BACKLOG.md`; the known bugs it still has are listed in the RFD's "Outcome". |
 | `.github/workflows/code-inspection.yml` | **Reusable** advisory inspection gate apps call from their CI.                                                                                                                 |
 
 ## Install

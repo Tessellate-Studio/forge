@@ -1,6 +1,6 @@
 ---
 name: roadmap-pulse
-description: Weekly project-management skill that scans open GitHub issues (P0–P3) plus RELEASE notes and the regression log (and, in a repo that has not migrated yet, its BACKLOG.md), runs an honesty pass on stale claims, reads and infers task dependencies, scores open work via RICE (Reach × Impact × Confidence / Effort) within the owner's P bands, and publishes a prioritized top-5-to-10 list to the roadmap Artifact, refreshed at the same URL every run. Self-schedules a weekly cron; also fires manually. Use whenever the user asks to "run roadmap pulse", "rebalance the backlog", "score open tasks", "what should I focus on this week", "is my roadmap up to date", "triage the issues", or any phrasing implying both honesty-checking the open work AND deciding what's next. Triggers even on passive cues like "feels like the backlog needs a refresh" or "I'm not sure what to focus on" — even when the user doesn't say "skill" or "pulse" explicitly. Output is a sourced prioritized list with RICE scores + reusability/strategic-fit/dependency-unblock overlays, a label-hygiene lint, and the roadmap Artifact page (which embeds this run's scores for next week's diff).
+description: Weekly project-management skill that scans open GitHub issues (P0–P3) plus RELEASE notes and the regression log, runs an honesty pass on stale claims, reads and infers task dependencies, scores open work via RICE (Reach × Impact × Confidence / Effort) within the owner's P bands, and publishes a prioritized top-5-to-10 list to the roadmap Artifact, refreshed at the same URL every run. Self-schedules a weekly cron; also fires manually. Use whenever the user asks to "run roadmap pulse", "rebalance the backlog", "score open tasks", "what should I focus on this week", "is my roadmap up to date", "triage the issues", or any phrasing implying both honesty-checking the open work AND deciding what's next. Triggers even on passive cues like "feels like the backlog needs a refresh" or "I'm not sure what to focus on" — even when the user doesn't say "skill" or "pulse" explicitly. Output is a sourced prioritized list with RICE scores + reusability/strategic-fit/dependency-unblock overlays, a label-hygiene lint, and the roadmap Artifact page (which embeds this run's scores for next week's diff).
 ---
 
 # Roadmap pulse
@@ -21,10 +21,9 @@ The point is not "produce a pretty list." The point is **align action with curre
 
 **Where open work lives.** Work items are GitHub issues labelled `P0`–`P3`
 (forge `standards/workflows.md` → "Work items are GitHub issues", decided in
-RFD 004). App repos move off `BACKLOG.md` one at a time, so this skill runs in
-**dual mode**: each repo is read from issues once it has migrated, and from its
-`BACKLOG.md` until then. See "Per-repo mode" below. File mode is removed in a
-later forge release, once every repo has migrated.
+RFD 004). Every app repo has migrated, and its `BACKLOG.md` is a one-line
+retired pointer. This skill reads **issues only**: the BACKLOG file mode that
+ran during the rollout was removed in RFD 004 step 6.
 
 ## Subagent / worktree harness — read before invoking tools
 
@@ -66,32 +65,27 @@ scope is explicit next time. alate's pulse spans loom, tessellate-pages and
 litmus (alate `CLAUDE.md`). An item is filed, and read, **in the repo that
 owns the code**.
 
-### Per-repo mode (dual mode)
+### Retired-pointer check
 
-Decide each repo's mode **fresh on every run**, from the default branch, never
-from a local checkout that may be stale:
+Every repo is read from its issues. Check each repo's `BACKLOG.md` **fresh on
+every run**, from the default branch, never from a local checkout that may be
+stale:
 
 ```bash
 gh api "repos/<owner>/<repo>/contents/BACKLOG.md" -H "Accept: application/vnd.github.raw" 2>/dev/null
 ```
 
-| What the default branch holds | Mode |
+| What the default branch holds | Action |
 |---|---|
-| `BACKLOG.md` containing `<!-- backlog-retired -->` | **issues** |
-| No `BACKLOG.md` at all (e.g. a repo created after RFD 004) | **issues** |
-| `BACKLOG.md` with entries and no marker | **file** |
+| `BACKLOG.md` holding `<!-- backlog-retired -->` and only its pointer line | None |
+| No `BACKLOG.md` at all (e.g. a repo created after RFD 004) | None |
+| A retired `BACKLOG.md` that has grown past its pointer line | **Finding** under label hygiene (the freeze guard should have caught the PR that grew it) |
+| `BACKLOG.md` with entries and no marker | **Finding** at the top of the summary: the repo was never migrated, or its pointer was reverted. Point at `tools/backlog-migrate/`. Do not read or score the file |
 
-A retired `BACKLOG.md` with more than its one pointer line is a finding (the
-freeze guard should have caught the PR that grew it): report it under label
-hygiene, and read the repo from issues anyway. Because the mode is decided per
-run, **rollback is automatic**: reverting a repo's pointer commit puts that
-repo back in file mode on the next run.
+In every case the repo's open work is its issues. The pulse never scores a
+BACKLOG file's entries: it has no file mode any more.
 
-Say which mode each repo ran in, in the run metadata. A run that silently
-reads a migrated repo's pointer file as an empty backlog would report "no open
-work" for a repo full of issues.
-
-### Issue mode — the inventory
+### The inventory
 
 One call per list, **`-L` on every one** — `gh issue list` defaults to 30
 results, which would silently drop half of alate:
@@ -128,23 +122,7 @@ gh pr list    -R <repo> --state open -L 200 --label decision --json number,title
 of the body; `P` is its P label (none, or several, is a lint finding — see
 Step 1); `held` is `on hold`; `needs-you` is `needs-input`.
 
-### File mode — the inventory (un-migrated repos only)
-
-Exactly as before RFD 004, plus one addition:
-
-1. Read `<repo-root>/BACKLOG.md` (`## P0`–`## P4` sections; a `P4` entry is
-   treated as `P3` for ranking) and `<repo-root>/backlog/*.md` /
-   `docs/backlog/*.md` if present. Use a checkout that is current with origin
-   (see "check the checkouts" in Step 1).
-2. **Also read the repo's open issues that carry a P label** (the issue-mode
-   list call above, filtered to `P0`–`P3`, `device-test` excluded). New work
-   goes to issues in every repo from RFD 004 on, and crash-monitor,
-   security-sweep and device-test file P-labelled issues everywhere, so a file-
-   mode pulse that ignored them would miss exactly the newest work. When a
-   BACKLOG entry cites the issue (`#N`, `<repo>#N` or its URL), score it once,
-   as the issue.
-
-### Other inputs (both modes, unchanged)
+### Other inputs
 
 | Doc | Default path | What it claims state about |
 |---|---|---|
@@ -155,7 +133,7 @@ Exactly as before RFD 004, plus one addition:
 | Briefs | `<repo-root>/docs/briefs/*.md` | Long product briefs, each linked from its issue |
 | User-named markdown | Whatever the user passes | Apply same workflow |
 
-Present the found repos, their modes and the docs back to the user. **For
+Present the found repos, their open-issue counts and the docs back to the user. **For
 autonomous (cron-triggered) runs, default to everything found.** For manual
 invocations, confirm scope.
 
@@ -165,8 +143,7 @@ invocations, confirm scope.
 a P label.** It comments, edits stale citations in bodies, and reports.
 Everything that changes an issue's state goes through a manual run, on the
 owner's word. (Adopted from prior art on AI coordinators over GitHub Issues:
-closing is hard-limited.) Deleting an issue is never an action of this skill,
-in either mode.
+closing is hard-limited.) Deleting an issue is never an action of this skill.
 
 ## Workflow
 
@@ -231,31 +208,22 @@ live in the roadmap Artifact itself. Before anything else:
 2. The read fails, or the page has no such block → use `lastScores` from
    `.roadmap-pulse-state.json`, and **say so in the Step 6 summary** ("previous
    scores read from the state-file fallback, not the Artifact").
-3. Neither exists → if the repo still has a `WEEKLY_DIGEST.md` from before
-   RFD 004, read its newest section **read-only** for the previous top 10
-   (it is never appended to again). Otherwise this is the first run: the diff
-   section says so.
+3. Neither exists → this is the first run: the diff section says so.
 
 Block shape and field meanings: [`references/digest-format.md`](references/digest-format.md).
 
 ### Step 1 — Honesty pass
 
-For each open item, scan for state claims and verify each against the source of truth. Full detection logic in [`references/staleness-detection.md`](references/staleness-detection.md) — read it before running. It gives the issue-mode check and the file-mode check for each failure mode.
+For each open item, scan for state claims and verify each against the source of truth. Full detection logic in [`references/staleness-detection.md`](references/staleness-detection.md) — read it before running.
 
-| Failure mode | Issue mode check | Cron action | Manual-run action |
+| Failure mode | Check | Cron action | Manual-run action |
 |---|---|---|---|
 | **Already-shipped-but-still-open** | `closedByPullRequestsReferences` holds a merged PR while the issue is open; the timeline (`gh api repos/<r>/issues/N/timeline`) has a `cross-referenced` merged PR; or `git log origin/<default> --grep "<distinctive phrase>"` finds the squash merge | **One** evidence comment with the hidden marker `<!-- pulse:suspect-shipped -->`, edited on later runs, never re-posted. Listed in the Artifact under "close these?". **Never closes** | Owner confirms → `gh issue close N --reason completed --comment "<SHA, branch --contains proof>"` |
 | **Shipped-from-orphan-branch** | Closed `completed` since the last run, with no merged PR in its timeline and no default-branch SHA cited | Comment + Artifact flag | Reopen with a history note |
 | **Deferred-without-source** | Open `P3` or `on hold` whose body has no *because* / link / decision doc / `Deferred until:` trigger | Artifact flag | Add the rationale to the body |
 | **Stale file:line citations** | Same algorithm, run over the issue body | **Edit the body in place** (GitHub keeps the edit history) + one comment naming old → new | Same |
 | **Still-pending-but-actually-live** | Entry claims outstanding _external_ state (env var, cron, table, endpoint, DNS, runner) — **probe the live system**; run the body's own `**Verify:**` block instead of quoting it | Comment with the probe output; narrow "Done when" in the body | Close or narrow, per the three-outcome grading table |
-| **Label hygiene** (issues only) | 0 or >1 P labels; `P0` with no activity for 14 days; `needs-input` > 14 days; `on hold` past its review-by date; a dead `claimed`; `needs-input` on a `decision` PR; a `decision` PR open > 14 days | Artifact section. `on hold` expiry → reminder comment. Dead `claimed` → `wip sweep` | Fix the labels with the owner |
-
-In **file mode** the first five checks run over `BACKLOG.md` exactly as they
-always have, and rewrites follow the BACKLOG templates in
-[`references/rewrite-patterns.md`](references/rewrite-patterns.md) (strike +
-tombstone, reopen with a history note, add a rationale). Those rewrites go in
-one PR to that repo, as before.
+| **Label hygiene** | 0 or >1 P labels; `P0` with no activity for 14 days; `needs-input` > 14 days; `on hold` past its review-by date; a dead `claimed`; `needs-input` on a `decision` PR; a `decision` PR open > 14 days | Artifact section. `on hold` expiry → reminder comment. Dead `claimed` → `wip sweep` | Fix the labels with the owner |
 
 **The last content check hunts in the opposite direction from the others and is
 easy to forget.** The first four ask "claims done — is it?". The fifth asks
@@ -311,9 +279,8 @@ Fix only what is provably safe, report the rest:
 
 Full detection, confirmation and persistence rules in [`references/dependency-inference.md`](references/dependency-inference.md).
 
-1. **Read the confirmed graph first.** Issue mode: native `blockedBy` /
-   `blocking` from the list call (they work across repos) plus parent/child
-   from sub-issues. File mode: `**Depends on:**` lines in BACKLOG entries.
+1. **Read the confirmed graph first:** native `blockedBy` / `blocking` from
+   the list call (they work across repos) plus parent/child from sub-issues.
 2. **Infer only what's missing.** Scan titles and bodies for high-confidence
    signals (`#N` / `repo#N` next to "depends on / blocked by / after / requires
    / needs", or a direct title mention) and medium ones (a shared file or
@@ -321,16 +288,14 @@ Full detection, confirmation and persistence rules in [`references/dependency-in
    body changed after the link was created.
 3. **Ask the user to confirm or reject** — one clustered table, not 10
    separate questions.
-4. **Persist confirmed dependencies (manual runs only).** Issue mode:
-   `gh issue edit <dependent> -R <repo> --add-blocked-by <blocker-url>`. File
-   mode: a `**Depends on:**` line in the BACKLOG entry, as before.
+4. **Persist confirmed dependencies (manual runs only):**
+   `gh issue edit <dependent> -R <repo> --add-blocked-by <blocker-url>`.
 5. **Rejected** suggestions go in `rejectedDependencies` in
    `.roadmap-pulse-state.json` with a 4-week cooldown.
 
 **Cron runs persist nothing to issues.** High-confidence suggestions go in the
 Artifact's "needs confirmation" table instead of a `**Suggested dependency:**`
-marker (that marker needed a file to live in). File-mode repos keep the old
-behaviour: a `**Suggested dependency:**` line in the entry.
+marker (that marker needed a file to live in).
 
 A **parent** issue is scored as the rollup of its open children, and only
 **leaf** issues are auto-build candidates. Cycle detection runs on the whole
@@ -340,13 +305,13 @@ graph, as before.
 
 For each open item:
 
-1. Compose the input for rubric-sdk: `{ title, description (≤500 chars), context: { goals: <Step 2 list>, dependencies: <Step 3 graph> } }`. Where the inputs come from, per mode: [`references/scoring-contract.md`](references/scoring-contract.md) → "Where the inputs come from".
+1. Compose the input for rubric-sdk: `{ title, description (≤500 chars), context: { goals: <Step 2 list>, dependencies: <Step 3 graph> } }`. Where the inputs come from: [`references/scoring-contract.md`](references/scoring-contract.md) → "Where the inputs come from".
 2. Invoke rubric-sdk via [`scripts/invoke_rubric.sh`](scripts/invoke_rubric.sh) — wraps the SDK CLI so the skill doesn't hand-write CLI strings. Falls back to programmatic API if the CLI fails.
 3. Receive `{ reach, impact, confidence, effort, rice_score, reasoning }`. **Reach and Effort come from the issue body** when a human filled the `### Reach` / `### Effort (person-days)` sections (anything but `unknown`); recompute `rice_score` with them and cite "from the issue" in the reasoning.
 4. **Adjust score with three multiplier overlays:**
    - **×1.2** if this item produces a reusable component/pattern (reusability bonus).
    - **×1.2** if this item is on the Step 2 goal-aligned list (strategic fit bonus).
-   - **×1.1** if this item blocks another open item (`blocking.totalCount ≥ 1`, or a confirmed file-mode dependency) (dependency-unblock bonus).
+   - **×1.1** if this item blocks another open item (`blocking.totalCount ≥ 1`) (dependency-unblock bonus).
 5. **Rank within the owner's P bands.** Sort by adjusted score, then apply the
    band floor: **an item never ranks below one two or more P levels lower**
    (a `P0` never below a `P2` or `P3`; a `P1` never below a `P3`) — applied as
@@ -392,12 +357,12 @@ the whole digest, and **its URL never changes**:
 3. Content, in this order (full spec in
    [`references/digest-format.md`](references/digest-format.md)):
    the priorities table (Rank | ☐ | P | Item | Score | Band | Source — the
-   issue URL, or the BACKLOG line for a file-mode entry | Why), then
+   issue URL | Why), then
    "awaiting your yes/no" (open `decision` PRs, oldest first), "needs you"
    (`needs-input`), "close these?" (suspect-shipped), label hygiene, proposed
    P changes, dependency suggestions needing confirmation, holds expiring,
    "built this week", "what changed since last run", and run metadata
-   (each repo's mode and open-issue count).
+   (each repo's open-issue count, and any retired-pointer finding).
 4. **Embed this run's scores** for every scored item — not just the top 10 —
    as `<script type="application/json" id="roadmap-pulse-scores">{…}</script>`.
    That block is what Step 0.5 reads next week, and it is the rubric's
@@ -418,20 +383,18 @@ Everything built here ships to **test/preview** (OTA to the `preview` channel), 
 
 **Candidates, up to 2 per run.** An item qualifies only when **all** hold:
 
-- Issue mode: an open issue labelled `P0`, in the Must band, that is a **leaf**
+- It is an open issue labelled `P0`, in the Must band, that is a **leaf**
   (no open sub-issues), has no live `claimed` that isn't the pulse's own, has
   none of `needs-input` / `on hold` / `device-test`, is not a `decision` PR, and
   has no open blocker in `blockedBy`.
-- File mode: an entry in the `## P0` section, in the Must band, whose entry has
-  no `**Needs input:**` / `**Decision needed:**` line.
-- Both modes: it doesn't need changes in more than one repo, and its text
+- It doesn't need changes in more than one repo, and its text
   doesn't mention "breaking change", "migration" or "schema change" — those
   need human oversight.
 
 **For each candidate:**
 
 1. **Branch:** create `pulse/<slug>` off the default branch (fetch origin first).
-2. **Claim it (issue mode):** `wip claim <repo>#<n>` before writing any code,
+2. **Claim it:** `wip claim <repo>#<n>` before writing any code,
    and after the branch exists so the claim names the right worktree (`wip` not
    found → `node "${CLAUDE_PLUGIN_ROOT}/tools/work-claim/cli.js"` with the same
    arguments). Another live session already holds it → drop the branch, skip
@@ -439,7 +402,7 @@ Everything built here ships to **test/preview** (OTA to the `preview` channel), 
 3. **Build:** invoke the `forge:build-feature` skill to implement the item end-to-end. The build-feature skill handles TDD, implementation, OTA publish to preview, device verification (if a device is connected), and quality pass.
 4. **PR:** open a ready (not draft) PR with:
    - Title: `feat(<scope>): <item title>`
-   - Body: standard build-feature output — TLDR, what changed, test coverage, acceptance criteria verdicts — and **`Closes #<n>`** for an issue-mode item, so the merge closes the issue.
+   - Body: standard build-feature output — TLDR, what changed, test coverage, acceptance criteria verdicts — and **`Closes #<n>`**, so the merge closes the issue.
    - Labels: `pulse-auto-build`, `auto-generated`
 5. **Merge through the confidence command** — after waiting for CI as its own
    step, because the confidence command reads CI once and a check still
@@ -455,10 +418,8 @@ Everything built here ships to **test/preview** (OTA to the `preview` channel), 
    `--auto`, and never a bare `gh pr merge`** — this runs unattended and is
    the largest blast radius in the system (forge#86). See
    `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Merge on green".
-6. **Close the loop.** Issue mode: nothing to edit — the merge closes the issue
-   through `Closes #<n>`. File mode: mark the BACKLOG entry `DONE — <date>, PR
-   #<n>` and the merged SHA once it lands, collapsed to a one-line tombstone
-   per "Docs stay lean".
+6. **Close the loop.** Nothing to edit — the merge closes the issue through
+   `Closes #<n>`.
 7. **Release the claim:** `wip release <repo>#<n>`, whether the build merged,
    stalled or was left open for the user.
 8. **Log:** safe-merge writes the auto-ship-log row on exit `0`. On exit `11` (merged, append failed) add it by hand to `Tessellate-Studio/litmus` auto-ship-log.md (default branch `main`):
@@ -479,17 +440,16 @@ End the run with the user's project-CLAUDE.md communication structure (for Alate
 3. **What I (Claude) can do** — anything the skill can take off the user's hands (e.g. "start on alate#123 now").
 4. **Summary of what changed this run** — items closed or flagged, dependencies linked, scores shifted vs last run (from Step 0.5 — say if the fallback was used).
 5. **Built this week** — items auto-built by Step 5.5 (PR links + 1-line summaries). Only present on autonomous runs where Step 5.5 executed.
-6. **Issues touched** — comments posted, bodies edited, links added, per repo; any file-mode doc PR; and the refreshed roadmap Artifact link.
+6. **Issues touched** — comments posted, bodies edited, links added, per repo; and the refreshed roadmap Artifact link.
 
 Confirm the next scheduled run is on the calendar; surface the next-run timestamp.
 
 ## What this skill does NOT do
 
 - It does not close, reopen or re-prioritise an issue on an unattended run. It comments and reports; the owner decides (see "Autonomous vs manual").
-- It never deletes an issue, a comment or a BACKLOG entry. "Strike-through, don't delete" became "close with a reason, never delete": a closed issue keeps its whole body and comments, so nothing that no diff can give back is lost.
-- In file mode it does not collapse **what no diff can give back** (rejected alternatives and why they lost, investigations that corrected a false belief, external research) or **test artefacts** (coverage maps, user-path audits, E2E contracts, regression tables). Both carve-outs are stated in `standards/workflows.md` → "Docs stay lean".
+- It never deletes an issue or a comment. "Strike-through, don't delete" became "close with a reason, never delete": a closed issue keeps its whole body and comments, so nothing that no diff can give back is lost.
 - It does not invent SHAs or RICE scores. If rubric-sdk fails to return a score, the item is surfaced as "unscored, manual review needed" — never fabricated.
-- It does not write scores into issues (no labels, no scorecard comments, no Projects fields) or re-sort a BACKLOG's P sections. The Artifact is the visibility layer.
+- It does not write scores into issues (no labels, no scorecard comments, no Projects fields). The Artifact is the visibility layer.
 - It does not touch `device-test` issues. That queue has its own drain.
 - It does not run on repos or docs the user didn't include in the inventory's confirmed scope.
 - It does not pester. Rejected dependency suggestions don't re-surface for 4 weeks. Goal-alignment inferences are surfaced once per run, not re-asked. An evidence comment is edited on later runs, never re-posted.
@@ -498,7 +458,7 @@ Confirm the next scheduled run is on the calendar; surface the next-run timestam
 
 - The doc is a writing/style document (blog post, marketing copy, design narrative). This skill is for status/planning with verifiable claims.
 - The user wants to ADD a work item (file it: `wi new --priority P0..P3`) or edit a doc directly.
-- There are no open issues, no BACKLOG and no RELEASE doc in scope, AND the user didn't name an alternative — there's nothing to operate on; surface that and exit.
+- There are no open issues and no RELEASE doc in scope, AND the user didn't name an alternative — there's nothing to operate on; surface that and exit.
 - Non-English content (detection regexes assume English keywords).
 
 ## Tone + style
