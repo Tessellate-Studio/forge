@@ -15,6 +15,16 @@ const { canonicalFor, AREA } = require('../../labels/lib/labels');
 const MIGRATED_LABEL = 'migrated-from-backlog';
 const ACTIONABLE = new Set(['create', 'link']);
 
+/**
+ * The owner's calendar date, YYYY-MM-DD, in local time. toISOString() is UTC,
+ * so a migration run in IST before 05:30 stamped yesterday's date on issue
+ * bodies, Tracking headers and the pointer file.
+ */
+function localDate(d = new Date()) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 function requireGh(gh) {
   const v = gh.version();
   if (!v || !versionAtLeast(v)) {
@@ -541,7 +551,7 @@ function rewrite({
   dir,
   ledger,
   plan: doc = null,
-  date = new Date().toISOString().slice(0, 10),
+  date = localDate(),
   digestUrl = null,
   guardWorkflow = null,
   fs = nodeFs,
@@ -675,6 +685,7 @@ function rewrite({
 
 module.exports = {
   insertFreezeGuard,
+  localDate,
   plan,
   apply,
   rollback,

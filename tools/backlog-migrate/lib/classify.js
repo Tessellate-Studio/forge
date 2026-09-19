@@ -282,7 +282,19 @@ function overlap(a, b) {
   return n / Math.min(A.size, B.size);
 }
 
+// An explicit `**Repo:** owner/name` (or bare `name`, optionally in
+// backticks) line anywhere in the entry is the author saying where the work
+// lives, so it outranks the "(x repo)" heuristic below. Found in the alate
+// migration: "v2 themed redesign" carried `**Repo:** Tessellate-Studio/
+// tessellate-pages` and was still planned into alate.
+const REPO_LINE =
+  /^\s*\*\*Repo:?\*\*:?\s*`?(?:[\w.-]+\/)?([\w.-]+?)`?\s*(?:[—–(,.]|$)/im;
+
 function targetRepoOf(entry, sourceRepo) {
+  const explicit = `${entry.statusLine || ''}\n${entry.text}`.match(REPO_LINE);
+  if (explicit && KNOWN_REPOS.includes(explicit[1].toLowerCase())) {
+    return explicit[1].toLowerCase();
+  }
   const head = `${entry.statusLine}\n${entry.text
     .split('\n')
     .slice(0, 2)

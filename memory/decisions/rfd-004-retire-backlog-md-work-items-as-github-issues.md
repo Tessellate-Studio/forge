@@ -1,7 +1,7 @@
 # RFD 004: Retire BACKLOG.md. Work items become GitHub issues
 
 **Date:** 2026-09-18
-**State:** discussion — all open questions answered by the owner 2026-09-18; awaiting merge of the decision PR
+**State:** committed — rollout complete 2026-09-19
 **Author:** Saptami Ram (with Claude)
 **Decided upstream (not reopened here):** on 2026-09-18 the owner decided to
 retire `BACKLOG.md` across the Tessellate repos. Work items become GitHub
@@ -919,3 +919,49 @@ All resolved by the owner on 2026-09-18.
 - [x] **Q5. Cross-repo entries.** File each in the repo that owns the code; litmus and tessellate-pages get the label set via bootstrap.
 - [x] **Q6. Area labels.** *Amended by the owner 2026-09-19, superseding the 2026-09-18 "none added" ruling:* area labels are used **only in loom and alate**. loom keeps its existing set (`admin-ui api sdk extension supabase infra`); alate gets a new set, `mobile backend scraper fit-engine infra`, defined in `tools/labels` and created when alate is bootstrapped (step 5). mood-layer and badige get no area labels from the migration; mood-layer's existing area labels are left untouched, not deleted. The migration infers area only for loom and alate, and only on a confident path/keyword match; otherwise it leaves area empty.
 - [x] **Q7. alate's `docs/backlog/` briefs.** Move to `docs/briefs/` and link each from its issue.
+
+## Outcome
+
+Rollout complete on 2026-09-19. Every app repo's `BACKLOG.md` is now a one-line
+pointer with a freeze guard. Step 6 removed the pulse's file mode (forge 0.16.0).
+
+| Step | PR |
+|---|---|
+| Decision | forge#151 |
+| 1. forge tooling | forge#153 |
+| 2. forge standards, skills, pulse dual mode | forge#152 (0.15.0) |
+| loom pilot hand fixes, back into the tool | forge#155 |
+| 3. loom pilot | loom#175 |
+| 4. mood-layer, badige | mood-layer#141, badige#96 |
+| 5. alate | alate#959 |
+| 6. forge: remove file mode | forge#156 (0.16.0) |
+| Cleanup: alate code comments repointed at issues | alate#960 |
+
+**Issues filed:**
+
+| Repo | Work issues | Device tests | Notes |
+|---|---|---|---|
+| loom | 9 | — | + alate#929 (cross-repo, filed in the repo that owns the code) |
+| mood-layer | 9 | 2 | |
+| badige | 7 | 2 | |
+| alate | 31 (incl. 1 linked to an existing issue) | 2 | + cross-repo tessellate-pages#15, loom#177, litmus#54 |
+
+**Known tool bugs** in `tools/backlog-migrate/`, found during the rollout:
+
+1. **Open.** The parser glues a trailing resolved paragraph onto the previous
+   entry.
+2. **Fixed in step 6.** Target-repo inference missed an explicit
+   `**Repo:** owner/name` line (alate's "v2 themed redesign" entry was planned
+   into alate instead of tessellate-pages). The line now wins over the
+   "(x repo)" heuristic, for known repos only
+   (`__tests__/rollout-fixes.test.js`).
+3. **Open.** "Verify … end-to-end" isn't detected as a device test.
+4. **Open.** A `verdict` override masks `already-migrated` in the plan table.
+5. **Fixed in step 6.** `rewrite` / `apply` stamped UTC dates, so a run in IST
+   before 05:30 wrote yesterday's date. They now use the local calendar day
+   (`localDate()` in `lib/commands.js`).
+6. **Open.** `rewrite` doesn't scan source-code comments for BACKLOG pointers.
+   alate's 18 BACKLOG code comments were repointed by hand in alate#960.
+
+The tool is kept for any other app that still has a `BACKLOG.md`. Check the
+open bugs above against its output before applying.

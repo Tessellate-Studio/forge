@@ -2,9 +2,9 @@
 
 This file is the operational manual for Step 1 of the roadmap-pulse workflow — the honesty pass that strips ghost items before Step 2 onward operates on them. Read this before you start verifying — the gotchas matter, especially around squash merges.
 
-**Two modes.** A migrated repo's open work is GitHub issues (**issue mode**); a repo that hasn't migrated off `BACKLOG.md` yet is read from the file (**file mode**). SKILL.md → "Per-repo mode" says how to tell. Each failure mode below gives the issue-mode check first, then the file-mode check. The probes themselves (git log, `branch --contains`, live-system queries) are the same in both; what changes is where the claim is read and where the verdict is written.
+**Open work is GitHub issues.** Each failure mode below gives the check on issues first, then the git probe it relies on (git log, `branch --contains`). The BACKLOG.md file mode was removed in RFD 004 step 6.
 
-**Unattended runs only comment and report.** In issue mode a cron run never closes or reopens an issue and never changes a P label; it posts or edits one evidence comment and lists the item in the Artifact. The state change happens on a manual run, on the owner's word.
+**Unattended runs only comment and report.** A cron run never closes or reopens an issue and never changes a P label; it posts or edits one evidence comment and lists the item in the Artifact. The state change happens on a manual run, on the owner's word.
 
 ## Table of contents
 
@@ -13,7 +13,7 @@ This file is the operational manual for Step 1 of the roadmap-pulse workflow —
 3. [Deferred-without-source](#deferred-without-source)
 4. [Stale file:line citations](#stale-fileline-citations)
 5. [**Still-pending-but-actually-live**](#still-pending-but-actually-live)
-6. [Label hygiene (issue mode)](#label-hygiene-issue-mode)
+6. [Label hygiene](#label-hygiene)
 7. [Cross-failure cases](#cross-failure-cases)
 8. [MCP-tracked state (Supabase, etc.)](#mcp-tracked-state)
 
@@ -21,7 +21,7 @@ This file is the operational manual for Step 1 of the roadmap-pulse workflow —
 
 ## Already-shipped-but-still-open
 
-### Issue mode
+### The check on issues
 
 **Symptom:** the issue is open, but the work merged. Usually the PR said "fixes the thing" without the `Closes #N` keyword, or it closed a sibling issue.
 
@@ -34,7 +34,7 @@ This file is the operational manual for Step 1 of the roadmap-pulse workflow —
      --jq '.[] | select(.event=="cross-referenced") | .source.issue | select(.pull_request.merged_at != null) | "\(.number) \(.title) \(.pull_request.merged_at)"'
    ```
    A cross-reference is only a mention. Read the PR before concluding it shipped the item.
-3. The file-mode grep below, with a distinctive phrase from the issue title, against `origin/<default>`.
+3. The squash-merge grep below, with a distinctive phrase from the issue title, against `origin/<default>`.
 
 **Verdict:** post **one** evidence comment, starting with the hidden marker `<!-- pulse:suspect-shipped -->` (template: `rewrite-patterns.md` → "Issue rewrites"). On later runs, **edit** that comment rather than posting another. Find it with
 `gh api "repos/<owner>/<repo>/issues/<N>/comments" --paginate --jq '.[] | select(.body | contains("pulse:suspect-shipped")) | .id'`
@@ -42,86 +42,68 @@ and update it with `gh api -X PATCH "repos/<owner>/<repo>/issues/comments/<id>" 
 
 The partial-implementation gotcha below applies in full: if only part shipped, the verdict is "narrow the body", not "close".
 
-### File mode
+### The squash-merge grep
 
-**Symptom:** Entry sits in `## P0`, `## P1`, etc. with no strikethrough. The work has actually shipped — usually as a squash-merge under a different SHA than the entry might naively predict.
+Most repos squash-merge, so the work lands under a fresh SHA that nothing in the issue names when the PR didn't say `Closes #N`.
 
-**Why this happens:** Most repos use squash-merge for PRs. The entry's underlying work gets a fresh squash SHA, and the BACKLOG entry never gets updated because nothing links a PR to a paragraph. (Issues fix this at the root: `Closes #N` closes the item on merge. That is half the reason RFD 004 moved work into issues.)
-
-**The check:**
-
-1. Extract the entry's distinctive subject — the section heading is usually enough.
-2. Pull the most distinctive 3-5 words. Avoid generic verbs (`Apply`, `Fix`, `Add`); favor the noun phrase (`Supabase migration blocked_brands`).
-3. Run:
+1. Pull the most distinctive 3-5 words from the issue title. Avoid generic verbs (`Apply`, `Fix`, `Add`); favor the noun phrase (`Supabase migration blocked_brands`).
+2. Run:
    ```bash
-   git log master --oneline --grep="<distinctive phrase>" | head -10
+   git log origin/<default> --oneline --grep="<distinctive phrase>" | head -10
    ```
-4. If a commit subject matches the entry's intent, the entry is mis-flagged. Verdict: `already-shipped → strike + add merge commit ref`.
+3. If a commit subject matches the issue's intent, it is a suspect-shipped candidate (verdict above).
 
 **Gotchas:**
 
-- **Multiple matches:** if 3 commits match, read each via `git show <sha>` and pick the one whose changes most plausibly close the entry. Cite that SHA in the rewrite.
-- **No match, but you suspect:** if grep finds nothing yet the entry mentions files (`mobile/src/foo.ts`), run `git log master -- mobile/src/foo.ts | head -20` and look for relevant commits.
-- **Partial implementation:** an entry like "Add X with Y, Z, and W" might have been partially shipped (X and Y landed, Z and W didn't). Don't blanket-strike — surface as "Partial — X+Y shipped in <sha>, Z+W remain open" and propose splitting the entry.
+- **Multiple matches:** if 3 commits match, read each via `git show <sha>` and pick the one whose changes most plausibly close the issue. Cite that SHA in the evidence comment.
+- **No match, but you suspect:** if grep finds nothing yet the issue mentions files (`mobile/src/foo.ts`), run `git log origin/<default> -- mobile/src/foo.ts | head -20` and look for relevant commits.
+- **Partial implementation:** an issue like "Add X with Y, Z, and W" might have been partially shipped (X and Y landed, Z and W didn't). Don't propose closing it — surface as "Partial — X+Y shipped in <sha>, Z+W remain open" and propose narrowing the body (or splitting off sub-issues).
 
 ---
 
 ## Shipped-from-orphan-branch
 
-### Issue mode
+### The check on issues
 
 **Symptom:** an issue was closed `completed` since the last run (the closed-issues list call), but no merged PR is in its timeline and no SHA reachable from the default branch is cited in its closing comment. A session closed it on the strength of a commit that never merged.
 
-**The check:** `closedByPullRequestsReferences` is empty **and** the timeline has no merged cross-referencing PR **and** every SHA cited in the closing comment fails the file-mode `branch --contains` check below against `origin/<default>`.
+**The check:** `closedByPullRequestsReferences` is empty **and** the timeline has no merged cross-referencing PR **and** every SHA cited in the closing comment fails the `branch --contains` probe below against `origin/<default>`.
 
 **Verdict:** a comment with the evidence and an Artifact flag on a cron run; on a manual run, reopen with a history note (`rewrite-patterns.md`). An issue closed `not_planned` is a decision, not a claim of shipping, and is never flagged here.
 
-### File mode
+### The `branch --contains` probe
 
-**Symptom:** Entry has strikethrough + a "LANDED" / "FIXED" marker, often with a cited SHA. But the SHA is on a stranded branch (e.g. `claude/<adjective>-<noun>-<hash>` from a prior session) that never merged to master.
-
-**Why this happens:** A prior session wrote a fix, committed it on a session-scoped branch, recorded the SHA in the BACKLOG / regression log as proof of "shipped" — then the session ended and the branch was never pushed or never merged.
-
-**The check:**
+**Why this happens:** a prior session wrote a fix, committed it on a session-scoped branch (e.g. `claude/<adjective>-<noun>-<hash>`), cited the SHA in a closing comment or the regression log as proof of "shipped" — then the session ended and the branch was never pushed or never merged.
 
 1. Extract the cited SHA. Look for 40-char or 7-char hex tokens.
 2. Run:
    ```bash
-   git branch --contains <sha> 2>&1
+   git branch -r --contains <sha> 2>&1
    ```
-3. If `master` (or your project's default branch) appears in the output, the entry is **verified shipped**.
-4. If only `claude/*` / `feat/*` / other non-default branches appear — the entry is **falsely shipped**. Verdict: `orphan-shipped → reopen entry + correct history note`.
+3. If `origin/<default>` appears in the output, the claim is **verified shipped**.
+4. If only `claude/*` / `feat/*` / other non-default branches appear — it is **falsely shipped**. Verdict: `orphan-shipped → reopen with a history note`.
 
 **Gotchas:**
 
 - **The SHA doesn't exist locally:** the orphan branch was deleted. Try `git fetch --all` first. If still nothing, the SHA is unverifiable — surface as "Cited SHA `<short>` is unreachable; cannot confirm shipped state."
-- **The PR was merged but the cited SHA is the pre-merge branch tip:** common with squash merges. `git branch --contains <pre-merge-sha>` won't list master because the squash commit is a new SHA. Solution: also grep `git log master --oneline --grep="<entry subject>"` for the squash subject.
+- **The PR was merged but the cited SHA is the pre-merge branch tip:** common with squash merges. `git branch --contains <pre-merge-sha>` won't list master because the squash commit is a new SHA. Solution: also grep `git log origin/<default> --oneline --grep="<subject>"` for the squash subject.
 
 ---
 
 ## Deferred-without-source
 
-### Issue mode
-
-**Symptom:** an open `P3` or `on hold` issue whose body has no reason: no *because* clause, no link to a decision doc or brief, no `Deferred until: <trigger>` line (the form a migrated `P4` takes), and, for `on hold`, no applying comment with a review-by date.
-
-**The check:** the same scan as file mode below, over the issue body and, for `on hold`, the comment that applied the label. **Verdict:** Artifact flag; a manual run adds the rationale to the body.
-
-### File mode
-
-**Symptom:** Entry contains `parked` / `deferred to v2` / `out of scope` / `for later` / `dismissed` — but no reasoning, no link to a successor BACKLOG entry, no rationale paragraph.
+**Symptom:** an open `P3` or `on hold` issue (or one whose body says `parked` / `deferred to v2` / `out of scope` / `for later`) that has no reason: no *because* clause, no link to a decision doc or brief, no `Deferred until: <trigger>` line (the form a migrated `P4` takes), and, for `on hold`, no applying comment with a review-by date.
 
 **Why this matters:** A bare deferral is unactionable in v2 planning. Six months later, nobody can tell why it was parked.
 
-**The check:**
+**The check:** scan the issue body and, for `on hold`, the comment that applied the label, for any of:
 
-1. For each deferral entry, scan the entry's body (everything between this `###` and the next).
-2. Look for any of:
-   - A "because" / "since" / "due to" / "this requires" clause
-   - A markdown link to another BACKLOG entry: `[see ...](#anchor)`
-   - A markdown link to a successor doc (`[backlog/<name>.md](...)`, `docs/briefs/<name>.md`) or to an issue (`#N`, `repo#N`)
-   - A paragraph that contains a verb-form clause explaining the gating constraint (e.g. "needs merchant consent", "post-launch only", "depends on X partnership")
-3. If none are present, the entry is **deferred-without-source**. Verdict: `propose adding a rationale paragraph`.
+- A "because" / "since" / "due to" / "this requires" clause
+- A link to a successor doc (`docs/briefs/<name>.md`, `memory/decisions/…`) or to an issue (`#N`, `repo#N`)
+- A `Deferred until: <trigger>` line
+- A paragraph that contains a verb-form clause explaining the gating constraint (e.g. "needs merchant consent", "post-launch only", "depends on X partnership")
+
+If none are present, the issue is **deferred-without-source**. **Verdict:** Artifact flag; a manual run adds the rationale to the body.
 
 **Gotchas:**
 
@@ -129,23 +111,21 @@ The partial-implementation gotcha below applies in full: if only part shipped, t
   ```bash
   grep -rli "<entry subject>" memory/
   ```
-  If a memory file documents the reason, the BACKLOG entry just needs a reference to it — not new reasoning.
+  If a memory file documents the reason, the issue just needs a reference to it — not new reasoning.
 
 ---
 
 ## Stale file:line citations
 
-**Issue mode:** run the algorithm below over each open issue body. A confirmed drift is fixed by **editing the body in place** (`gh issue edit N -R <repo> --body-file <file>`; GitHub keeps the edit history), plus **one** comment naming the old → new citation, so the change is visible to anyone watching the issue. This is the one body edit a cron run makes on its own: it changes no state, only a pointer. Read the body fresh right before editing, and change only the citation, so a human's concurrent edit isn't overwritten.
+Run the algorithm below over each open issue body. A confirmed drift is fixed by **editing the body in place** (`gh issue edit N -R <repo> --body-file <file>`; GitHub keeps the edit history), plus **one** comment naming the old → new citation, so the change is visible to anyone watching the issue. This is the one body edit a cron run makes on its own: it changes no state, only a pointer. Read the body fresh right before editing, and change only the citation, so a human's concurrent edit isn't overwritten.
 
-**File mode:**
-
-**Symptom:** Entry cites a path like `mobile/src/screens/FitResultScreen.tsx:1055`, but the file has been refactored — the line number no longer points at the symbol the surrounding text implies.
+**Symptom:** an issue cites a path like `mobile/src/screens/FitResultScreen.tsx:1055`, but the file has been refactored — the line number no longer points at the symbol the surrounding text implies.
 
 **The check:**
 
-1. Extract all `path:line` patterns from the doc.
+1. Extract all `path:line` patterns from the body.
 2. For each path: verify the file exists (Glob).
-3. For each `path:line`: Read the file at that offset (5 lines context). Compare the symbol the item's prose (issue body or BACKLOG entry) implies with the symbol actually there.
+3. For each `path:line`: Read the file at that offset (5 lines context). Compare the symbol the issue's prose implies with the symbol actually there.
 4. Mismatches:
    - **File moved / renamed:** `git log --follow --oneline -- <path>` shows the rename. Update the citation.
    - **Line drifted within file:** `git grep -n "<symbol>" -- <path>` to find the new line. Update.
@@ -223,7 +203,7 @@ gh api repos/<org>/<repo>/actions/runs/<id>/jobs --jq '.jobs[]|"\(.name) \(.runn
 gh repo list <org> --limit 30 --json name   # does the cited repo exist at all?
 ```
 
-**Where the claim lives:** in issue mode, the body's "Done when" / `**Verify:**` block and any "what's left"; in file mode, the entry text. On a cron run, the probe output goes in a comment and "Done when" is narrowed in the body; closing waits for a manual run.
+**Where the claim lives:** the body's "Done when" / `**Verify:**` block and any "what's left". On a cron run, the probe output goes in a comment and "Done when" is narrowed in the body; closing waits for a manual run.
 
 **Grading the result — three outcomes, not two:**
 
@@ -246,7 +226,7 @@ user, not something to do unattended.
 
 ---
 
-## Label hygiene (issue mode)
+## Label hygiene
 
 GitHub labels have no mutual exclusion, so the P scheme is enforced here and by the filing helper (`wi new`). Check every open issue in scope (except `device-test`) and every open `decision` PR:
 
@@ -260,6 +240,7 @@ GitHub labels have no mutual exclusion, so the P scheme is enforced here and by 
 | **`needs-input` on a `decision` PR** | Closing a decision PR is a valid answer, so it must not also carry `needs-input` | List it |
 | **`decision` PR open > 14 days** | The owner hasn't answered | List it under "awaiting your yes/no", flagged |
 | **Retired `BACKLOG.md` grew** | The pointer file has more than its one line | List it: the freeze guard missed a PR |
+| **`BACKLOG.md` has entries and no retired marker** | Every repo in scope migrated in RFD 004 | List it at the top: never migrated, or the pointer was reverted. Don't read or score the file |
 
 Only a manual run changes labels, with the owner.
 
@@ -267,10 +248,9 @@ Only a manual run changes labels, with the owner.
 
 Handle in this order:
 
-1. **Citation-stale entries that are also already-shipped** → fix the shipped-claim rewrite; don't bother updating the citation (entry will be struck-through).
-2. **Orphan-shipped entries with stale citations** → fix both: reopen the entry AND update the citation.
-3. **Deferred-without-source items that defer to a successor that doesn't exist** (a future entry or issue nobody filed) → surface as a dependency: "Defers to X, but no open issue (or entry) X exists."
-4. **Suspect-shipped issues with stale citations** → post the evidence comment; don't edit the citation (the issue is likely to close).
+1. **Suspect-shipped issues with stale citations** → post the evidence comment; don't edit the citation (the issue is likely to close).
+2. **Orphan-shipped issues with stale citations** → fix both: reopen the issue AND update the citation.
+3. **Deferred-without-source items that defer to a successor that doesn't exist** (an issue nobody filed) → surface as a dependency: "Defers to X, but no open issue X exists."
 
 ---
 
@@ -285,7 +265,7 @@ Some claims aren't verifiable from git alone.
 **The check:**
 
 - `mcp__<supabase-project>__list_migrations` for the migration version.
-- If absent: `mcp__<supabase-project>__list_tables --schemas '["public"]' --verbose` — if the table is present with expected columns/RLS/policies, treat the entry as **shipped**.
+- If absent: `mcp__<supabase-project>__list_tables --schemas '["public"]' --verbose` — if the table is present with expected columns/RLS/policies, treat the claim as **shipped**.
 
 Precedent: AP#20 in the Alate project (regression log row #42, 2026-05-20).
 
@@ -306,4 +286,4 @@ Precedent: AP#20 in the Alate project (regression log row #42, 2026-05-20).
 | "This shipped recently." | `Squash-merged in 2e517d6 ("fix: docked-card double hairline + auto-increment Android versionCode (#131)")` |
 | "The table exists." | `Verified via list_tables 2026-05-22: public.blocked_brands present with RLS enabled and 'Service role only' policy.` |
 | "The fix is on master." | `git branch --contains 74c88be lists master (verified 2026-05-23).` |
-| "It was deferred for v2." | `Deferred to v2 because reading custom.material requires merchant-issued Storefront API tokens (see Build the Shopify merchant plugin entry below).` |
+| "It was deferred for v2." | `Deferred to v2 because reading custom.material requires merchant-issued Storefront API tokens (see alate#<n>, "Build the Shopify merchant plugin").` |
