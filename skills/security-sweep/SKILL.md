@@ -222,6 +222,22 @@ The correct phrasing when a patch exists but is unreachable is "patched in X,
 capped by <parent>'s pin" — not "no fix available". The distinction changes the
 re-check plan: one clears on a parent bump, the other can't clear at all.
 
+**"Genuinely unpatched" expires. Re-verify it every sweep, don't inherit it.**
+A no-patch verdict is a statement about the registry on the day it was written,
+and the registry moves. Two of these went stale inside two weeks:
+
+| Package | Recorded as | When | What was true at the next sweep |
+| --- | --- | --- | --- |
+| `image-size` | "genuinely unpatched — 2.0.2 is newest and is itself in the `<=2.0.2` range" | 2026-09-09 | 2.0.3 and 2.0.4 published. Now *capped* by `metro`'s `^1.0.2`, which clears on a metro major |
+| `vitest` | "the registry jumped 4.1.8 → 5.0.0-beta directly, no 4.1.11 patch was ever published" | 2026-09-15 | 4.1.11 published, inside the existing `^4.1.0` — the fix was semver-reachable and got taken on 2026-09-21 |
+
+So: re-run `npm view <pkg> version` against every package the log calls
+unpatched, every sweep. It is one cheap call per package, and getting it wrong
+writes a confidently false disposition that nobody re-examines — the whole
+failure mode this section exists to prevent. Carrying a stale "no fix
+available" forward is worse than re-deriving it, because it also suppresses
+the safe pass that would have taken the fix.
+
 ### 1b. Dependabot alerts
 
 ```bash
@@ -270,17 +286,57 @@ These are safe to fix automatically:
    spuriously on the very first run after a cold `npm install`; run it twice
    before believing a red result.)
 2. `npm audit fix` (no `--force`) — semver-compatible, lockfile-only
-3. **Confirm `package.json` was NOT modified** — `git status` should show only
+3. **"0 changes" from `npm audit fix` is NOT proof that nothing is reachable.**
+   Re-resolve the lockfile against the unchanged manifest as a second, cheap
+   check, and re-audit:
+
+   ```bash
+   npm install --package-lock-only   # manifest untouched; lockfile re-resolved
+   npm audit --json
+   ```
+
+   `npm audit fix` cannot move a **peer-pinned pair**. On alate `backend/`,
+   `@vitest/coverage-v8@4.1.8` peer-pins `vitest` to exactly `4.1.8`, so
+   neither package could move alone and the safe pass reported zero changes —
+   the identical output it gives when a fix genuinely does not exist. That
+   ambiguity is what put a false "no patch was ever published" line in the
+   disposition log on 2026-09-15. The re-resolve moved both to 4.1.11 and the
+   fix shipped on 2026-09-21.
+
+   Run it against **every** package root, not just the ones that look
+   promising. When it finds nothing, that is worth saying: the "capped"
+   verdicts then rest on two independent checks instead of one.
+
+   Read the resulting diff before believing it — a re-resolve is wider than a
+   targeted fix, and two things routinely ride along:
+
+   - **Dedupes, which are not upgrades.** If the re-resolve drops a
+     finding while changing zero package *versions*, it collapsed a duplicate
+     nested tree rather than patching anything. Worth taking, but say so —
+     and weigh it against the cost of verifying it. (litmus, 2026-09-21: 30
+     nested entries dropped, one dev-only moderate off the audit, declined
+     because that repo has no test suite and no `node_modules` to verify
+     against.)
+   - **Optional platform packages.** Prefer `npm install --package-lock-only`
+     over `npm update <pkg>`: on a Windows host, `npm update` dropped
+     `@img/sharp-linux-x64` — declared in alate `backend/`'s
+     `optionalDependencies` for the Vercel Linux runtime — straight out of the
+     lockfile. Always diff `packages[""]` against `package.json` before
+     committing.
+4. **Confirm `package.json` was NOT modified** — `git status` should show only
    `package-lock.json`. If a manifest changed, the fix bumped a direct
    dependency; that's out of scope for the safe pass, revert and route to 2b.
-4. **Run `npm ci` and confirm it succeeds.** `npm audit fix` can leave the
+   Note `npm install <pkg>@<version>` **always** writes the manifest, even
+   with the version already inside the declared range — which is why the
+   re-resolve above is the right tool, not a targeted install.
+5. **Run `npm ci` and confirm it succeeds.** `npm audit fix` can leave the
    lockfile internally inconsistent (seen on alate `backend/`: optional
    `@emnapi/*` platform packages left unsatisfiable). CI uses `npm ci`, so a
    lockfile that only works with `npm install` is a broken build. If it fails,
    run `npm install` to reconcile, then re-verify.
-5. Run the full test suite: `npx jest --no-coverage` (and `npx tsc --noEmit` if
+6. Run the full test suite: `npx jest --no-coverage` (and `npx tsc --noEmit` if
    TypeScript). Compare against the step-1 baseline.
-6. If tests pass:
+7. If tests pass:
    - Create branch: `security-sweep/<app>-deps-<date>`
    - Commit with message: `fix(deps): patch <package> — <CVE or advisory ID>`
    - Open PR with labels: `security-sweep`, `auto-generated`
@@ -302,7 +358,7 @@ These are safe to fix automatically:
      it used to merge on the gated watch, which waited for CI but skipped the
      cooldown, the device check and the ledger.) See
      `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Merge on green".
-7. If tests regress vs baseline: **discard the lockfile change** (`git checkout
+8. If tests regress vs baseline: **discard the lockfile change** (`git checkout
 -- package-lock.json`) and route to 2b. Do not ship a red suite to patch a
    build-time-only finding — that trade is never worth it.
 
