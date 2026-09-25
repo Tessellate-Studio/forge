@@ -377,7 +377,7 @@ the body, because a field and a label drift apart.
 | Type | `bug` · `feature` · `chore` · `refactor` (`enhancement` reads as `feature`) | At most one |
 | Area | loom: `admin-ui api sdk extension supabase infra` · alate: `mobile backend scraper fit-engine infra` | Optional, 0–n, **loom and alate only**. Every other repo gets no area labels. Never inferred by a tool |
 | Lifecycle | `decision` · `on hold` · `claimed` · `needs-input` · `needs-triage` | See the matrix below |
-| Queues | `device-test` + `needs-human` `needs-build` `parked` `failed` | A separate system ("Device-test queue" below). `device-test` issues carry **no** P label |
+| Queues | `device-test` + `needs-human` `needs-build` `parked` `failed` | A separate system ("Device-test queue" below). A `device-test` issue carries the P label inherited from what it verifies (`dtq enqueue`, default `P2`) so drains and escalation can rank it; roadmap-pulse still never scores one |
 | Provenance | `migrated-from-backlog`, `crash-monitor`, `security-sweep`, `auto-generated`, `ci-failure`, `ops-alert` | Set by the filing tool |
 
 `tools/labels/bootstrap.js --repo <r> [--dry-run]` creates the canonical set
@@ -543,8 +543,9 @@ sessions alike.
 - **`wip scan` is the other half.** The board can only show what it was told,
   so unclaimed work looks like no work. `scan` lists items that moved recently
   with no claim — it reports, never auto-claims.
-- **It is advisory,** and not a device claim: 🔒 below locks one physical
-  handset, 🚧 says who owns a piece of work. A device-test drain takes both.
+- **It is advisory.** A claim that also names a phone (`--device`) is the
+  device lock — see "Claiming the device" below. There is no separate 🔒
+  claim any more.
 
 Format, lifecycle and the reasoning behind every threshold live with the code —
 `tools/work-claim/lib/claim.js` (`STALE_MINUTES`, `CLAIM_LABEL`) and
@@ -757,6 +758,12 @@ as a `.github/ISSUE_TEMPLATE` file in each app — ADR-003's zero-files
 constraint still holds, and four template copies would drift four ways.
 `--dry-run` prints what it would create.
 
+**It files the test with a priority.** The P label is copied from what the
+test verifies — the most urgent P on the PR itself or on any issue that PR
+closes (a fix PR rarely carries one; the bug it closes does) — falling back
+to `P2`. `--priority P0` overrides. `dtq` lists failed tests first, then by P,
+so what needs escalating is on top.
+
 **It searches before it creates.** An open `device-test` issue whose intent
 matches gets the new detail as a comment instead of a second issue; the same
 failure is routinely reported by several sessions, and a queue with four
@@ -841,109 +848,97 @@ cross-references make finding them a lookup rather than a search.
 the context is warm has real Steps and a real Expect; one written later from
 the diff has neither.
 
-### Claiming the device — one lock per handset, in litmus
+### Claiming the device — claim the tests you run, with the phone named
 
-`dtq` is read-only. It answers _what is pending_; it never answered **is
-anyone on the device right now**. Nothing did. On 2026-09-01 two sessions
-reached for the same handset within the hour — one ran a 15-cycle relaunch
-investigation and a full drain, the other had enqueued a device item without
-claiming the device. Neither announced, and because every session commits
-under the same GitHub account the byline reveals nothing, so the collision had
-to be reconstructed afterwards by one session messaging the other.
+`dtq` answers _what is pending_. **Is anyone on the device right now** is
+answered by the same list: a drain claims every device-test issue it takes
+with the ordinary 🚧 work claim ("Work claims", above) plus the phone it runs
+on, and **a phone is busy while any OPEN `device-test` issue holds a live
+claim naming it.** One claim format, one label (`claimed`), and the lock says
+which test is on the phone, not just that something is.
 
-**The lock is a comment on the device's own issue in
-`Tessellate-Studio/litmus`** — one pinned issue per physical handset
-([#43](https://github.com/Tessellate-Studio/litmus/issues/43) the Pixel,
-[#44](https://github.com/Tessellate-Studio/litmus/issues/44) the iPhone). No
-new service, no local state file a second machine cannot read — any session,
-on any machine, and any human sees it with the tools they already use.
+```bash
+wip claim alate#990 --device pixel --holder drain-7f3a     # adb handset
+wip claim alate#957 --device iphone --holder drain-7f3a \n  --waiting-on "human — TestFlight pass"
+wip touch alate#990 --holder drain-7f3a                    # keeps the phone
+wip release alate#990 --holder drain-7f3a
+dtq                                                        # Devices: who holds each phone
+```
 
-**Why not the app's queue, where it used to live** (changed 2026-09-09,
-RFD-003 / forge#107): the device is not any one app's. alate, mood-layer and
-badige all drive the same handset, so a lock posted on alate's queue was
-invisible to a drain reading mood-layer's — every other queue reported the
-phone free while someone held it. litmus is the private shared
-testing-utilities repo for the mobile apps, which is a device's charter
-exactly; it is private, so a claim may name what is being tested; and it is
-not forge, which is public.
+**A drain claims under its own name** — `--holder drain-<4 hex>`, picked once
+and passed to every `wip` call it makes. A nested agent inherits its parent's
+`CLAUDE_CODE_SESSION_ID` (verified 2026-09-25), so without a holder name two
+drains launched from one session are the same claimant to `wip`, and the race
+rule below cannot tell them apart — the 2026-09-07 collision.
 
-**One issue per DEVICE, not per app**, because they are claimed
-independently: a drain can hold the Pixel over adb while a human is mid-way
-through a TestFlight pass on the iPhone, and neither should block the other.
-The iPhone's claim sits permanently at `**Waiting on:** human`, which never
-expires — the honest description of a device with no adb path, not a way
-around the staleness rule.
+The claim carries everything a PR claim does — session to resume, worktree,
+related PR, docs — plus `- **Device:** pixel`. A claim with no `Device` (a
+session fixing a failed test from its desk) never locks the phone.
+
+**Why it moved off litmus** (ADR-004, 2026-09-25, superseding RFD-003 §3):
+the lock used to be a 🔒 comment on one pinned issue per handset in
+`Tessellate-Studio/litmus` (#43/#44, now closed). That was a second place to
+look and a second claim format, and it said nothing about which test was
+running. The problem it was built for is unchanged: on 2026-09-01 two
+sessions reached for the same handset, and every session commits under the
+same GitHub account, so the byline reveals nothing.
+
+**Claim before the first `adb` command, release as each verdict lands.**
+Claim every test you are taking this sitting up front; release each one
+(`wip release <repo>#<n>`) when its verdict is written. The phone frees
+itself when you hold no claim on an OPEN test — and **closing a test drops its
+claim from the lock just as releasing does**. So never close or release your
+last held test before claiming the next: the gap is a free phone to everyone
+else. If a claim with `--device` cannot get its `claimed` label, `wip` exits
+non-zero — the lock is found by that label, so treat it as not claimed.
+
+**Two windows, on purpose.** The work claim survives seven days of silence
+(nobody is blocked waiting on a piece of work). The PHONE is scarce, so a
+claim stops holding it after **30 minutes with no touch** — while the claim
+itself stays on the issue. Touch it every time you drive the device (`wip
+touch <repo>#<n>`). **Only the claim's own `Last touch` counts for the
+phone** — not activity on the issue, which would refresh every claim on it at
+once, a crashed drain's included. A `--force` takeover retires the claim it
+replaced, so a dead holder's comment never wins the phone back.
+**Parked on a human never expires** on either window: set `--waiting-on
+"human — <what>"` before handing the phone over, clear it when you resume.
 
 **Two rules make a race resolve without a lease or a clock:**
 
-1. **Post, then re-read.** After posting, wait ~5s and re-read every HELD
-   claim on that device's issue. If another HELD claim has a **lower comment
-   id**, release yours and stand down. Ids are server-assigned and monotonic,
-   so both racers reach the same verdict independently — the 16-second
-   collision on 2026-09-07 resolves in one round trip. (`losesRaceTo` in
-   `skills/device-test/scripts/claim-lib.js`.)
-2. **Re-check at the point of use.** Before each device-driving step, re-read
-   the lock and abort if you no longer hold the lowest live claim. This is the
-   nearest thing to a fencing token available over adb.
+1. **Post, then re-read.** After claiming, wait ~5s and run `dtq`. If the
+   Devices line names another session as the holder — i.e. a live claim on
+   that phone with a **lower comment id** than your earliest — release every
+   claim you just posted and stand down. GitHub comment ids are global and
+   server-assigned, so two drains that claimed DIFFERENT tests, even in
+   different repos, reach the same verdict independently (`losesRaceTo` in
+   `skills/device-test/scripts/claim-lib.js`). Your own other claims are
+   never rivals.
+2. **Re-check at the point of use.** Before each device-driving step that
+   mutates state, re-read and abort if you are no longer the holder.
 
-**An unreadable lock is not a free device.** If the device issue cannot be
-read, `dtq` prints `? UNREADABLE` rather than `free`, and that is a reason to
-stop — "nobody is on the phone" and "I could not find out" are opposite
-instructions to a session about to drive it.
+**An unreadable lock is not a free device.** If any queue repo cannot be
+read, `dtq` prints `? UNREADABLE` for every phone — the claim holding it may
+be in exactly that repo — and that is a reason to stop.
 
-```markdown
-### 🔒 Device claim
-
-- **Claimed by:** <session name>
-- **Device:** <adb serial, or "any">
-- **Claimed at:** <ISO 8601 UTC>
-- **Last touch:** <ISO 8601 UTC — rewritten on every device action>
-- **Waiting on:** — <or: human — what you handed them>
-- **Claim:** HELD
-```
-
-**A claim ends when its holder closes it, not when a timer expires.** The
-first version of this lock expired 45 minutes after it was taken, which
-measured the wrong thing: plenty of fixes run longer than that, and a session
-still working the phone had its claim quietly ignored out from under it. How
-long a job takes is not evidence that it stopped.
-
-- **Close it when the work is done** — edit the comment so `**Claim:**` reads
-  `RELEASED`, then **minimize it as Resolved** (GraphQL `minimizeComment`,
-  `classifier: RESOLVED`). A released claim collapses out of the lock issue; a live one is
-  the only 🔒 anyone has to scroll past. Do this even when the drain failed,
-  stopped early, or found nothing.
-- **Signal liveness, not duration.** Rewrite `**Last touch:**` each time you
-  drive the device — one PATCH, alongside edits the drain is already making.
-  A claim is treated as abandoned only after **30 minutes with no touch at
-  all**; there is no cap on how long it may be held. Silence is the
-  abandonment signal, and it is the only one.
-- **Parked on a human never expires.** Set `**Waiting on:** human — <what>`
-  before handing the phone over. A human step legitimately takes hours, and
-  stealing the device mid-step is the exact collision this lock exists to
-  prevent. Clear it back to `—` when you resume.
-- **Before driving the device:** read the claims. Held by someone else and
-  still alive → don't touch it; report who holds it, what it last touched, and
-  what it's waiting on. Free, released, or silent past the window → post your
-  own claim, and say in it that you took over a silent one.
-- **And before _spawning_ something that will drive the device — read them
+- **Before driving the device:** read `dtq`. Held by someone else and live →
+  don't touch it; report who holds it, which test, what it's waiting on.
+  Free → claim, then re-read (rule 1). Took over a silent claim → say so.
+- **And before _spawning_ something that will drive the device — read it
   again, right then.** A claim only protects the window it is inside, and the
   window that actually failed is between a session deciding to launch a drain
-  and that drain posting its claim. On 2026-09-07, with this lock in place, a
-  session read all-`RELEASED` claims, concluded nothing was running, and
-  launched a replacement drain; an already-running nested agent claimed
-  **16 seconds** ahead of it, and the two interleaved on the same handset and
-  destroyed the user's saved data. Three rules come out of that:
-  - **`RELEASED` everywhere means nobody has claimed yet, not that nobody is
-    running.** Re-read the claims immediately before the launch, and once more
-    after posting your own.
+  and that drain posting its claim. On 2026-09-07 a session read
+  all-`RELEASED` claims, launched a replacement drain, and an already-running
+  nested agent claimed **16 seconds** ahead of it; the two interleaved on the
+  same handset and destroyed the user's saved data. Three rules come out of
+  that:
+  - **No live claim means nobody has claimed yet, not that nobody is
+    running.** Re-read immediately before the launch, and once more after
+    posting your own.
   - **An agent's completion notification says nothing about its
-    descendants.** "No live background children" is about the agent you
-    spawned. Verify against the claim comments; they are the only record that
+    descendants.** Verify against the claims; they are the only record that
     survives the process tree.
   - **Two claims seconds apart are not simultaneous — the lower comment id
-    holds the phone** (rule 1 above), and the later one releases and stands
-    down rather than racing.
+    holds the phone** (rule 1), and the later one releases and stands down.
 - **It is advisory.** Nothing can stop a raw `adb` command, and it is not
   trying to. It removes the ambiguity, which is the part that actually failed.
 
