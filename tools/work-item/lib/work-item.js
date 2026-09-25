@@ -3,6 +3,7 @@
 // form cannot enforce live here:
 //
 //   * exactly one P label, P0–P3, always (a form cannot set one at all);
+//   * an area label in a repo that has them (loom, alate);
 //   * the same section headings the forms produce, so the pulse parses both;
 //   * list-before-create: a full LIST of open issues, never the search API,
 //     whose index lags by minutes and has filed duplicates (§5.3).
@@ -96,6 +97,11 @@ function buildIssue(o) {
 
   const area = o.area ? String(o.area) : null;
   const areas = (AREA[repo] || []).map(l => l.name);
+  if (!area && areas.length) {
+    throw new UsageError(
+      `--area is required for ${repo}: one of ${areas.join(', ')}`
+    );
+  }
   if (area && !areas.includes(area)) {
     throw new UsageError(
       areas.length

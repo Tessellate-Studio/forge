@@ -4,6 +4,13 @@
 // One colour and one description everywhere: issue forms SILENTLY drop a
 // label the repo does not have, so a missing `feature` label means every
 // feature filed through the form is unlabelled and nobody is told.
+//
+// Colours — owner ruling 2026-09-25: earthy, muted and bright mixed, every
+// label its own colour, and a family shares a hue. P0–P3 run brick → sand;
+// the device-test queue's labels are browns; every `needs-*` label is a
+// muted grey-purple or dusky blue, so a blocked issue reads as blocked at a
+// glance. __tests__ pins the stock GitHub colours
+// these replaced out of the set.
 
 const {
   CLAIM_LABEL,
@@ -11,31 +18,33 @@ const {
   CLAIM_LABEL_DESC,
 } = require('../../work-claim/lib/claim');
 
+// The needs-* family: muted grey-purples and dusky blues.
+const NEEDS_SHADES = ['8E86A8', 'B3ADC9', '7C91AB', 'A9B7CA'];
+
 // Owner ruling 2026-09-19: the descriptions keep the "Priority N — " prefix
-// that the P labels were created with on 2026-09-18 in every repo, so
-// bootstrap is a no-op for them instead of rewriting five repos' labels.
+// that the P labels were created with on 2026-09-18 in every repo.
 const PRIORITY = [
   {
     name: 'P0',
-    color: 'B60205',
+    color: '8B2E16',
     description: 'Priority 0 — blocker / pre-launch',
   },
-  { name: 'P1', color: 'D93F0B', description: 'Priority 1 — do next' },
-  { name: 'P2', color: 'FBCA04', description: 'Priority 2 — soon' },
-  { name: 'P3', color: 'C5DEF5', description: 'Priority 3 — later' },
+  { name: 'P1', color: 'C0612B', description: 'Priority 1 — do next' },
+  { name: 'P2', color: 'D9A441', description: 'Priority 2 — soon' },
+  { name: 'P3', color: 'E3D5B8', description: 'Priority 3 — later' },
 ];
 
 const TYPE = [
-  { name: 'bug', color: 'D73A4A', description: "Something isn't working" },
-  { name: 'feature', color: '0E8A16', description: 'New functionality' },
+  { name: 'bug', color: 'B97A6E', description: "Something isn't working" },
+  { name: 'feature', color: '6B8E23', description: 'New functionality' },
   {
     name: 'chore',
-    color: 'FEF2C0',
+    color: 'C9B79C',
     description: 'Maintenance, dependencies, config',
   },
   {
     name: 'refactor',
-    color: '7057FF',
+    color: '9B7B8E',
     description: 'Code restructuring without behavior change',
   },
 ];
@@ -43,14 +52,14 @@ const TYPE = [
 const LIFECYCLE = [
   {
     name: 'decision',
-    color: '0E8A16',
+    color: '4F6B3A',
     description:
       'A plan awaiting owner decision (draft PR): merge = approve, close = reject',
   },
   {
     // Text and colour are the ones standards/workflows.md prescribes.
     name: 'on hold',
-    color: 'BFD4F2',
+    color: 'BCB38A',
     description:
       'Deliberately paused — needs review by a set date, not indefinite (see forge/standards/workflows.md)',
   },
@@ -61,7 +70,7 @@ const LIFECYCLE = [
   },
   {
     name: 'needs-input',
-    color: 'C2E0C6',
+    color: NEEDS_SHADES[0],
     description:
       'Blocked on a human answer that is not a doc approval, or on an open decision PR',
   },
@@ -69,7 +78,7 @@ const LIFECYCLE = [
     // Not FBCA04 (P2's colour, until 2026-09-25) — an untriaged issue must
     // not read as a P2.
     name: 'needs-triage',
-    color: 'D876E3',
+    color: NEEDS_SHADES[1],
     description: 'Filed without a P label — triage sets exactly one of P0–P3',
   },
 ];
@@ -77,32 +86,37 @@ const LIFECYCLE = [
 const PROVENANCE = [
   {
     name: 'migrated-from-backlog',
-    color: 'EDEDED',
+    color: 'DAD4C8',
     description: 'Filed by backlog-migrate from BACKLOG.md (RFD 004)',
   },
 ];
 
-// RFD-003 device-test queue. Colour per standards/workflows.md
-// ("Device-test queue": every queue label is 5319e7).
+// RFD-003 device-test queue. The queue's own labels are browns; its two
+// needs-* labels join the needs family.
 const DEVICE_TEST = [
   {
     name: 'device-test',
+    color: '8C6A4F',
     description: 'A pending on-device test (one issue per test)',
   },
   {
     name: 'needs-human',
+    color: NEEDS_SHADES[2],
     description: 'This device test needs a person, not an agent',
   },
   {
     name: 'needs-build',
+    color: NEEDS_SHADES[3],
     description: 'No installable build can reach this test yet',
   },
   {
     name: 'parked',
+    color: 'CDBBA7',
     description: 'Open, but deliberately not drained — the owner parked it',
   },
   {
     name: 'failed',
+    color: '5E3A28',
     description: 'This device test failed — see the latest comment',
   },
   {
@@ -110,9 +124,10 @@ const DEVICE_TEST = [
     // (hooks/merge-gate.mjs). Created ad hoc by the hook's hint, in P1's
     // colour, until it joined the registry on 2026-09-25.
     name: 'device-unverified',
+    color: 'A68A64',
     description: 'Merged before its device test passed',
   },
-].map(l => ({ ...l, color: '5319E7' }));
+];
 
 /** The registry entry for one label, by name — for code that has to tell
  *  someone to create or apply it, so the hint cannot drift from the set. */
@@ -134,21 +149,21 @@ function labelSpec(name) {
 }
 
 // Owner amendment to RFD 004 Q6 (2026-09-19): area labels in loom and alate
-// ONLY. loom keeps its existing set as-is (colours and descriptions copied
-// from the live repo, so bootstrap is a no-op for them). alate's set is new
-// and is created when alate is bootstrapped (RFD step 5). mood-layer's
-// existing area labels are left untouched — bootstrap never deletes — and
-// badige gets none.
+// ONLY — and every issue in those two repos carries one (`wi new` refuses
+// without it). loom keeps its existing names and descriptions; both repos'
+// area colours were re-picked 2026-09-25; infra keeps its khaki, the colour
+// invalid wears too. mood-layer's existing area labels are left untouched —
+// bootstrap never deletes — and badige gets none.
 const AREA = {
   loom: [
     {
       name: 'admin-ui',
-      color: '1D76DB',
+      color: '46708C',
       description: 'Embedded Shopify admin app (admin/)',
     },
     {
       name: 'api',
-      color: '5319E7',
+      color: 'B5835A',
       description: 'Serverless endpoints (api/)',
     },
     {
@@ -158,21 +173,21 @@ const AREA = {
     },
     {
       name: 'extension',
-      color: 'D4C5F9',
+      color: 'A3B18A',
       description: 'Shopify theme-app extension (extensions/)',
     },
     {
       name: 'supabase',
-      color: 'F9D0C4',
+      color: 'E0B39A',
       description: 'Schema, migrations, RLS',
     },
     { name: 'infra', color: 'E4E669', description: 'Infrastructure/CI/CD' },
   ],
   alate: [
-    { name: 'mobile', color: '1D76DB', description: 'Expo app (mobile/)' },
+    { name: 'mobile', color: '46708C', description: 'Expo app (mobile/)' },
     {
       name: 'backend',
-      color: '5319E7',
+      color: 'B5835A',
       description: 'Vercel API, SDK and Supabase (backend/)',
     },
     {
@@ -183,7 +198,7 @@ const AREA = {
     },
     {
       name: 'fit-engine',
-      color: 'D4C5F9',
+      color: 'A3B18A',
       description:
         'Fit guidance and size finder (backend/sdk/fitGuidance, sizeFinder)',
     },
@@ -245,6 +260,7 @@ function planLabels(existing, canonical) {
 
 module.exports = {
   PRIORITY,
+  NEEDS_SHADES,
   TYPE,
   LIFECYCLE,
   PROVENANCE,

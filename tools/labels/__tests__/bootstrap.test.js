@@ -41,13 +41,48 @@ describe('canonical set', () => {
     expect(L.PRIORITY).toEqual([
       {
         name: 'P0',
-        color: 'B60205',
+        color: '8B2E16',
         description: 'Priority 0 — blocker / pre-launch',
       },
-      { name: 'P1', color: 'D93F0B', description: 'Priority 1 — do next' },
-      { name: 'P2', color: 'FBCA04', description: 'Priority 2 — soon' },
-      { name: 'P3', color: 'C5DEF5', description: 'Priority 3 — later' },
+      { name: 'P1', color: 'C0612B', description: 'Priority 1 — do next' },
+      { name: 'P2', color: 'D9A441', description: 'Priority 2 — soon' },
+      { name: 'P3', color: 'E3D5B8', description: 'Priority 3 — later' },
     ]);
+  });
+
+  // Owner ruling 2026-09-25: earthy colours, muted and bright mixed, one
+  // colour per label — and label families share a hue.
+  const REPOS = ['alate', 'loom', 'mood-layer', 'badige', 'forge', 'litmus'];
+
+  test('no two labels in a repo share a colour', () => {
+    for (const repo of REPOS) {
+      const colors = L.canonicalFor(repo).map(l => l.color.toUpperCase());
+      expect(new Set(colors).size).toBe(colors.length);
+    }
+  });
+
+  test('every needs-* label is one of the muted needs shades', () => {
+    const needs = L.canonicalFor('alate').filter(l =>
+      l.name.startsWith('needs-')
+    );
+    expect(needs.map(l => l.name).sort()).toEqual([
+      'needs-build',
+      'needs-human',
+      'needs-input',
+      'needs-triage',
+    ]);
+    for (const l of needs) {
+      expect(L.NEEDS_SHADES).toContain(l.color);
+    }
+  });
+
+  test("none keeps GitHub's stock colours from before the recolour", () => {
+    const stock = ['B60205', 'D93F0B', 'FBCA04', 'C5DEF5', '5319E7', '0E8A16'];
+    for (const repo of REPOS) {
+      for (const l of L.canonicalFor(repo)) {
+        expect(stock).not.toContain(l.color.toUpperCase());
+      }
+    }
   });
 
   test('every repo gets P, type, lifecycle, provenance and device-test labels', () => {
@@ -124,10 +159,12 @@ describe('bootstrap', () => {
       log: s => lines.push(s),
     });
     expect(gh.writes).toBe(0);
-    expect(plan.edit.map(l => l.name)).toEqual(['P0']); // description aligned
+
+    // P0's description drifted; bug and feature wear the pre-2026-09-25 colours.
+    expect(plan.edit.map(l => l.name)).toEqual(['P0', 'bug', 'feature']);
     expect(plan.create.map(l => l.name)).toContain('P1');
     expect(lines.join('\n')).toMatch(
-      /would create P1 #D93F0B "Priority 1 — do next"/
+      /would create P1 #C0612B "Priority 1 — do next"/
     );
     expect(lines.join('\n')).toMatch(
       /legacy priority labels present .*critical, high/

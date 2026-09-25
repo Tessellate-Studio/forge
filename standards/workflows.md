@@ -425,7 +425,7 @@ the body, because a field and a label drift apart.
 |---|---|---|
 | Priority | `P0` blocker / pre-launch · `P1` do next · `P2` soon · `P3` later | **Exactly one** on every open work issue. There is no `P4`: "someday" is `P3` plus a `Deferred until: <trigger>` line in the body |
 | Type | `bug` · `feature` · `chore` · `refactor` (`enhancement` reads as `feature`) | At most one |
-| Area | loom: `admin-ui api sdk extension supabase infra` · alate: `mobile backend scraper fit-engine infra` | Optional, 0–n, **loom and alate only**. Every other repo gets no area labels. Never inferred by a tool |
+| Area | loom: `admin-ui api sdk extension supabase infra` · alate: `mobile backend scraper fit-engine infra` | **At least one on every open work issue in loom and alate** (owner ruling 2026-09-25; `wi new` refuses without `--area`). Every other repo gets no area labels. Never inferred by a tool — the filer picks it |
 | Lifecycle | `decision` · `on hold` · `claimed` · `needs-input` · `needs-triage` | See the matrix below |
 | Queues | `device-test` + `needs-human` `needs-build` `parked` `failed` | A separate system ("Device-test queue" below). A `device-test` issue carries the P label inherited from what it verifies (`dtq enqueue`, default `P2`) so drains and escalation can rank it; roadmap-pulse still never scores one |
 | Provenance | `migrated-from-backlog`, `crash-monitor`, `security-sweep`, `auto-generated`, `ci-failure`, `ops-alert` | Set by the filing tool |
@@ -435,6 +435,18 @@ in a repo, idempotently. Issue forms silently drop a label the repo doesn't
 have, so run it before relying on a form. The old `critical` / `high` /
 `medium` / `low` labels map to `P0` / `P1` / `P2` / `P3` and are deleted after
 relabelling.
+
+**Colours live in `tools/labels/lib/labels.js` only** — never hand-pick one in
+`gh label create`; run bootstrap instead, which also re-colours drifted labels.
+The palette (owner ruling 2026-09-25) is earthy, muted and bright mixed, one
+colour per label, and a family shares a hue: `P0`–`P3` run brick → sand, the
+device-test queue is browns, and every `needs-*` label is a muted grey-purple
+or dusky blue.
+
+**What every open work issue carries:** exactly one `P0`–`P3`; an area label in
+loom and alate; and `claimed` for as long as a session is working it — `wip
+claim` adds it, `wip release` removes it, so a session that files an issue and
+starts on it claims it straight away rather than leaving it looking free.
 
 **How the lifecycle labels interact:**
 
@@ -450,8 +462,13 @@ relabelling.
 - **Never put `needs-input` on a `decision` PR.** Closing a decision PR is a
   valid answer (reject). `pr-close-label-guard.yml` skips `decision`-labelled
   PRs so that answer isn't turned into a follow-up issue.
-- **P-label exclusivity is enforced twice:** by the filing helper at write
-  time, and by roadmap-pulse's weekly lint (0 or >1 P labels is reported).
+- **P-label exclusivity and the area label are enforced twice:** by the filing
+  helper at write time, and by roadmap-pulse's weekly lint (0 or >1 P labels,
+  or no area label in loom/alate, is reported).
+- **A label that no longer applies comes off when the state changes**, not at
+  the next sweep. A superseded device test still wearing `device-test` +
+  `needs-human` (alate#1035, cleaned by hand 2026-09-25) reads as a pending
+  test to anything that filters by label.
 
 ### Filing an issue
 

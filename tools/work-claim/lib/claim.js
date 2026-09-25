@@ -78,9 +78,9 @@ const QUIET_MINUTES = 8 * 60;
  *  is for. */
 const CLAIM_LABEL = 'claimed';
 
-// Not D93F0B, which it wore until 2026-09-25: that is P1's colour, and a
-// claimed P2 read as a P1 at a glance (tools/labels registry test).
-const CLAIM_LABEL_COLOR = '006B75';
+// Verdigris (owner palette, 2026-09-25). Not D93F0B, which it wore until
+// then: that is P1's colour, and a claimed P2 read as a P1 at a glance.
+const CLAIM_LABEL_COLOR = '2F7F73';
 const CLAIM_LABEL_DESC =
   'A Claude session is actively working this — see the 🚧 Work claim comment';
 
