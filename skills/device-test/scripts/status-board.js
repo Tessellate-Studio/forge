@@ -17,7 +17,7 @@ const {
   checkGhReady,
   collect,
   daysSince,
-  describeClaim,
+  describeDeviceClaim,
   fetchDeviceClaims,
   REPOS,
 } = require('./queue-lib');
@@ -134,8 +134,13 @@ function renderRepo(result, opts) {
     lines.push(chalk.gray('  (queue empty)'));
   }
 
+  // Failed first (a failure is the loudest open work), then by priority —
+  // P0 before P3, unranked last — so what needs escalating is on top.
+  const rank = i =>
+    (i.state === STATUS.FAILED ? 0 : 10) +
+    (i.priority ? Number(i.priority.slice(1)) : 4);
   visible
-    .sort(a => (a.state === STATUS.FAILED ? -1 : 1))
+    .sort((a, b) => rank(a) - rank(b))
     .forEach(item => {
       const age = daysSince(item.createdAt);
       const ageStr = age === null ? '' : chalk.dim(` (${age}d)`);
@@ -160,8 +165,12 @@ function renderRepo(result, opts) {
       const notes = noteCount
         ? chalk.dim(` +${noteCount} note${noteCount > 1 ? 's' : ''}`)
         : '';
+      const priority = item.priority
+        ? chalk.bold(item.priority)
+        : chalk.dim('P?');
+      const claimed = item.claimed ? chalk.yellow(' 🚧') : '';
       lines.push(
-        `  ${statusIcon(item)}  ${id}  ${clip(
+        `  ${statusIcon(item)}  ${priority}  ${id}${claimed}  ${clip(
           item.title,
           72
         )}${ageStr}${notes}  ${pr}  ${chalk.dim(extra)}`
@@ -190,7 +199,7 @@ function renderDevices(devices) {
         )} ${chalk.red('· do not drive it until this reads')}`
       );
     } else if (claim) {
-      lines.push(`  ${chalk.yellow(describeClaim(claim))}`);
+      lines.push(`  ${chalk.yellow(describeDeviceClaim(device, claim))}`);
     } else {
       lines.push(`  ${chalk.green('free')} ${chalk.dim(name)}`);
     }
@@ -281,6 +290,7 @@ async function runEnqueue(argv) {
         'usage: dtq enqueue --repo <alate|mood-layer|badige|loom> --intent "<what this proves>"\n' +
           '                   [--verifies <pr>] [--sha <sha>] [--delivery <how it reaches the device>]\n' +
           '                   [--needs-runtime <version>] [--why <why a device is needed>]\n' +
+          '                   [--priority <P0-P3>]  (default: copied from what it verifies, else P2)\n' +
           '                   [--step "<one step>"]... [--expect "<one expectation>"]... [--dry-run]\n\n' +
           'Prefix a step with "HUMAN:" to mark it as needing a person — that is what labels the issue needs-human.'
       )
@@ -298,6 +308,7 @@ async function runEnqueue(argv) {
       delivery: arg('delivery'),
       needsRuntime: arg('needs-runtime'),
       why: arg('why'),
+      priority: arg('priority'),
       steps: many('step'),
       expect: many('expect'),
     },
@@ -369,9 +380,10 @@ async function main() {
     let results;
     let devices;
     try {
-      // Both in flight together: the device lock lives in a different repo
-      // from every queue, so serialising them would add a round trip to the
-      // one line a session reads before touching the phone.
+      // Both in flight together: the device lock is read off the claimed
+      // tests (ADR-004) with its own query per repo, and serialising them
+      // would add a round trip to the one line a session reads before
+      // touching the phone.
       [results, devices] = await Promise.all([
         collect(opts.repo),
         fetchDeviceClaims(),

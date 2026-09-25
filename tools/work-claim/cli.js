@@ -30,6 +30,7 @@ const {
   repoList,
   identity,
   claimBody,
+  isMine,
   parseClaim,
   activeClaim,
   touchBody,
@@ -45,17 +46,14 @@ const {
 const { stripCode, NOT_WAITING, clip, humanIdle } = require('./lib/protocol');
 
 /**
- * Every "is this claim mine?" test compares session ids. Outside Claude Code
- * there is no CLAUDE_CODE_SESSION_ID, so `identity()` reports `unknown` — and
- * two such callers would read as the SAME session, letting one silently
- * heartbeat or release the other's claim. Releasing someone else's claim is
- * the one thing the standard forbids outright, so an unidentifiable caller has
- * to say which claim it means rather than matching by identity.
+ * "Is this claim mine?" compares session ids, or a named `--holder` (see
+ * isMine in lib/claim.js). Outside Claude Code there is no
+ * CLAUDE_CODE_SESSION_ID, and two such callers would read as the SAME session,
+ * letting one silently heartbeat or release the other's claim. Releasing
+ * someone else's claim is the one thing the standard forbids outright, so an
+ * unidentifiable caller has to say which claim it means (`--holder`) rather
+ * than matching by identity.
  */
-function isMine(claim, me) {
-  return Boolean(me.sessionId) && claim.sessionId === me.sessionId;
-}
-
 function refuseAnonymous(action) {
   console.error(
     chalk.red(
@@ -538,7 +536,10 @@ async function claim(target, opts) {
   const { repo, number } = parseTarget(target);
   const existing = await findClaimComments(repo, number);
   const live = activeClaim(existing.map(e => e.claim));
-  const me = identity({ branch: opts.branch || (await currentBranch()) });
+  const me = identity({
+    branch: opts.branch || (await currentBranch()),
+    holder: opts.holder,
+  });
 
   // `--worktree none` for a branch that exists only on origin: better an
   // explicit "none" than a path that is not on this branch.
@@ -582,6 +583,7 @@ async function claim(target, opts) {
     at: new Date().toISOString(),
     docs: opts.doc || [],
     related: opts.related || (await relatedRefs(repo, number)),
+    device: opts.device || null,
     waitingOn: opts.waitingOn,
   });
 
@@ -608,6 +610,19 @@ async function claim(target, opts) {
   if (!labelled) {
     await ensureLabel(repo);
     const retried = await tryLabel(repo, number);
+    if (!retried && opts.device) {
+      // For a device claim the label is not cosmetic: dtq finds device
+      // claims by it, so an unlabelled one leaves the phone reading free
+      // while this session drives it.
+      console.error(
+        chalk.red(
+          `Claim posted, but the "${CLAIM_LABEL}" label would not attach to ` +
+            `${repo}#${number} — dtq cannot see it, so the phone reads FREE. ` +
+            'Do not drive the device: release and retry.'
+        )
+      );
+      process.exit(1);
+    }
     if (!retried) {
       console.error(
         chalk.yellow(
@@ -632,8 +647,8 @@ async function touch(target, opts) {
   // No currentBranch() here: touch rewrites a heartbeat on a claim that
   // already names its branch, so the git spawn would be pure waste — and this
   // is the hottest path in the tool, run at every commit and push.
-  const me = identity();
-  if (!me.sessionId) {
+  const me = identity({ holder: opts.holder });
+  if (!me.sessionId && !me.holder) {
     refuseAnonymous('touch'); // before the fetch — it would be thrown away
   }
   const existing = await findClaimComments(repo, number);
@@ -661,6 +676,7 @@ async function touch(target, opts) {
           lastTouch: at,
           waitingOn: opts.waitingOn,
           docs: opts.doc || [],
+          device: opts.device,
         })}`,
       ])
     )
@@ -670,8 +686,8 @@ async function touch(target, opts) {
 
 async function release(target, opts) {
   const { repo, number } = parseTarget(target);
-  const me = identity(); // same as touch: the branch is not read here
-  if (!opts.all && !me.sessionId) {
+  const me = identity({ holder: opts.holder }); // same as touch: no branch read
+  if (!opts.all && !me.sessionId && !me.holder) {
     refuseAnonymous('release'); // before the fetch
   }
   const existing = await findClaimComments(repo, number);
@@ -793,6 +809,14 @@ program
     '-W, --worktree <path>',
     'worktree path, or "none" for a branch that only exists on origin'
   )
+  .option(
+    '-D, --device <name>',
+    'the phone this device-test runs on (pixel, iphone) — makes the claim the device lock'
+  )
+  .option(
+    '-H, --holder <name>',
+    'claim as this holder instead of the session (drains: a name unique to this drain)'
+  )
   .option('-f, --force', 'take over a live claim held by another session')
   .action((target, opts) => claim(target, opts).catch(fail));
 
@@ -809,12 +833,21 @@ program
     '-w, --waiting-on <what>',
     'park the claim on a human, or "—" to unpark'
   )
+  .option('-D, --device <name>', 'mark the claim as holding this phone')
+  .option(
+    '-H, --holder <name>',
+    'claim as this holder instead of the session (drains: a name unique to this drain)'
+  )
   .action((target, opts) => touch(target, opts).catch(fail));
 
 program
   .command('release <target>')
   .description('Release your claim — RELEASED, unlabelled, minimized')
   .option('-a, --all', "release every live claim, not just this session's")
+  .option(
+    '-H, --holder <name>',
+    'claim as this holder instead of the session (drains: a name unique to this drain)'
+  )
   .action((target, opts) => release(target, opts).catch(fail));
 
 function fail(error) {

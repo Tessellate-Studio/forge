@@ -183,7 +183,9 @@ function setField(body, name, value, before) {
  * @param {string} spec.startedField the "when was this taken" field name
  * @param {Array}  spec.fields       ordered extra fields. `render` is
  *   REQUIRED on each — there is no fallback, so a `{name, from}` field
- *   throws at render time rather than emitting something half-formed.
+ *   throws at render time rather than emitting something half-formed. A
+ *   render that returns null OMITS the line: an optional field (the work
+ *   claim's `Device`) must not add a "—" row to every claim that has none.
  * @param {function} [spec.footer]   body footer lines, given the variant
  */
 function createClaimProtocol(spec) {
@@ -207,7 +209,10 @@ function createClaimProtocol(spec) {
       `- **Claimed by:** ${opts.heldBy}`,
     ];
     fields.forEach(f => {
-      lines.push(`- **${f.name}:** ${f.render(opts)}`);
+      const value = f.render(opts);
+      if (value !== null) {
+        lines.push(`- **${f.name}:** ${value}`);
+      }
     });
     lines.push(
       `- **${startedField}:** ${at}`,

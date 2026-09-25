@@ -786,3 +786,38 @@ describe('maskCode — the same removal, with offsets intact', () => {
     expect(maskCode(null)).toBe('');
   });
 });
+
+describe('device claims (ADR-004)', () => {
+  const {
+    identity,
+    isMine,
+    touchBody,
+    claimBody,
+    parseClaim,
+  } = require('../lib/claim');
+
+  it('a named holder is its own identity, even inside one Claude session', () => {
+    // A nested drain shares CLAUDE_CODE_SESSION_ID with its parent (verified
+    // 2026-09-25), so the session id alone cannot tell two drains apart.
+    const env = { CLAUDE_CODE_SESSION_ID: 'same-session' };
+    const a = identity({ env, holder: 'drain-a1b2' });
+    const b = identity({ env, holder: 'drain-c3d4' });
+    expect(a.heldBy).toBe('drain-a1b2');
+    const claimA = parseClaim({ id: 1, body: claimBody({ ...a }) });
+    expect(isMine(claimA, a)).toBe(true);
+    expect(isMine(claimA, b)).toBe(false);
+  });
+
+  it('without a holder, the session id decides as before', () => {
+    const env = { CLAUDE_CODE_SESSION_ID: 'sess-1' };
+    const me = identity({ env, branch: 'feat/x' });
+    const c = parseClaim({ id: 1, body: claimBody({ ...me }) });
+    expect(isMine(c, me)).toBe(true);
+  });
+
+  it('touch --device adds the Device line to an existing claim', () => {
+    const body = claimBody({ heldBy: 'x', branch: 'b' });
+    const out = touchBody(body, { device: 'pixel' });
+    expect(parseClaim({ id: 1, body: out }).device).toBe('pixel');
+  });
+});

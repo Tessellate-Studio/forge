@@ -153,3 +153,22 @@ describe('what the board reads off an issue', () => {
     expect(item.state).toBe(STATUS.OPEN);
   });
 });
+
+describe('priority and ownership, straight off the labels', () => {
+  it('reads the P label so the board can rank tests', () => {
+    expect(itemFromIssue(withLabels(LABELS.ITEM, 'P1'), 'alate').priority).toBe(
+      'P1'
+    );
+  });
+
+  it('has no priority when no P label is present', () => {
+    expect(itemFromIssue(issue(), 'alate').priority).toBeNull();
+  });
+
+  it('knows a test is claimed from the claimed label', () => {
+    expect(
+      itemFromIssue(withLabels(LABELS.ITEM, 'claimed'), 'alate').claimed
+    ).toBe(true);
+    expect(itemFromIssue(issue(), 'alate').claimed).toBe(false);
+  });
+});
