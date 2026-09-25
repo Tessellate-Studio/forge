@@ -11,6 +11,7 @@ const base = {
   what: 'Pick collections from a list',
   why: 'Merchants paste raw ids today',
   'done-when': 'Picker lists collections',
+  area: 'admin-ui',
 };
 
 describe('exactly one P label', () => {
@@ -77,6 +78,18 @@ describe('rendering', () => {
       buildIssue({ ...base, repo: 'alate', area: 'fit-engine' }).labels
     ).toContain('fit-engine');
   });
+
+  test('a repo with area labels refuses an issue without one', () => {
+    const { area, ...noArea } = base;
+    expect(area).toBe('admin-ui');
+    expect(() => buildIssue(noArea)).toThrow(
+      /--area is required for loom: one of admin-ui/
+    );
+    expect(() => buildIssue({ ...noArea, repo: 'alate' })).toThrow(
+      /--area is required for alate/
+    );
+    expect(buildIssue({ ...noArea, repo: 'badige' }).labels).toEqual(['P2']);
+  });
 });
 
 describe('list-before-create', () => {
@@ -111,7 +124,10 @@ describe('list-before-create', () => {
       { gh }
     );
     expect(f.status).toBe('created');
-    expect(gh.issues.loom.at(-1).labels.map(l => l.name)).toEqual(['P2']);
+    expect(gh.issues.loom.at(-1).labels.map(l => l.name)).toEqual([
+      'P2',
+      'admin-ui',
+    ]);
   });
 
   test('dry run lists nothing and writes nothing', () => {
@@ -144,6 +160,8 @@ describe('cli', () => {
     'y',
     '--done-when',
     'd',
+    '--area',
+    'api',
   ];
 
   test('usage error without a P label exits 2', () => {
@@ -162,7 +180,7 @@ describe('cli', () => {
       '--dry-run',
     ]);
     expect(r.code).toBe(0);
-    expect(r.out).toMatch(/labels: P1, needs-input/);
+    expect(r.out).toMatch(/labels: P1, api, needs-input/);
     expect(r.gh.writes).toBe(0);
   });
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // wi new --repo <r> --title <t> --priority P0|P1|P2|P3 --what <…> --why <…> --done-when <…>
-//        [--type bug|feature|chore|refactor] [--area <a>] [--context <…>]
+//        [--type bug|feature|chore|refactor] [--area <a> — required in loom, alate] [--context <…>]
 //        [--effort 0.5|1|2|3|5|10|20] [--reach 1|10|100|1000]
 //        [--label <l>]… [--parent <n>] [--dry-run] [--force]
 //

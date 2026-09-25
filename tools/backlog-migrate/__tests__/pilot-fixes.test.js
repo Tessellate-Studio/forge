@@ -135,7 +135,7 @@ describe('+ apply creates canonical labels on a cross-repo target', () => {
       expect.arrayContaining(['alate:migrated-from-backlog', 'alate:P2'])
     );
     const made = gh.labels.alate.find(l => l.name === 'migrated-from-backlog');
-    expect(made.color).toBe('EDEDED'); // canonical colour, not a guess
+    expect(made.color).toBe('DAD4C8'); // canonical colour, not a guess
     expect(gh.labels.alate.some(l => l.name === 'backend')).toBe(false);
     expect(gh.issues.alate).toHaveLength(1);
   });

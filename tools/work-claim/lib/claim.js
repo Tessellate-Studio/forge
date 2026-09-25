@@ -78,7 +78,7 @@ const QUIET_MINUTES = 8 * 60;
  *  is for. */
 const CLAIM_LABEL = 'claimed';
 
-const CLAIM_LABEL_COLOR = 'D93F0B';
+const CLAIM_LABEL_COLOR = '2F7F73';
 const CLAIM_LABEL_DESC =
   'A Claude session is actively working this — see the 🚧 Work claim comment';
 

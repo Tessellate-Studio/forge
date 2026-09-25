@@ -147,7 +147,7 @@ const DEVICE_REFUSAL = ({ detail, repo, pr }) =>
     '\n\nEither:',
     '\n  1. Run the test first (/forge:device-test), close it `completed` when it passes, then merge; or',
     '\n  2. Merge before a device pass ON PURPOSE, and say so on the PR, where it stays:',
-    `\n     gh label create device-unverified -R ${repo} --color d93f0b --description "Merged before its device test passed" || true`,
+    `\n     gh label create device-unverified -R ${repo} --color A68A64 --description "Merged before its device test passed" || true`,
     `\n     gh pr edit ${pr} -R ${repo} --add-label device-unverified`,
     '\n\nShipping first is often right — an OTA-delivered change can only be tested once it ships.',
     ' What this changes is that it is no longer silent. Do not add the label just to get past this',
