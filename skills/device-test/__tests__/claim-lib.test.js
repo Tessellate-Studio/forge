@@ -1,12 +1,22 @@
+// The device lock (ADR-004, superseding RFD-003 §3): no litmus issue. A drain
+// claims each device-test issue it takes with the ordinary 🚧 work claim plus
+// a `Device` field, and a phone is busy while any open test holds a live claim
+// naming it.
+
 const {
   HEARTBEAT_STALE_MINUTES,
-  parseClaim,
-  activeClaim,
-  claimBody,
-  describeClaim,
+  DEVICES,
+  deviceFor,
+  deviceHolder,
+  losesRaceTo,
+  resolveDevices,
 } = require('../scripts/claim-lib');
+const {
+  claimBody,
+  parseClaim,
+} = require('../../../tools/work-claim/lib/claim');
 
-const NOW = Date.parse('2026-09-02T12:00:00Z');
+const NOW = Date.parse('2026-09-25T12:00:00Z');
 const minutesAgo = m => new Date(NOW - m * 60000).toISOString();
 
 beforeEach(() => {
@@ -16,365 +26,192 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-const claim = (lines, overrides = {}) => ({
-  id: 5507399380,
-  html_url:
-    'https://github.com/Tessellate-Studio/alate/issues/562#issuecomment-5507399380',
-  body: ['### 🔒 Device claim', ...lines].join('\n'),
-  ...overrides,
-});
+let nextId = 7000000000;
 
-describe('a long job keeps the phone — elapsed time is not the criterion', () => {
-  it('holds a three-hour-old claim whose last touch is recent', () => {
-    const parsed = parseClaim(
-      claim([
-        '- **Claimed by:** session-a',
-        '- **Device:** 804KPSL1724518',
-        `- **Claimed at:** ${minutesAgo(180)}`,
-        `- **Last touch:** ${minutesAgo(4)}`,
-        '- **Waiting on:** —',
-        '- **Claim:** HELD',
-      ])
-    );
-
-    // The old rule expired this at 45 minutes and handed the device to a
-    // second session mid-fix. Duration of the task is not evidence of
-    // abandonment; silence is.
-    expect(parsed.stale).toBe(false);
-    expect(parsed.idleMinutes).toBe(4);
+/** A parsed 🚧 claim, as the drain would post it with `wip claim --device`. */
+const claim = (over = {}) => {
+  const id = over.id || nextId++;
+  const parsed = parseClaim({
+    id,
+    html_url: `https://github.com/Tessellate-Studio/alate/issues/990#issuecomment-${id}`,
+    body: claimBody({
+      heldBy: over.heldBy || 'drain-a (abcd1234)',
+      sessionId: 'abcd1234-0000',
+      host: 'spectre',
+      worktree: null,
+      branch: 'master',
+      device: 'device' in over ? over.device : 'pixel',
+      at: minutesAgo(over.age || 5),
+      lastTouch: minutesAgo(over.idle === undefined ? 1 : over.idle),
+      waitingOn: over.waitingOn,
+      held: over.held,
+    }),
   });
+  return { ...parsed, testId: over.testId || 'alate#990' };
+};
 
-  it('goes stale on silence, measured from the last touch', () => {
-    const parsed = parseClaim(
-      claim([
-        '- **Claimed by:** session-a',
-        `- **Claimed at:** ${minutesAgo(180)}`,
-        `- **Last touch:** ${minutesAgo(HEARTBEAT_STALE_MINUTES + 1)}`,
-        '- **Waiting on:** —',
-        '- **Claim:** HELD',
-      ])
-    );
-    expect(parsed.stale).toBe(true);
-  });
+const pixel = deviceFor('pixel');
+const iphone = deviceFor('iphone');
 
-  it('never expires a claim that is parked waiting on a human', () => {
-    const parsed = parseClaim(
-      claim([
-        '- **Claimed by:** session-a',
-        `- **Claimed at:** ${minutesAgo(400)}`,
-        `- **Last touch:** ${minutesAgo(240)}`,
-        '- **Waiting on:** human — camera permission prompt',
-        '- **Claim:** HELD',
-      ])
-    );
-
-    // A human step can take hours. Stealing the device out from under one is
-    // exactly the collision the lock exists to prevent.
-    expect(parsed.waitingOnHuman).toBe(true);
-    expect(parsed.stale).toBe(false);
-  });
-
-  it('treats an em-dash placeholder as not waiting on anyone', () => {
-    const parsed = parseClaim(
-      claim([
-        '- **Claimed by:** session-a',
-        `- **Claimed at:** ${minutesAgo(10)}`,
-        `- **Last touch:** ${minutesAgo(HEARTBEAT_STALE_MINUTES + 5)}`,
-        '- **Waiting on:** —',
-        '- **Claim:** HELD',
-      ])
-    );
-    expect(parsed.waitingOnHuman).toBe(false);
-    expect(parsed.stale).toBe(true);
-  });
-});
-
-describe('claims written before the heartbeat existed', () => {
-  it('falls back to Claimed at when there is no Last touch', () => {
-    const fresh = parseClaim(
-      claim([
-        '- **Claimed by:** session-a',
-        `- **Claimed at:** ${minutesAgo(5)}`,
-        '- **Claim:** HELD',
-      ])
-    );
-    expect(fresh.stale).toBe(false);
-
-    const old = parseClaim(
-      claim([
-        '- **Claimed by:** session-a',
-        `- **Claimed at:** ${minutesAgo(HEARTBEAT_STALE_MINUTES + 10)}`,
-        '- **Claim:** HELD',
-      ])
-    );
-    expect(old.stale).toBe(true);
-  });
-
-  it('counts an unreadable timestamp as stale rather than an indefinite hold', () => {
-    const parsed = parseClaim(
-      claim([
-        '- **Claimed by:** session-a',
-        '- **Claimed at:** whenever',
-        '- **Claim:** HELD',
-      ])
-    );
-    expect(parsed.stale).toBe(true);
-  });
-});
-
-describe('who holds the device', () => {
-  it('is nobody once the claim reads RELEASED', () => {
-    const parsed = parseClaim(
-      claim([
-        '- **Claimed by:** session-a',
-        `- **Claimed at:** ${minutesAgo(2)}`,
-        `- **Last touch:** ${minutesAgo(1)}`,
-        '- **Claim:** RELEASED',
-      ])
-    );
-    expect(activeClaim([parsed])).toBeNull();
-  });
-
-  it('takes the latest record per holder, so a re-claim does not read as two', () => {
-    const held = parseClaim(
-      claim(
-        [
-          '- **Claimed by:** session-a',
-          `- **Claimed at:** ${minutesAgo(30)}`,
-          `- **Last touch:** ${minutesAgo(30)}`,
-          '- **Claim:** HELD',
-        ],
-        { id: 1 }
-      )
-    );
-    const released = parseClaim(
-      claim(
-        [
-          '- **Claimed by:** session-a',
-          `- **Claimed at:** ${minutesAgo(2)}`,
-          `- **Last touch:** ${minutesAgo(1)}`,
-          '- **Claim:** RELEASED',
-        ],
-        { id: 2 }
-      )
-    );
-    expect(activeClaim([held, released])).toBeNull();
-  });
-});
-
-describe('the comment body a session writes', () => {
-  it('carries the heartbeat fields', () => {
-    const body = claimBody({
-      heldBy: 'session-a',
-      device: '804KPSL1724518',
-      at: '2026-09-02T09:25:42Z',
-      lastTouch: '2026-09-02T11:04:10Z',
+describe('there is no litmus lock any more', () => {
+  it('registers devices without a lock repo or lock issue', () => {
+    DEVICES.forEach(d => {
+      expect(d.repo).toBeUndefined();
+      expect(d.issue).toBeUndefined();
     });
-    expect(body).toContain('### 🔒 Device claim');
-    expect(body).toContain('- **Last touch:** 2026-09-02T11:04:10Z');
-    expect(body).toContain('- **Waiting on:** —');
-    expect(body).toContain('- **Claim:** HELD');
-
-    // Round-trips through the parser it is written for.
-    expect(parseClaim({ id: 1, body }).heldBy).toBe('session-a');
-  });
-
-  it('defaults Last touch to the claim time and renders a release', () => {
-    const body = claimBody({
-      heldBy: 'session-a',
-      at: '2026-09-02T09:25:42Z',
-      held: false,
-    });
-    expect(body).toContain('- **Last touch:** 2026-09-02T09:25:42Z');
-    expect(body).toContain('- **Claim:** RELEASED');
-  });
-
-  it('says what it is waiting on when it is parked', () => {
-    const body = claimBody({
-      heldBy: 'session-a',
-      at: '2026-09-02T09:25:42Z',
-      waitingOn: 'human — camera permission prompt',
-    });
-    expect(body).toContain(
-      '- **Waiting on:** human — camera permission prompt'
-    );
+    expect(require('../scripts/claim-lib').LOCK_REPO).toBeUndefined();
   });
 });
 
-describe('the one-line summary', () => {
-  it('reports idle time, not age', () => {
-    const parsed = parseClaim(
-      claim([
-        '- **Claimed by:** session-a',
-        '- **Device:** 804KPSL1724518',
-        `- **Claimed at:** ${minutesAgo(180)}`,
-        `- **Last touch:** ${minutesAgo(3)}`,
-        '- **Claim:** HELD',
-      ])
-    );
-    const line = describeClaim(parsed);
-    expect(line).toContain('804KPSL1724518');
-    expect(line).toContain('session-a');
-
-    // Shared vocabulary with the work claim and the board (humanIdle).
-    expect(line).toContain('3m ago');
+describe('naming a device', () => {
+  it('finds a device by key or by adb serial, case-insensitively', () => {
+    expect(deviceFor('Pixel')).toBe(pixel);
+    expect(deviceFor('804KPSL1724518')).toBe(pixel);
+    expect(deviceFor('iPhone')).toBe(iphone);
   });
 
-  it('says so when the holder is parked on a human', () => {
-    const parsed = parseClaim(
-      claim([
-        '- **Claimed by:** session-a',
-        `- **Claimed at:** ${minutesAgo(60)}`,
-        `- **Last touch:** ${minutesAgo(50)}`,
-        '- **Waiting on:** human — camera permission prompt',
-        '- **Claim:** HELD',
-      ])
-    );
-    expect(describeClaim(parsed)).toMatch(/waiting on/i);
+  it('falls back to the adb handset for an unknown name', () => {
+    // Guessing the iPhone would park an agent-runnable drain on a human.
+    expect(deviceFor('some-new-serial')).toBe(pixel);
   });
 
-  it('is empty when the device is free', () => {
-    expect(describeClaim(null)).toBe('');
-  });
-});
-
-describe('the device one-liner reads as a sentence', () => {
-  // Sharing describe() across both variants briefly collapsed the subject to
-  // one position, and the device line came out "🔒 claimed by session-a
-  // 804KPSL1724518" — as though the holder were named after the handset.
-  // Asserted exactly, not with toContain, which let that through.
-  it('puts the device before the holder and keeps the word "device"', () => {
-    const body = claimBody({
-      heldBy: 'session-a',
-      device: '804KPSL1724518',
-      at: '2026-09-08T10:00:00.000Z',
-      lastTouch: new Date(Date.now() - 3 * 60_000).toISOString(),
-    });
-    expect(describeClaim(parseClaim({ id: 1, body }))).toBe(
-      '🔒 device 804KPSL1724518 claimed by session-a (last touch 3m ago)'
-    );
-  });
-
-  it('says just "device" when no serial was recorded', () => {
-    const body = claimBody({
-      heldBy: 'session-a',
-      at: '2026-09-08T10:00:00.000Z',
-      lastTouch: new Date(Date.now() - 3 * 60_000).toISOString(),
-    });
-    expect(describeClaim(parseClaim({ id: 1, body }))).toBe(
-      '🔒 device claimed by session-a (last touch 3m ago)'
-    );
-  });
-});
-
-// ---------------------------------------------------------------------------
-// RFD-003 section 3 — one lock per physical device, outside every app queue.
-// ---------------------------------------------------------------------------
-describe('where a device lock lives', () => {
-  const { DEVICES, deviceFor, LOCK_REPO } = require('../scripts/claim-lib');
-
-  it('holds the lock in litmus, not in an app repo and not in forge', () => {
-    // The device is not any one app's: alate, mood-layer and badige all drive
-    // the same handset. litmus is the shared testing-utilities repo for the
-    // mobile apps, and it is PRIVATE, so a claim may name what is being
-    // tested. forge is public, which is why the lock cannot live there.
-    expect(LOCK_REPO).toBe('Tessellate-Studio/litmus');
-    DEVICES.forEach(d => expect(d.repo).toBe(LOCK_REPO));
-  });
-
-  it('gives each physical device its own issue', () => {
-    // One issue per DEVICE, not per app: a drain can hold the Pixel over adb
-    // while a human is mid-sitting on the iPhone, and neither blocks the
-    // other.
-    const numbers = DEVICES.map(d => d.issue);
-    expect(new Set(numbers).size).toBe(DEVICES.length);
-    expect(DEVICES.length).toBeGreaterThanOrEqual(2);
-  });
-
-  it('finds the Android handset by its adb serial', () => {
-    const pixel = deviceFor('804KPSL1724518');
-    expect(pixel.issue).toBe(43);
-    expect(pixel.adb).toBe(true);
-  });
-
-  it('knows the iPhone has no adb path, so its claim waits on a human', () => {
-    // Not a workaround — the honest description of the device. Every step is
-    // someone's hands, and a claim parked on a human never expires.
-    const iphone = DEVICES.find(d => !d.adb);
-    expect(iphone).toBeDefined();
-    expect(iphone.issue).toBe(44);
+  it('knows the iPhone waits on a human', () => {
+    expect(iphone.adb).toBe(false);
     expect(iphone.waitsOnHuman).toBe(true);
   });
+});
 
-  it('falls back to the adb device when asked for an unknown serial', () => {
-    // A serial nobody registered is far likelier to be the Pixel re-flashed
-    // than a second phone nobody told the queue about; guessing the iPhone
-    // would park an agent-runnable drain on a human forever.
-    expect(deviceFor('NOT-A-SERIAL').adb).toBe(true);
+describe('the Device field rides on the ordinary work claim', () => {
+  it('reads back the device it was posted with', () => {
+    expect(claim().device).toBe('pixel');
+  });
+
+  it('leaves a PR claim with no device exactly as it was', () => {
+    const body = claimBody({ heldBy: 'x', branch: 'feat/y' });
+    expect(body).not.toContain('**Device:**');
+    expect(parseClaim({ id: 1, body }).device).toBeNull();
   });
 });
 
-describe('two sessions racing for the same device', () => {
-  const { losesRaceTo } = require('../scripts/claim-lib');
-
-  const held = (id, who) => ({
-    id,
-    html_url: `https://github.com/Tessellate-Studio/litmus/issues/43#issuecomment-${id}`,
-    body: [
-      '### 🔒 Device claim',
-      `- **Claimed by:** ${who}`,
-      '- **Device:** 804KPSL1724518',
-      `- **Claimed at:** ${minutesAgo(1)}`,
-      `- **Last touch:** ${minutesAgo(1)}`,
-      '- **Waiting on:** —',
-      '- **Claim:** HELD',
-    ].join('\n'),
+describe('is the phone busy?', () => {
+  it('is free when no test claims it', () => {
+    expect(deviceHolder([], pixel)).toBeNull();
   });
 
-  it('stands the later poster down, deterministically', () => {
-    // Comment ids are server-assigned and monotonic, so both racers reach the
-    // SAME answer with no clock involved. The 16-second collision on
-    // 2026-09-07 resolves in one round trip.
-    const claims = [held(100, 'session-a'), held(200, 'session-b')].map(
-      parseClaim
-    );
-    expect(losesRaceTo(claims, 200).heldBy).toBe('session-a');
-    expect(losesRaceTo(claims, 100)).toBeNull();
+  it('is busy while any open test holds a live claim naming it', () => {
+    const c = claim();
+    expect(deviceHolder([c], pixel)).toBe(c);
   });
 
-  it('both racers agree on the winner', () => {
-    const claims = [held(100, 'session-a'), held(200, 'session-b')].map(
-      parseClaim
-    );
-    const bWinner = losesRaceTo(claims, 200);
-    const aWinner = losesRaceTo(claims, 100);
-    expect(bWinner).not.toBeNull();
-    expect(aWinner).toBeNull();
+  it('ignores claims naming the other device', () => {
+    expect(deviceHolder([claim({ device: 'iphone' })], pixel)).toBeNull();
   });
 
-  it('ignores a released claim, however early it was posted', () => {
-    const releasedEarly = {
-      ...held(50, 'session-old'),
-      body: held(50, 'session-old').body.replace('HELD', 'RELEASED'),
-    };
-    const claims = [releasedEarly, held(200, 'session-b')].map(parseClaim);
-    expect(losesRaceTo(claims, 200)).toBeNull();
+  it('ignores claims with no device — those are work claims, not locks', () => {
+    // A session fixing a failed test claims the issue without driving the
+    // phone; that must not lock the handset.
+    expect(deviceHolder([claim({ device: null })], pixel)).toBeNull();
   });
 
-  it('ignores a stale claim, so a crashed session cannot wedge the device', () => {
-    const silent = {
-      ...held(50, 'session-dead'),
-      body: held(50, 'session-dead').body.replace(
-        `- **Last touch:** ${minutesAgo(1)}`,
-        `- **Last touch:** ${minutesAgo(HEARTBEAT_STALE_MINUTES * 3)}`
-      ),
-    };
-    const claims = [silent, held(200, 'session-b')].map(parseClaim);
-    expect(losesRaceTo(claims, 200)).toBeNull();
+  it('ignores a released claim', () => {
+    expect(deviceHolder([claim({ held: false })], pixel)).toBeNull();
   });
 
-  it('is a no-op when nobody else is holding', () => {
-    expect(losesRaceTo([parseClaim(held(200, 'solo'))], 200)).toBeNull();
-    expect(losesRaceTo([], 200)).toBeNull();
+  it(`frees the phone after ${HEARTBEAT_STALE_MINUTES} min of silence, however young the work claim`, () => {
+    // The WORK claim survives seven days; the PHONE cannot wait that long
+    // for a crashed drain. Silence on the device is judged on its own window.
+    const quiet = claim({ idle: HEARTBEAT_STALE_MINUTES + 1 });
+    expect(quiet.stale).toBe(false);
+    expect(deviceHolder([quiet], pixel)).toBeNull();
+  });
+
+  it('holds a long job whose last touch is recent', () => {
+    expect(deviceHolder([claim({ age: 180, idle: 3 })], pixel)).not.toBeNull();
+  });
+
+  it('never frees a claim parked on a human', () => {
+    const parked = claim({
+      idle: 600,
+      waitingOn: 'human — judge the swipe feel',
+    });
+    expect(deviceHolder([parked], pixel)).toBe(parked);
+  });
+
+  it('names the earliest claim when two drains hold tests on the same phone', () => {
+    const first = claim({ id: 100, heldBy: 'drain-a', testId: 'alate#990' });
+    const second = claim({ id: 200, heldBy: 'drain-b', testId: 'badige#12' });
+    expect(deviceHolder([second, first], pixel)).toBe(first);
+  });
+});
+
+describe('two drains racing across different tests', () => {
+  // Comment ids are global on GitHub, so the lowest-id rule works across
+  // issues and repos, not just within one lock issue.
+  it('stands the later drain down', () => {
+    const a = claim({ id: 100, heldBy: 'drain-a' });
+    const b = claim({ id: 200, heldBy: 'drain-b' });
+    expect(losesRaceTo([a, b], pixel, 'drain-b')).toBe(a);
+    expect(losesRaceTo([a, b], pixel, 'drain-a')).toBeNull();
+  });
+
+  it('does not race against itself holding several tests', () => {
+    const mine = [
+      claim({ id: 100, heldBy: 'drain-a', testId: 'alate#990' }),
+      claim({ id: 150, heldBy: 'drain-a', testId: 'alate#1032' }),
+    ];
+    expect(losesRaceTo(mine, pixel, 'drain-a')).toBeNull();
+  });
+
+  it('ignores a rival on the other device', () => {
+    const a = claim({ id: 100, heldBy: 'drain-a', device: 'iphone' });
+    expect(losesRaceTo([a], pixel, 'drain-b')).toBeNull();
+  });
+});
+
+describe('the Devices block the board prints', () => {
+  it('reports each device with its holder, or free', () => {
+    const c = claim();
+    const out = resolveDevices([c]);
+    expect(out.find(d => d.device === pixel).claim).toBe(c);
+    expect(out.find(d => d.device === iphone).claim).toBeNull();
+  });
+
+  it('reads UNREADABLE, never free, when any queue could not be read', () => {
+    const out = resolveDevices([], ['alate: HTTP 502']);
+    out.forEach(d => {
+      expect(d.error).toMatch(/alate: HTTP 502/);
+      expect(d.claim).toBeUndefined();
+    });
+  });
+});
+
+describe('a taken-over claim cannot come back (review 2026-09-25)', () => {
+  // A claim parked on a human never expires, so the only way off it is a
+  // --force takeover — which leaves the old comment HELD.
+  const parkedDead = () =>
+    claim({ id: 100, heldBy: 'drain-a', idle: 90, waitingOn: 'human — tap' });
+
+  it('hands the phone to the taker, not the older parked claim', () => {
+    const taker = claim({ id: 200, heldBy: 'drain-b', age: 2 });
+    expect(deviceHolder([parkedDead(), taker], pixel)).toBe(taker);
+    expect(losesRaceTo([parkedDead(), taker], pixel, 'drain-b')).toBeNull();
+  });
+
+  it('keeps it retired after the taker releases', () => {
+    const released = claim({ id: 200, heldBy: 'drain-b', age: 2, held: false });
+    expect(deviceHolder([parkedDead(), released], pixel)).toBeNull();
+  });
+
+  it('does NOT let a later racer retire a fresh claim on the same test', () => {
+    // Both posted within seconds: the lower id keeps the phone.
+    const first = claim({ id: 100, heldBy: 'drain-a', age: 1, idle: 1 });
+    const second = claim({ id: 200, heldBy: 'drain-b', age: 1, idle: 1 });
+    expect(losesRaceTo([first, second], pixel, 'drain-b')).toBe(first);
+  });
+
+  it('still races two live claims on DIFFERENT tests', () => {
+    const a = claim({ id: 100, heldBy: 'drain-a', testId: 'alate#990' });
+    const b = claim({ id: 200, heldBy: 'drain-b', testId: 'alate#1032' });
+    expect(losesRaceTo([a, b], pixel, 'drain-b')).toBe(a);
   });
 });

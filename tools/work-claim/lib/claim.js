@@ -22,8 +22,9 @@
 // point is to remove the ambiguity, which is the part that actually failed.
 //
 // The MECHANISM — heading, fields, HELD/RELEASED, heartbeat, staleness,
-// resolution — lives in ./protocol.js and is shared with the 🔒 device claim.
-// This file declares only what makes the work claim different.
+// resolution — lives in ./protocol.js. This file declares only what makes the
+// work claim different. There is no separate 🔒 device claim any more: a work
+// claim with a `Device` field IS the device lock (ADR-004).
 //
 // Keep in sync with standards/workflows.md → "Work claims".
 
@@ -149,6 +150,15 @@ const PROTOCOL = createClaimProtocol({
       },
     },
     {
+      // Set only when the claimed item is a device-test issue being run on
+      // a phone — this field IS the device lock (ADR-004). A phone is busy
+      // while any open device-test issue holds a live claim naming it; see
+      // skills/device-test/scripts/claim-lib.js. Omitted on every other claim.
+      name: 'Device',
+      from: 'device',
+      render: o => o.device || null,
+    },
+    {
       name: 'Docs',
       from: 'docsRaw',
       render: o => {
@@ -194,6 +204,7 @@ function identity(opts = {}) {
   const cwd = opts.cwd || process.cwd();
   const host = opts.host || os.hostname();
   const branch = opts.branch || null;
+  const holder = opts.holder || null;
 
   // null, not the string "unknown". parseClaim already yields null for an
   // unidentified claim, so two values meant the same thing and were tested
@@ -204,8 +215,26 @@ function identity(opts = {}) {
   // handle another agent has ("who is on feat/x?"); the session-id tail
   // disambiguates two sessions on one branch.
   const tail = sessionId ? sessionId.slice(0, 8) : host;
-  const heldBy = branch ? `${branch} (${tail})` : `session ${tail}`;
-  return { heldBy, sessionId, host, worktree: cwd, branch };
+
+  // A named holder (`--holder drain-1a2b`) overrides both, and becomes the
+  // identity `isMine` matches on. A nested agent shares its parent's
+  // CLAUDE_CODE_SESSION_ID (verified 2026-09-25), so two drains launched
+  // from one session are indistinguishable by session id — exactly the
+  // 2026-09-07 collision the device lock exists to prevent (ADR-004).
+  const heldBy = holder || (branch ? `${branch} (${tail})` : `session ${tail}`);
+  return { heldBy, holder, sessionId, host, worktree: cwd, branch };
+}
+
+/**
+ * Is this claim the caller's? By named holder when one was given, else by
+ * session id — never by the display name alone, which two sessions on one
+ * branch share. An unidentified caller owns nothing.
+ */
+function isMine(claim, me) {
+  if (me.holder) {
+    return claim.heldBy === me.holder;
+  }
+  return Boolean(me.sessionId) && claim.sessionId === me.sessionId;
 }
 
 const claimBody = PROTOCOL.render;
@@ -260,11 +289,18 @@ const releaseBody = PROTOCOL.release;
  */
 function touchBody(body, opts = {}) {
   const out = PROTOCOL.touch(body, opts);
+  let out2 = out;
+
+  // `wip claim --device` on an item you already hold lands here; dropping
+  // the device silently would leave a claim that does not lock the phone.
+  if (opts.device) {
+    out2 = setField(out2, 'Device', opts.device, 'Docs');
+  }
   const adding = (opts.docs || []).filter(Boolean);
   if (!adding.length) {
-    return out;
+    return out2;
   }
-  const current = field(out, 'Docs') || '—';
+  const current = field(out2, 'Docs') || '—';
   const kept = NOT_WAITING.test(current)
     ? []
     : current
@@ -272,7 +308,7 @@ function touchBody(body, opts = {}) {
         .map(d => d.trim())
         .filter(Boolean);
   const merged = [...new Set([...kept, ...adding])];
-  return setField(out, 'Docs', merged.join(', '), 'Waiting on');
+  return setField(out2, 'Docs', merged.join(', '), 'Waiting on');
 }
 
 const describeClaim = PROTOCOL.describe;
@@ -289,6 +325,7 @@ function claimDetails(claim) {
     ['worktree: ', claim.worktree, 72],
     ['resume: claude --resume ', claim.sessionId, 200],
     ['related: ', claim.related, 62],
+    ['device: ', claim.device, 40],
     ['docs: ', claim.docs, 66],
   ].filter(row => row[1]);
 }
@@ -575,6 +612,7 @@ module.exports = {
   slugRepo,
   repoList,
   identity,
+  isMine,
   claimBody,
   parseClaim,
   activeClaim,

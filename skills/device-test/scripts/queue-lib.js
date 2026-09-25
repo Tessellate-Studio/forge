@@ -11,7 +11,7 @@ const path = require('path');
 
 // CLAIM_MARKER and isNotice went with the comment parser: nothing here reads
 // a queue comment any more, so nothing needs to tell a notice from an item.
-const { parseClaim, activeClaim, DEVICES } = require('./claim-lib');
+const { resolveDevices } = require('./claim-lib');
 
 // gh() and checkGhReady() come from the work-claim lib rather than being
 // declared again here. The copy that used to live in this file was
@@ -20,7 +20,13 @@ const { parseClaim, activeClaim, DEVICES } = require('./claim-lib');
 // collect() against a deadline, and Promise.race does not cancel the
 // loser, so a slow fetch left gh children running after the hook exited.
 // The reasoning was written down once, in the module that did not need it.
-const { gh, checkGhReady, slugRepo } = require(path.join(
+const {
+  gh,
+  checkGhReady,
+  slugRepo,
+  parseClaim,
+  CLAIM_LABEL,
+} = require(path.join(
   __dirname,
   '..',
   '..',
@@ -113,6 +119,9 @@ const LABELS = {
   FAILED: 'failed',
 };
 
+/** P0 is the most urgent. Matches the work-item labels (`wi new --priority`). */
+const PRIORITY = /^P[0-3]$/;
+
 const GLYPHS = {
   OPEN: '🤖',
   OPEN_HUMAN: '🙋',
@@ -190,23 +199,54 @@ async function fetchRepoQueue(repoDef) {
   }
 }
 
+/**
+ * Who holds each phone, read off the claimed device-test issues themselves
+ * (ADR-004 — there is no lock issue any more).
+ *
+ * One label query per queue repo for OPEN tests carrying `claimed`, then the
+ * comments of just those. A closed test cannot hold the phone: closing it is
+ * the drain's last act on it. Any repo that fails turns every device
+ * UNREADABLE (resolveDevices), because the missing claim may be there.
+ */
 async function fetchDeviceClaims() {
-  return Promise.all(
-    DEVICES.map(async device => {
+  const errors = [];
+  const claims = [];
+  await Promise.all(
+    REPOS.map(async repoDef => {
       try {
         const out = await gh([
           'api',
-          `repos/${device.repo}/issues/${device.issue}/comments`,
+          `repos/${repoDef.repo}/issues?labels=${LABELS.ITEM},${CLAIM_LABEL}&state=open&per_page=100`,
           '--paginate',
         ]);
-        const comments = parseGh(out, `${device.repo}#${device.issue} claims`);
-        const claims = comments.map(parseClaim).filter(Boolean);
-        return { device, claim: activeClaim(claims), claims };
+        const issues = parseGh(out, `${repoDef.repo} claimed tests`).filter(
+          i => !i.pull_request
+        );
+        await Promise.all(
+          issues.map(async i => {
+            const raw = await gh([
+              'api',
+              `repos/${repoDef.repo}/issues/${i.number}/comments?per_page=100`,
+              '--paginate',
+            ]);
+            const parsed = parseGh(raw, `${repoDef.key}#${i.number} claims`)
+              .map(parseClaim)
+              .filter(Boolean)
+              .map(c => ({ ...c, testId: `${repoDef.key}#${i.number}` }));
+
+            // Each claim's OWN Last touch, never the issue's updated_at:
+            // item activity would refresh every claim on the issue at once,
+            // including a crashed drain's, and hand it the phone again
+            // (review 2026-09-25). A drain keeps the phone with `wip touch`.
+            claims.push(...parsed);
+          })
+        );
       } catch (error) {
-        return { device, error: error.message || String(error) };
+        errors.push(`${repoDef.key}: ${error.message || String(error)}`);
       }
     })
   );
+  return resolveDevices(claims, errors);
 }
 
 /**
@@ -277,6 +317,14 @@ function itemFromIssue(issue, repoKey) {
     needsRuntime: field('Needs runtime'),
     needsHuman: has(LABELS.NEEDS_HUMAN),
 
+    // Priority and ownership are labels too, so the board ranks and shows
+    // who is on a test without opening it.
+    priority:
+      (issue.labels || [])
+        .map(l => String(l.name || l))
+        .find(n => PRIORITY.test(n)) || null,
+    claimed: has(CLAIM_LABEL),
+
     // An issue body can stack two `### <glyph>` headings exactly as a comment
     // could, so forge #117's detection moves here rather than dying with the
     // comment medium.
@@ -328,6 +376,7 @@ module.exports = {
   REPOS,
   STATUS,
   LABELS,
+  PRIORITY,
   itemFromIssue,
 
   // ITEM_GLYPHS outlives the comment format: `itemHeadingCount` still counts

@@ -3,6 +3,8 @@ const {
   labelsFor,
   intentSlug,
   matchesIntent,
+  priorityFrom,
+  checkPriority,
 } = require('../scripts/enqueue');
 
 const FIELDS = {
@@ -110,5 +112,35 @@ describe('not enqueueing the same test twice', () => {
         'gender-unisex-739 — the third chip stores unisex'
       )
     ).toBe(false);
+  });
+});
+
+describe('which priority a new test gets', () => {
+  it('copies the P label from what it verifies', () => {
+    expect(priorityFrom([['bug', 'P1']])).toBe('P1');
+  });
+
+  it('takes the most urgent when a PR closes several issues', () => {
+    expect(priorityFrom([['P2'], ['P0', 'bug'], []])).toBe('P0');
+  });
+
+  it('falls back to P2 when nothing it verifies carries one', () => {
+    expect(priorityFrom([['bug'], []])).toBe('P2');
+    expect(priorityFrom([])).toBe('P2');
+  });
+
+  it('adds the priority to the labels it files with', () => {
+    expect(labelsFor({ ...FIELDS, priority: 'P1' })).toContain('P1');
+  });
+});
+
+describe('an explicit --priority is checked, not trusted', () => {
+  it('accepts P0-P3', () => {
+    expect(checkPriority('P0')).toBe('P0');
+  });
+
+  it('rejects anything else rather than minting a stray label', () => {
+    expect(() => checkPriority('p1')).toThrow(/P0-P3/);
+    expect(() => checkPriority('high')).toThrow(/P0-P3/);
   });
 });

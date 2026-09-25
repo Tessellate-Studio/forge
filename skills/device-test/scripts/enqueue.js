@@ -11,7 +11,7 @@
 
 const path = require('path');
 
-const { LABELS } = require('./queue-lib');
+const { LABELS, PRIORITY } = require('./queue-lib');
 
 const { gh } = require(path.join(
   __dirname,
@@ -88,14 +88,92 @@ function renderTestBody(fields) {
   return lines.join('\n');
 }
 
-/** device-test always; needs-human when a step is prefixed `HUMAN:`. */
+/** device-test always; needs-human when a step is prefixed `HUMAN:`; the
+ *  priority when one was decided. */
 function labelsFor(fields) {
   const steps = (fields && fields.steps) || [];
   const labels = [LABELS.ITEM];
   if (steps.some(s => HUMAN_STEP.test(s))) {
     labels.push(LABELS.NEEDS_HUMAN);
   }
+  if (fields && fields.priority) {
+    labels.push(fields.priority);
+  }
   return labels;
+}
+
+/** An explicit priority must be a real P label — a typo would otherwise mint
+ *  a stray label and rank the test below every P3. */
+function checkPriority(p) {
+  if (!PRIORITY.test(String(p))) {
+    throw new Error(`--priority must be one of P0-P3 (got "${p}")`);
+  }
+  return p;
+}
+
+/** A test with no priority of its own is ordinary work, not urgent work. */
+const DEFAULT_PRIORITY = 'P2';
+
+/**
+ * The priority a test inherits: the most urgent P label on whatever it
+ * verifies — the PR itself, and the issues that PR closes (a fix PR rarely
+ * carries a P label; the bug it closes does). P0 beats P3.
+ *
+ * @param labelLists one array of label names per thing it verifies
+ */
+function priorityFrom(labelLists) {
+  const found = (labelLists || [])
+    .flat()
+    .map(String)
+    .filter(n => PRIORITY.test(n))
+    .sort();
+  return found[0] || DEFAULT_PRIORITY;
+}
+
+/**
+ * Read the labels of the verified PR/issue and of every issue it closes.
+ * Best effort: a lookup that fails files the test at the default priority
+ * rather than failing the enqueue — a test with the wrong rank is still a
+ * test; a test never filed is a change nobody checks.
+ */
+async function inheritedPriority(repo, verifies) {
+  if (!verifies) {
+    return DEFAULT_PRIORITY;
+  }
+  try {
+    const out = await gh([
+      'pr',
+      'view',
+      String(verifies),
+      '-R',
+      repo,
+      '--json',
+      'labels,closingIssuesReferences',
+    ]);
+    const pr = JSON.parse(out);
+    const lists = [(pr.labels || []).map(l => l.name)];
+    for (const ref of pr.closingIssuesReferences || []) {
+      // A PR can close an issue in ANOTHER repo (alate PR → loom issue).
+      const r = ref.repository;
+      const where =
+        r && r.owner && r.name ? `${r.owner.login}/${r.name}` : repo;
+      const issue = JSON.parse(
+        await gh(['api', `repos/${where}/issues/${ref.number}`])
+      );
+      lists.push((issue.labels || []).map(l => l.name));
+    }
+    return priorityFrom(lists);
+  } catch {
+    // Not a PR (an issue number) — or gh failed. Try it as an issue.
+    try {
+      const issue = JSON.parse(
+        await gh(['api', `repos/${repo}/issues/${verifies}`])
+      );
+      return priorityFrom([(issue.labels || []).map(l => l.name)]);
+    } catch {
+      return DEFAULT_PRIORITY;
+    }
+  }
 }
 
 /** A title reduced to something two sessions would write identically. */
@@ -122,7 +200,10 @@ function matchesIntent(issue, intent) {
  */
 async function enqueue({ repo, intent, fields, dryRun }) {
   const body = renderTestBody(fields);
-  const labels = labelsFor(fields);
+  const priority =
+    (fields && fields.priority && checkPriority(fields.priority)) ||
+    (await inheritedPriority(repo, fields && fields.verifies));
+  const labels = labelsFor({ ...fields, priority });
   const title = `[device-test] ${intent}`;
 
   const found = await gh([
@@ -169,6 +250,10 @@ async function enqueue({ repo, intent, fields, dryRun }) {
 module.exports = {
   renderTestBody,
   labelsFor,
+  priorityFrom,
+  checkPriority,
+  inheritedPriority,
+  DEFAULT_PRIORITY,
   intentSlug,
   matchesIntent,
   enqueue,

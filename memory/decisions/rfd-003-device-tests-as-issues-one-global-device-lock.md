@@ -6,6 +6,7 @@
 **Tracking:** [forge#107](https://github.com/Tessellate-Studio/forge/issues/107)
 **Supersedes:** [ADR-003](./adr-003-device-test-queue.md) — the queue *medium* only. Its
 three constraints (below) are kept in full.
+**Superseded in part:** §3 (the litmus device lock) by [ADR-004](./adr-004-device-lock-on-claimed-tests.md) (2026-09-25) — the lock is now a claim on the tests themselves.
 
 ## Background
 

@@ -92,15 +92,12 @@ Step 0.4 has the agent read the device claims once it is *running*. That is not
 sufficient on its own, because the launching session decides to spawn some
 seconds earlier, and a drain that has been spawned but has not claimed yet is
 invisible everywhere you would think to look. So immediately before the Agent
-call — not at the top of the turn, not "we checked a few minutes ago" — fetch
-the claim comments on the device's own lock issue in `Tessellate-Studio/litmus`
-([#43](https://github.com/Tessellate-Studio/litmus/issues/43) the Pixel,
-[#44](https://github.com/Tessellate-Studio/litmus/issues/44) the iPhone — one
-lock per handset, shared by alate, mood-layer and badige; loom carries no claim
-because it never uses adb) and read them fresh. `dtq` prints the same thing
-under **Devices**, and prints `? UNREADABLE` — a reason to stop, never "free" —
-when it cannot tell. Paginate a hand-rolled fetch: the newest claim is exactly
-what an unpaginated read drops. Two rules follow from how this failed:
+call — not at the top of the turn, not "we checked a few minutes ago" — run
+`dtq` and read its **Devices** block fresh. It names, per phone, the test and
+session holding it: the phone is busy while any open `device-test` issue holds
+a live 🚧 claim naming it (`wip claim … --device`; loom never claims a device
+because it never uses adb). It prints `? UNREADABLE` — a reason to stop, never
+"free" — when any queue cannot be read. Two rules follow from how this failed:
 
 - **A completion notification is NOT evidence that a drain stopped.** "No live
   background children" describes the agent you spawned, not its descendants.
@@ -116,7 +113,7 @@ what an unpaginated read drops. Two rules follow from how this failed:
   interleaving destroyed it anyway. **Verify against the claim comments, never
   against the notification.**
 - **A claim that appears seconds after you spawn means you are the newcomer —
-  stand down.** If a `HELD` claim shows up on the device's lock issue between your
+  stand down.** If a live claim on the device shows up in `dtq` between your
   pre-spawn read and your agent's own Step 0.4 read, someone else got there
   first, however small the gap. Stop the agent, release anything you posted,
   and report who holds the device. Do not race it, and do not reason that two
@@ -197,10 +194,10 @@ of leaving the contradiction standing is a labelled queue quietly accumulating
 items that no drain is accountable for. It is in scope. A loom item differs
 from a phone item in exactly three ways:
 
-- **No adb, so no device claim.** loom items never touch the handset — run
-  them without claiming, and never let a live device claim held by another
-  session block them. If *you* are holding the device for another app, keep
-  the claim and note that this item was off-device.
+- **No adb, so no `--device`.** loom items never touch the handset. Claim
+  the loom test itself (`wip claim loom#<n>`, no `--device`) so nobody else
+  runs it, and never let a live device claim held by another session block
+  it.
 - **The browser is the harness.** Use the in-app browser tools
   (`mcp__Claude_Browser__*`) exactly the way Step 3 uses `adb`: `navigate`,
   `read_page` / `get_page_text` to assert on structure and copy, screenshots
@@ -275,73 +272,69 @@ untested for no stated reason.
      own, so nothing runs it, closes it, or notices it is missing.
 
    Say what was repaired in the wrap-up.
-4. **Claim the device before touching it.** The lock is a comment on the
-   device's own issue in `Tessellate-Studio/litmus` (#43 the Pixel, #44 the
-   iPhone), never on an app's queue — format and semantics in
-   [`standards/workflows.md` → "Claiming the device"](../../standards/workflows.md).
-   Read the claims first:
+4. **Claim the tests — and with them the phone — before touching it.** There
+   is no lock issue: you claim each device-test issue you take with the
+   ordinary 🚧 work claim plus the phone it runs on, and the phone is busy
+   while any open test holds a live claim naming it — format and semantics in
+   [`standards/workflows.md` → "Claiming the device"](../../standards/workflows.md)
+   (`wip` not found → run `node "${CLAUDE_PLUGIN_ROOT}/tools/work-claim/cli.js"`
+   with the same arguments; a claim that fails is reported to the user, never
+   skipped). Read `dtq`'s **Devices** block first:
    - **Held by another session and still alive** → do NOT drive the device.
-     Say who holds it, when it last touched the phone, and what it's waiting
-     on; then stop **the device half of the drain**. Fetching, reading,
-     reporting and every **loom** item are still fine — those never touch the
-     handset; `adb` is what's off-limits. A claim is alive whenever it was
-     touched inside the last 30 minutes,
-     **however long ago it was taken** — a three-hour job that is still
-     working holds the phone — and a claim marked `**Waiting on:** human`
-     is alive indefinitely.
-   - **Free, released, or silent past the window** → post your own claim
-     comment on that lock issue, naming your session and the `adb` serial,
-     then proceed. If you
-     took over a silent claim, say so in yours.
-   - **Someone claimed between the launch check and now → you are the
-     newcomer; stand down.** The session that spawned you re-read the claims
-     immediately before spawning ("Before you spawn a drain", above). If a
-     `HELD` claim exists now that was not there then — or one has a lower
-     comment id than yours — the other session got there first even if the
-     gap is seconds. Release your claim, don't touch `adb`, and report who
-     holds it. The lower comment id wins (`losesRaceTo` in `claim-lib.js`):
-     ids are server-assigned, so both racers reach the same verdict without
-     comparing clocks.
-   - **`RELEASED` on every claim does not prove nobody is running.** It proves
-     nobody has claimed *yet*. A drain that was spawned moments ago has not
-     posted its claim, and a completion notification about a parent agent says
-     nothing about a descendant still driving the phone. Treat an all-released
-     issue as "free right now", claim it, then **re-read the claims once more
-     after posting yours** — if a second claim landed alongside it, apply the
-     rule above rather than proceeding.
+     Say who holds it, which test, when it last touched the phone, and what
+     it's waiting on; then stop **the device half of the drain**. Fetching,
+     reading, reporting and every **loom** item are still fine — those never
+     touch the handset; `adb` is what's off-limits. A device claim is alive
+     whenever it was touched inside the last 30 minutes, **however long ago it
+     was taken**, and one marked `Waiting on: human` is alive indefinitely.
+   - **Free** → pick a holder name once (`drain-` + 4 random hex) and pass
+     `--holder <it>` to EVERY `wip` call this drain makes — you share the
+     launching session's id, so without it you and a sibling drain are the
+     same claimant. Claim every test you intend to run on that phone this
+     sitting: `wip claim <repo>#<n> --device pixel --holder <it>` (iPhone:
+     `--device iphone --waiting-on "human — <what>"`). A non-zero exit means
+     not claimed — the label did not attach and the phone still reads free. Tests you then drop in Step 1 (needs-build,
+     parked) get `wip release`d straight away. If you took over a silent
+     claim, `--force` and say so.
+   - **Then re-read — you may be the newcomer.** Wait ~5s and run `dtq` again.
+     If Devices names another session, a rival claimed the same phone with a
+     **lower comment id** than your earliest claim: release every claim you
+     just posted, don't touch `adb`, and report who holds it. Comment ids are
+     global, so this settles a race even when the two drains claimed
+     different tests in different repos (`losesRaceTo` in `claim-lib.js`).
+     The session that spawned you re-read immediately before spawning ("Before
+     you spawn a drain", above); a live claim now that was not there then
+     means someone got there first, however small the gap.
+   - **No live claim does not prove nobody is running.** It proves nobody has
+     claimed *yet* — a drain spawned moments ago has not posted, and a
+     completion notification about a parent agent says nothing about a
+     descendant still driving the phone. That is why the re-read above is
+     not optional.
 
-   **Then keep the heartbeat up.** Rewrite `**Last touch:**` on your claim
-   every time you drive the device — piggyback it on the issue updates you're
-   already making per test, not as a separate timer. Before handing the phone
-   to a human, set `**Waiting on:** human — <what you asked for>`, and clear
-   it back to `—` when you resume. Silence is the only thing that releases a
-   claim you didn't close yourself.
+   **Keep the heartbeat up, and release as you go.** `wip touch <repo>#<n>
+   --holder <it>` whenever you drive the device — only the claim's own `Last
+   touch` keeps the phone; comments on the issue do not. Before handing the phone to a
+   human, `wip touch <repo>#<n> --waiting-on "human — <what you asked for>"`.
+   When a test's verdict is written, `wip release` it — and **claim the next
+   test before closing or releasing the last one you hold**, never the other
+   way round: a closed test drops out of the lock, and the moment you hold no
+   claim on an open test the phone reads free.
 
-   One claim per device, and it is advisory — nothing stops a raw `adb`
-   command. It exists because two sessions drove the same handset on
-   2026-09-01 and the collision could only be reconstructed afterwards by one
-   session messaging the other. Every session commits under the same GitHub
-   account, so the byline never reveals who is on the phone.
-
-   It happened again on **2026-09-07**, with the lock in place, because the
-   lock was only ever read from *here* — inside the agent, after it started.
-   A nested drain that had not claimed yet was indistinguishable from no drain
-   at all, a replacement was launched into the gap, and the two sessions
+   It is advisory — nothing stops a raw `adb` command. It exists because two
+   sessions drove the same handset on 2026-09-01, and again on **2026-09-07**,
+   when a nested drain that had not claimed yet was indistinguishable from no
+   drain at all, a replacement was launched into the gap, and the two
    interleaved through alate's body-profile mutate/restore flow and destroyed
-   the user's real saved profile. Each had snapshotted and restored correctly
-   on its own. That is why the check now also runs on the **launch** path
-   ("Before you spawn a drain", above) and why re-delegation is banned: a
-   claim can only protect a window it is inside.
-5. **A device claim is not a work claim.** 🔒 locks the handset; 🚧 says who
-   owns a piece of work
-   ([`standards/workflows.md` → "Work claims"](../../standards/workflows.md)).
-   The drain takes 🔒 and needs nothing else to walk the queue — but the moment
-   it stops draining and starts *fixing* a tracked issue or PR, that item gets
-   its own `wip claim <repo>#<n>` (`wip` not found → run `node "${CLAUDE_PLUGIN_ROOT}/tools/work-claim/cli.js"` with the same arguments; a claim that fails is reported to the user, never skipped), released when the fix is handed off. A drain
-   that files a failure is still draining; a drain that opens a fix PR is
-   working an item someone else could pick up.
+   the user's real saved profile. That is why the check also runs on the
+   **launch** path and why re-delegation is banned: a claim can only protect a
+   window it is inside.
+5. **Fixing is still a separate claim.** The moment the drain stops draining
+   and starts *fixing* a tracked issue or PR, that item gets its own `wip
+   claim <repo>#<n>` — no `--device` — released when the fix is handed off. A
+   drain that files a failure is still draining; a drain that opens a fix PR
+   is working an item someone else could pick up.
 6. **All queues empty → say so and stop.** Quiet is a correct result — don't
-   invent work. Close your claim before stopping (Step 4).
+   invent work. Release anything you claimed before stopping (Step 4).
 
 ### Step 1 — Split the work: agent items, human items, and build-blocked items
 
@@ -608,19 +601,16 @@ For each OPEN item on the current app:
 
 ### Step 4 — Wrap up
 
-**Close the device claim FIRST**, before writing anything up — two actions on
-the claim comment you posted on the litmus lock issue in Step 0 (nothing to
-close if this was a loom-only sitting and you never claimed):
+**Release every claim you still hold FIRST**, before writing anything up —
+`wip release <repo>#<n> --holder <it>` on each test you claimed in Step 0. That flips `Claim:` to RELEASED and drops
+the `claimed` label; a test left open as `failed` or `needs-build` is still
+released — the claim is about who is on it now, not whether it is done.
 
-1. edit it so `**Claim:**` reads `RELEASED`;
-2. **minimize it as Resolved** (GraphQL `minimizeComment`, `classifier:
-   RESOLVED`), so it collapses out of the lock issue instead of sitting there
-   looking live.
-
-Do this even when the drain failed, stopped early, or found nothing. Closing
-the claim is the signal that the phone is free — nothing else is. The
-no-touch window only covers a session that *crashed*; a session that finished
-and left its claim standing has told everyone else the device is busy.
+Do this even when the drain failed, stopped early, or found nothing. Releasing
+is the signal that the phone is free — nothing else is. The no-touch window
+only covers a session that *crashed*; a session that finished and left a claim
+standing has told everyone else the device is busy. Then run `dtq` and confirm
+Devices reads `free`.
 
 One table: item · app · verdict (✅ agent-verified, with screenshot / ✅ human-
 confirmed / ❌ → filed link + chip `task_id` (or "chip re-spawned", or how

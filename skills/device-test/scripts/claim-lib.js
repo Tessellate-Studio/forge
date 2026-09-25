@@ -1,232 +1,218 @@
-// Device claim — the 🔒 variant of the claim protocol: a soft lock so two
-// sessions don't drive the same phone at once.
+// Device lock — a soft lock so two sessions don't drive the same phone at once.
 //
-// WHY THIS EXISTS. The status board (dtq) is read-only and answers "what is
-// pending?". Nothing answered "is anyone on the device RIGHT NOW?". On
-// 2026-09-01 two sessions reached for the same handset (804KPSL1724518)
-// within the hour: one ran a 15-cycle relaunch investigation plus a full
-// drain, the other had enqueued a device item without claiming the device.
-// Neither announced. Because every session commits under the same GitHub
-// account, authorship is not readable from the byline either — the collision
-// had to be reconstructed afterwards by one session messaging the other.
+// WHY THIS EXISTS. The status board (dtq) answers "what is pending?". Nothing
+// answered "is anyone on the device RIGHT NOW?". On 2026-09-01 two sessions
+// reached for the same handset within the hour, and on 2026-09-07 two drains
+// interleaved through alate's body-profile mutate/restore flow and wiped the
+// user's real saved profile. Every session commits under the same GitHub
+// account, so the byline never says who is on the phone.
 //
-// The lock lives as a comment on a GitHub issue, so any session, on any
-// machine, and any human can read and release it with the tools they already
-// use. No new service, no local state file that a second machine cannot see.
+// WHERE IT LIVES (ADR-004, 2026-09-25, superseding RFD-003 §3). It used to be
+// a 🔒 comment on one pinned issue per handset in Tessellate-Studio/litmus.
+// That was a second place to look, a second claim format, and a lock that
+// said nothing about WHICH test was running. Now there is no lock issue: a
+// drain claims each device-test issue it takes with the ordinary 🚧 work
+// claim (`wip claim <repo>#<n> --device pixel`) — same `claimed` label, same
+// session / worktree / related fields a PR claim carries — and a phone is
+// busy while any OPEN device-test issue holds a live claim naming it. The
+// test list and the lock are the same list.
 //
-// WHICH issue changed on 2026-09-09 (RFD-003, forge#107). It used to be the
-// app's own device-test queue issue — which was wrong in a way that only
-// showed once there were four queues: the device is not any one app's, so a
-// lock on alate's queue was invisible to a drain working mood-layer's, and
-// the queue medium itself is being retired. It is now one pinned issue per
-// PHYSICAL DEVICE in Tessellate-Studio/litmus. See LOCK_REPO below.
+// TWO WINDOWS, ON PURPOSE. The work claim survives seven days of silence,
+// because nobody is blocked waiting on it. The PHONE is scarce: someone is
+// waiting, so a device claim stops holding the phone after
+// HEARTBEAT_STALE_MINUTES of silence — while the work claim itself stays
+// readable on the issue. A claim parked on a human (`Waiting on: human — …`)
+// never expires on either window.
 //
 // It is advisory, not enforced — nothing can stop a raw `adb` command. It
 // removes the ambiguity, which is what actually went wrong.
-//
-// WHAT LIVES WHERE (changed 2026-09-07). The MECHANISM — heading, fields,
-// HELD/RELEASED, the heartbeat, staleness, latest-comment-wins resolution —
-// is not specific to a phone, and a second claim (🚧 work claim, which says
-// which session owns a piece of WORK) proved it by re-implementing the whole
-// thing. Both now share tools/work-claim/lib/protocol.js and this file
-// declares only what makes the device claim different: the glyph, the
-// 30-minute silence window, `Claimed at` rather than `Started at`, and the
-// `Device` field. See that module's header for the two behaviours the merge
-// had to reconcile.
-//
-// HOW A CLAIM ENDS. It used to expire 45 minutes after it was taken. That
-// measured the wrong thing: plenty of fixes run longer than 45 minutes, and
-// the session still holding the phone had its claim quietly ignored mid-job.
-// A claim now ends when its holder CLOSES it — edit `**Claim:**` to RELEASED
-// and minimize the comment. The only automatic escape hatch is SILENCE, not
-// duration: the holder rewrites `**Last touch:**` every time it drives the
-// device, and a claim reads as abandoned only after HEARTBEAT_STALE_MINUTES
-// with no touch at all. A claim parked on a human step
-// (`**Waiting on:** human — …`) never expires, because a human step
-// legitimately takes hours and stealing the device out from under one is the
-// exact collision this lock exists to prevent.
 
-const path = require('path');
-
-const { NOT_WAITING, isNotice, createClaimProtocol } = require(path.join(
-  __dirname,
-  '..',
-  '..',
-  '..',
-  'tools',
-  'work-claim',
-  'lib',
-  'protocol.js'
-));
-
-/** No touch for this long and the holder is presumed gone — the backstop for
- *  a crashed session, NOT a cap on how long a job may hold the phone. Long
- *  enough to cover an OTA double-relaunch, a cloud-build download, or a human
- *  reading a step; short enough to clear within one sitting. */
+/** No touch for this long and the phone is presumed free — the backstop for a
+ *  crashed drain, NOT a cap on how long a job may hold the phone. Long enough
+ *  to cover an OTA double-relaunch, a cloud-build download, or a human reading
+ *  a step; short enough to clear within one sitting. */
 const HEARTBEAT_STALE_MINUTES = 30;
 
 /**
- * WHERE THE LOCK LIVES (RFD-003 §3, forge#107).
- *
- * Not in an app repo, because the device is not any one app's — alate,
- * mood-layer and badige all drive the same handset, and a lock that lived on
- * one of their queues would be invisible to a drain working another. Not in
- * forge, which is public, while a claim may legitimately name the unreleased
- * thing being tested. litmus is the private "shared testing utilities for
- * Tessellate mobile apps" repo, and a device is a shared test fixture — its
- * charter exactly. Zero files anywhere, as ADR-003 required.
- */
-const LOCK_REPO = 'Tessellate-Studio/litmus';
-
-/**
- * One pinned issue per PHYSICAL device, because they are claimed
- * independently: a drain can hold the Pixel over adb while a human is
- * mid-sitting on the iPhone, and neither should block the other.
+ * The physical devices, claimed independently: a drain can hold the Pixel
+ * over adb while a human is mid-sitting on the iPhone, and neither blocks the
+ * other. `key` is what a claim's `Device` field says.
  */
 const DEVICES = [
   {
+    key: 'pixel',
     serial: '804KPSL1724518',
     label: 'Pixel, Android',
-    repo: LOCK_REPO,
-    issue: 43,
     adb: true,
     waitsOnHuman: false,
   },
   {
+    key: 'iphone',
     serial: 'iphone',
     label: 'iPhone — TestFlight, no adb',
-    repo: LOCK_REPO,
-    issue: 44,
     adb: false,
 
-    // Every step on this device is someone's hands, so its claim sits
-    // permanently at `Waiting on: human` — and a claim parked on a human
-    // never expires. That is the honest description of a TestFlight device,
-    // not a way around the staleness rule.
+    // Every step on this device is someone's hands, so its claims sit at
+    // `Waiting on: human` — and a claim parked on a human never expires.
     waitsOnHuman: true,
   },
 ];
 
 /**
- * The device a serial names, defaulting to the adb handset.
+ * The device a name or serial refers to, defaulting to the adb handset.
  *
- * An unregistered serial is far likelier to be the Pixel re-flashed or
+ * An unregistered name is far likelier to be the Pixel re-flashed or
  * re-paired than a second phone nobody told the queue about, and guessing the
  * iPhone would park an agent-runnable drain on a human indefinitely — the
- * expensive direction to be wrong in.
+ * expensive direction to be wrong in. For the busy check it is also the SAFE
+ * direction: a claim naming an unknown device locks the handset rather than
+ * nothing.
  */
-function deviceFor(serial) {
-  return DEVICES.find(d => d.serial === serial) || DEVICES.find(d => d.adb);
+function deviceFor(name) {
+  const n = String(name || '')
+    .trim()
+    .toLowerCase();
+  return (
+    DEVICES.find(d => d.key === n || d.serial.toLowerCase() === n) ||
+    DEVICES.find(d => d.adb)
+  );
+}
+
+/** Does this parsed work claim hold this phone right now? */
+function holdsDevice(claim, device) {
+  if (!claim || !claim.device || !claim.held) {
+    return false;
+  }
+  if (deviceFor(claim.device) !== device) {
+    return false;
+  }
+  if (claim.waitingOnHuman) {
+    return true;
+  }
+  return (
+    claim.idleMinutes !== null && claim.idleMinutes <= HEARTBEAT_STALE_MINUTES
+  );
+}
+
+const byCommentId = (a, b) => (a.commentId || 0) - (b.commentId || 0);
+
+/**
+ * Drop claims a later claim on the SAME test has superseded.
+ *
+ * `wip claim --force` takes a silent test over by posting a new claim; the
+ * crashed holder's comment stays HELD because nobody alive can release it.
+ * Counting it would hand the phone back to a dead drain — it has the lower
+ * comment id — the moment anything made it look alive (review 2026-09-25).
+ *
+ * But only a TAKEOVER supersedes. Two drains racing for one test both post
+ * fresh claims, and there the lower id must still win; if "later retires
+ * earlier" applied to them too, the race rule would invert. So a later claim
+ * by a different holder retires an earlier one only if, when it was posted,
+ * the earlier was already silent past the window or parked on a human —
+ * i.e. only a `--force` over something the phone rules had let go of, or a
+ * deliberate takeover of a human-parked claim.
+ */
+function takenOver(earlier, later) {
+  if (earlier.waitingOnHuman) {
+    return true;
+  }
+  const touched = Date.parse(earlier.lastTouch);
+  const posted = Date.parse(later.at);
+  if (Number.isNaN(touched) || Number.isNaN(posted)) {
+    return true; // unreadable reads as stale, as everywhere in the protocol
+  }
+  return posted - touched > HEARTBEAT_STALE_MINUTES * 60000;
+}
+
+function current(claims) {
+  const list = (claims || []).filter(Boolean);
+  return list.filter(
+    c =>
+      !list.some(
+        later =>
+          later.testId === c.testId &&
+          later.heldBy !== c.heldBy &&
+          (later.commentId || 0) > (c.commentId || 0) &&
+          takenOver(c, later)
+      )
+  );
 }
 
 /**
- * The claim that beats mine, or null when mine stands — half of the
- * post-then-re-read rule (RFD-003 §3).
+ * Who holds the phone, or null when it is free.
  *
- * LOWEST comment id wins, not the latest. Ids are server-assigned and
- * monotonic, so two racers re-reading the same issue reach the SAME verdict
- * with no clock, no lease and no coordination: the earlier poster keeps the
- * device and the later one releases and stands down. The 16-second collision
- * on 2026-09-07 resolves in one round trip.
+ * @param claims every parsed claim on every OPEN device-test issue, across
+ *   all queue repos (see queue-lib `fetchDeviceClaims`)
  *
- * This does not contradict `activeClaim`'s latest-wins rule. That one groups
- * by holder first and answers "who holds it now" for display; this one
- * arbitrates between DIFFERENT holders during the race window, after which
- * only one HELD claim remains and the two agree again.
- *
- * Released and stale claims are skipped, so a crashed session that posted
- * first cannot wedge the device forever.
+ * When two drains both hold tests on one phone, the EARLIEST claim is the
+ * holder — the same verdict `losesRaceTo` gives the later drain.
  */
-function losesRaceTo(claims, myCommentId) {
-  const rivals = (claims || []).filter(
-    c => c && c.held && !c.stale && c.commentId && c.commentId < myCommentId
+function deviceHolder(claims, device) {
+  const live = current(claims).filter(c => holdsDevice(c, device));
+  return live.length ? live.sort(byCommentId)[0] : null;
+}
+
+/**
+ * The claim that beats mine, or null when mine stands — the post-then-re-read
+ * rule (RFD-003 §3, carried over).
+ *
+ * LOWEST comment id wins. GitHub comment ids are server-assigned and global,
+ * so two drains that claimed DIFFERENT tests, even in different repos, reach
+ * the same verdict with no clock and no coordination: the earlier poster
+ * keeps the phone, the later releases everything it claimed and stands down.
+ * My own other claims are never rivals — one drain holds several tests.
+ */
+function losesRaceTo(claims, device, myHeldBy) {
+  const live = current(claims);
+  const holder = deviceHolder(
+    live.filter(c => c.heldBy !== myHeldBy),
+    device
   );
-  if (rivals.length === 0) {
+  if (!holder) {
     return null;
   }
-  return rivals.reduce((a, b) => (b.commentId < a.commentId ? b : a));
+  const mine = live
+    .filter(c => c.heldBy === myHeldBy && holdsDevice(c, device))
+    .sort(byCommentId)[0];
+  return !mine || holder.commentId < mine.commentId ? holder : null;
 }
 
-const PROTOCOL = createClaimProtocol({
-  heading: 'Device claim',
-  glyph: '🔒',
-  staleMinutes: HEARTBEAT_STALE_MINUTES,
-  startedField: 'Claimed at',
-  subjectBefore: c =>
-    c.device && c.device !== 'any' ? ` device ${c.device}` : ' device',
-  fields: [{ name: 'Device', from: 'device', render: o => o.device || 'any' }],
-  footer: ({ staleMinutes }) => [
-    '_Written by /forge:device-test. The claim ends when its holder closes it:',
-    'edit **Claim:** to RELEASED and minimize this comment. There is no cap on',
-    'how long a job may hold the phone — refresh **Last touch:** on every',
-    `device action, and only ${staleMinutes} min of total silence`,
-    'reads as abandoned. A claim **Waiting on:** a human never expires._',
-  ],
-});
-
-const CLAIM_MARKER = PROTOCOL.MARKER;
-
 /**
- * Automated notices that post to the queue issue but are NOT tests — the
- * OTA-publish record written by eas-update.yml (📦), this device claim (🔒),
- * and the work claim a session posts when it picks up a tracked item (🚧).
- * They carry a heading and no Status line, so the item parser files them as
- * malformed items and the board nags forever about drift no human caused.
- * Six of the nine "unparseable" comments on alate#562 were exactly this.
+ * The board's Devices block: one row per phone.
  *
- * DERIVED, not hand-written: every claim variant registers its own glyph
- * with the protocol module as it is created. queue-lib.js — the only
- * consumer of this marker — imports the 🚧 variant for its `gh` helpers, so
- * both variants are always registered before the marker is read. There used
- * to be a require here whose only purpose was that registration; it went
- * when the real dependency made it redundant.
- *
- * The rest of the rule still holds: every claim variant registers its glyph
- * the protocol module. Item glyphs (🤖 🙋 🔧 ⚪ 🔴) must never be registered —
- * matching one would make every item carrying it invisible to the board, the
- * worst failure this parser has. 🤖 in particular was once listed here and had
- * to be removed when it became an item glyph.
+ * Any queue that could not be read makes EVERY device unreadable, never free:
+ * the claim that holds the phone may be sitting in exactly that repo, and
+ * "nobody is on the phone" and "I could not find out" are opposite
+ * instructions to a session about to drive it.
  */
-
-/**
- * Parse a claim comment. Returns null for anything that isn't one, so it can
- * be mapped over every comment on the issue.
- */
-const parseClaim = PROTOCOL.parse;
-
-/**
- * The live holder, or null when the device is free. Resolved per holder,
- * latest comment wins — see the protocol module's header for why.
- */
-const activeClaim = PROTOCOL.active;
-
-/**
- * Render a claim comment body.
- * Keep in sync with standards/workflows.md → "Claiming the device".
- */
-function claimBody(opts) {
-  return PROTOCOL.render({
-    ...opts,
-    device: opts.device || 'any',
-    held: opts.held !== false,
-  });
+function resolveDevices(claims, errors = []) {
+  return DEVICES.map(device =>
+    errors.length
+      ? { device, error: errors.join('; ') }
+      : { device, claim: deviceHolder(claims, device) }
+  );
 }
 
-/** One-line summary for the board / hook. Empty string when free. */
-const describeClaim = PROTOCOL.describe;
+/** One-line summary for the board: which phone, which test, who. */
+function describeDeviceClaim(device, claim) {
+  if (!claim) {
+    return '';
+  }
+  const idle =
+    claim.idleMinutes === null ? '?' : `${Math.round(claim.idleMinutes)}m`;
+  const parked = claim.waitingOnHuman ? `, waiting on ${claim.waitingOn}` : '';
+  return `🔒 ${device.label} — ${claim.testId || 'a test'} claimed by ${
+    claim.heldBy
+  } (last touch ${idle} ago${parked})`;
+}
 
 module.exports = {
   HEARTBEAT_STALE_MINUTES,
-  LOCK_REPO,
   DEVICES,
   deviceFor,
+  holdsDevice,
+  deviceHolder,
   losesRaceTo,
-  PROTOCOL,
-  CLAIM_MARKER,
-  isNotice,
-  NOT_WAITING,
-  parseClaim,
-  activeClaim,
-  claimBody,
-  describeClaim,
+  resolveDevices,
+  describeDeviceClaim,
 };
