@@ -61,7 +61,7 @@ describe('canonical set', () => {
     }
   });
 
-  test('every needs-* label is a shade of the khaki infra/invalid wore (E4E669)', () => {
+  test('every needs-* label is one of the muted needs shades', () => {
     const needs = L.canonicalFor('alate').filter(l =>
       l.name.startsWith('needs-')
     );
@@ -71,7 +71,6 @@ describe('canonical set', () => {
       'needs-input',
       'needs-triage',
     ]);
-    expect(needs.find(l => l.name === 'needs-input').color).toBe('E4E669');
     for (const l of needs) {
       expect(L.NEEDS_SHADES).toContain(l.color);
     }

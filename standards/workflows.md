@@ -390,8 +390,8 @@ relabelling.
 `gh label create`; run bootstrap instead, which also re-colours drifted labels.
 The palette (owner ruling 2026-09-25) is earthy, muted and bright mixed, one
 colour per label, and a family shares a hue: `P0`–`P3` run brick → sand, the
-device-test queue is browns, and every `needs-*` label is a shade of khaki
-`E4E669`.
+device-test queue is browns, and every `needs-*` label is a muted grey-purple
+or dusky blue.
 
 **What every open work issue carries:** exactly one `P0`–`P3`; an area label in
 loom and alate; and `claimed` for as long as a session is working it — `wip

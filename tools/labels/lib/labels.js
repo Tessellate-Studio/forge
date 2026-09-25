@@ -7,9 +7,9 @@
 //
 // Colours — owner ruling 2026-09-25: earthy, muted and bright mixed, every
 // label its own colour, and a family shares a hue. P0–P3 run brick → sand;
-// the device-test queue's labels are browns; every `needs-*` label is a shade
-// of the khaki (E4E669) that infra and invalid wore before, so a blocked
-// issue reads as blocked at a glance. __tests__ pins the stock GitHub colours
+// the device-test queue's labels are browns; every `needs-*` label is a
+// muted grey-purple or dusky blue, so a blocked issue reads as blocked at a
+// glance. __tests__ pins the stock GitHub colours
 // these replaced out of the set.
 
 const {
@@ -18,8 +18,8 @@ const {
   CLAIM_LABEL_DESC,
 } = require('../../work-claim/lib/claim');
 
-// needs-input keeps the khaki itself; the others are shades of it.
-const NEEDS_SHADES = ['E4E669', 'CFD15A', 'F0F1B0', 'B3B447'];
+// The needs-* family: muted grey-purples and dusky blues.
+const NEEDS_SHADES = ['8E86A8', 'B3ADC9', '7C91AB', 'A9B7CA'];
 
 // Owner ruling 2026-09-19: the descriptions keep the "Priority N — " prefix
 // that the P labels were created with on 2026-09-18 in every repo.
@@ -44,7 +44,7 @@ const TYPE = [
   },
   {
     name: 'refactor',
-    color: '7E7A94',
+    color: '9B7B8E',
     description: 'Code restructuring without behavior change',
   },
 ];
@@ -59,7 +59,7 @@ const LIFECYCLE = [
   {
     // Text and colour are the ones standards/workflows.md prescribes.
     name: 'on hold',
-    color: 'A7B8C4',
+    color: 'BCB38A',
     description:
       'Deliberately paused — needs review by a set date, not indefinite (see forge/standards/workflows.md)',
   },
@@ -90,7 +90,7 @@ const PROVENANCE = [
 ];
 
 // RFD-003 device-test queue. The queue's own labels are browns; its two
-// needs-* labels join the khaki needs family.
+// needs-* labels join the needs family.
 const DEVICE_TEST = [
   {
     name: 'device-test',
@@ -122,14 +122,14 @@ const DEVICE_TEST = [
 // Owner amendment to RFD 004 Q6 (2026-09-19): area labels in loom and alate
 // ONLY — and every issue in those two repos carries one (`wi new` refuses
 // without it). loom keeps its existing names and descriptions; both repos'
-// area colours were re-picked 2026-09-25, and infra gave its khaki up to the
-// needs-* family. mood-layer's existing area labels are left untouched —
+// area colours were re-picked 2026-09-25; infra keeps its khaki, the colour
+// invalid wears too. mood-layer's existing area labels are left untouched —
 // bootstrap never deletes — and badige gets none.
 const AREA = {
   loom: [
     {
       name: 'admin-ui',
-      color: '5B7F95',
+      color: '46708C',
       description: 'Embedded Shopify admin app (admin/)',
     },
     {
@@ -152,10 +152,10 @@ const AREA = {
       color: 'E0B39A',
       description: 'Schema, migrations, RLS',
     },
-    { name: 'infra', color: '6E6259', description: 'Infrastructure/CI/CD' },
+    { name: 'infra', color: 'E4E669', description: 'Infrastructure/CI/CD' },
   ],
   alate: [
-    { name: 'mobile', color: '5B7F95', description: 'Expo app (mobile/)' },
+    { name: 'mobile', color: '46708C', description: 'Expo app (mobile/)' },
     {
       name: 'backend',
       color: 'B5835A',
@@ -173,7 +173,7 @@ const AREA = {
       description:
         'Fit guidance and size finder (backend/sdk/fitGuidance, sizeFinder)',
     },
-    { name: 'infra', color: '6E6259', description: 'Infrastructure/CI/CD' },
+    { name: 'infra', color: 'E4E669', description: 'Infrastructure/CI/CD' },
   ],
 };
 
