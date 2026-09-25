@@ -39,6 +39,12 @@ const {
 } = require('./lib/merge-gate.js');
 const { withDeadline } = require('./lib/session-start.js');
 
+// The hint below tells a human to create a label; it reads the name, colour
+// and description from the registry so it cannot mint a drifted copy.
+const UNVERIFIED = require('../tools/labels/lib/labels.js').labelSpec(
+  'device-unverified'
+);
+
 const execFileAsync = promisify(execFile);
 
 // The device-test question (forge#104) may take this long. hooks.json gives
@@ -147,8 +153,8 @@ const DEVICE_REFUSAL = ({ detail, repo, pr }) =>
     '\n\nEither:',
     '\n  1. Run the test first (/forge:device-test), close it `completed` when it passes, then merge; or',
     '\n  2. Merge before a device pass ON PURPOSE, and say so on the PR, where it stays:',
-    `\n     gh label create device-unverified -R ${repo} --color d93f0b --description "Merged before its device test passed" || true`,
-    `\n     gh pr edit ${pr} -R ${repo} --add-label device-unverified`,
+    `\n     gh label create ${UNVERIFIED.name} -R ${repo} --color ${UNVERIFIED.color} --description "${UNVERIFIED.description}" || true`,
+    `\n     gh pr edit ${pr} -R ${repo} --add-label ${UNVERIFIED.name}`,
     '\n\nShipping first is often right — an OTA-delivered change can only be tested once it ships.',
     ' What this changes is that it is no longer silent. Do not add the label just to get past this',
     ' hook: if the change has not been thought about, ask the user.',

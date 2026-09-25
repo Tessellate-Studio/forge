@@ -66,8 +66,10 @@ const LIFECYCLE = [
       'Blocked on a human answer that is not a doc approval, or on an open decision PR',
   },
   {
+    // Not FBCA04 (P2's colour, until 2026-09-25) — an untriaged issue must
+    // not read as a P2.
     name: 'needs-triage',
-    color: 'FBCA04',
+    color: 'D876E3',
     description: 'Filed without a P label — triage sets exactly one of P0–P3',
   },
 ];
@@ -103,7 +105,33 @@ const DEVICE_TEST = [
     name: 'failed',
     description: 'This device test failed — see the latest comment',
   },
+  {
+    // On a PR, not a test: merged before its device test passed, on purpose
+    // (hooks/merge-gate.mjs). Created ad hoc by the hook's hint, in P1's
+    // colour, until it joined the registry on 2026-09-25.
+    name: 'device-unverified',
+    description: 'Merged before its device test passed',
+  },
 ].map(l => ({ ...l, color: '5319E7' }));
+
+/** The registry entry for one label, by name — for code that has to tell
+ *  someone to create or apply it, so the hint cannot drift from the set. */
+function labelSpec(name) {
+  const all = [
+    ...PRIORITY,
+    ...TYPE,
+    ...LIFECYCLE,
+    ...PROVENANCE,
+    ...DEVICE_TEST,
+  ];
+  const found = all.find(l => l.name.toLowerCase() === name.toLowerCase());
+  if (!found) {
+    throw new Error(
+      `"${name}" is not in the label registry (tools/labels/lib/labels.js)`
+    );
+  }
+  return found;
+}
 
 // Owner amendment to RFD 004 Q6 (2026-09-19): area labels in loom and alate
 // ONLY. loom keeps its existing set as-is (colours and descriptions copied
@@ -225,4 +253,5 @@ module.exports = {
   LEGACY_PRIORITY,
   canonicalFor,
   planLabels,
+  labelSpec,
 };
