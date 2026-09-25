@@ -12,6 +12,56 @@ only _linked_ from here — same single-home principle.
 
 ---
 
+## Process tiers — which rules never bend
+
+Owner rule, 2026-09-25: **consistency in process is the point, and processes
+have priorities.** When time, scope or cost forces a trade-off, the critical
+tier is never skipped; a minor process may be, but the skip is **named out
+loud** in the report ("skipped /simplify — one-line fix"). A skipped critical
+process is a defect, whatever else shipped.
+
+| Tier | Process | Home |
+|---|---|---|
+| **Critical** | OWASP / security triage | `security-triage.md` |
+| **Critical** | Everything through a PR; nothing committed to `master` | "Draft first, then merge on green" |
+| **Critical** | PRs open as draft; the owner promotes and merges | same |
+| **Critical** | A merge is confirmed by the PR's state, never an exit code | same |
+| **Critical** | Work claims and device claims (`wip`) | "Work claims", "Claiming the device" |
+| **Critical** | Failing test first; suite green before commit | `anti-patterns.md` |
+| **Critical** | Cloud builds only; CI-spend rules | "CI spend" |
+| **Critical** | New labels, claim formats and queue conventions go through the existing registry | "One registry for process artifacts", below |
+| **Critical** | Device-test enqueue for anything only a phone can verify | "Device-test queue" |
+| **Critical** | Read the regression log before a bug fix | app `memory/project_regression_log.md` |
+| Minor | `/simplify`, `/design-critique` | "Quality pass before commit" |
+| Minor | Adversarial review on a small diff (`/code-review` covers it) | same |
+| Minor | Closing-retro detail beyond the three questions | build-feature Step 7 |
+| Minor | Collapsing shipped doc entries to tombstones | "Docs stay lean" |
+| Minor | Runbook formatting polish | `docs/manual-runbook.md` |
+| Minor | A regression-log entry for a trivial fix | app regression log |
+
+A process not in this table is minor by default. Promoting one to critical is
+an owner decision recorded here, not a session's judgement call.
+
+### One registry for process artifacts
+
+Before adding a label, a claim field, a queue convention or a similar
+artifact, **extend the one that exists — never build a parallel one.**
+
+- **Labels** live in `tools/labels/lib/labels.js` (name, colour,
+  description), and `tools/labels/bootstrap.js` creates them. Anything that
+  tells someone to create or apply a label reads it from there
+  (`labelSpec(name)`); `tools/labels/__tests__/registry.test.js` fails CI on a
+  `gh label create` / `--add-label` for a name the registry does not have, or
+  in a colour it does not use. No label other than a P label wears a P
+  colour, so priority reads at a glance.
+- **Claims** are the 🚧 work claim. A new kind of ownership is a field on it
+  (the device lock is `--device`, ADR-004), not a new claim format.
+- **Queues** are labelled issues with state in labels, per "Device-test
+  queue". A new queue follows that shape.
+
+The litmus device lock (retired 2026-09-25) is the example: a second claim
+format in a second place, doing a job the existing claim did with one field.
+
 ## Branch placement — AUTOMATIC, do not ask
 
 When a task's changes don't belong on the currently checked-out branch, cut a
@@ -569,13 +619,8 @@ gh pr edit <n> -R <owner/repo> --add-label "on hold"
 gh pr comment <n> -R <owner/repo> --body "**On hold** — <why>. Review by **<date, +14 days>**."
 ```
 
-Create the label per-repo if it does not exist yet (color `bfd4f2`, same
-description everywhere):
-
-```bash
-gh label create "on hold" -R <owner/repo> --color bfd4f2 \
-  --description "Deliberately paused — needs review by a set date, not indefinite (see forge/standards/workflows.md)"
-```
+If the repo lacks the label, create it from the registry — same colour and
+description everywhere: `node tools/labels/bootstrap.js --repo <repo>`.
 
 **The rules:**
 
@@ -769,13 +814,12 @@ matches gets the new detail as a comment instead of a second issue; the same
 failure is routinely reported by several sessions, and a queue with four
 copies of one test wastes a device sitting four times over.
 
-**Labels are created on first use** — self-healing, so a repo joining the
-queue needs no setup:
+**A repo joining the queue gets its labels from the registry** — the same
+names, colour and descriptions as every other repo ("One registry for process
+artifacts"):
 
 ```bash
-for l in device-test needs-human needs-build parked failed; do
-  gh label create "$l" --repo Tessellate-Studio/<repo> --color 5319e7 || true
-done
+node tools/labels/bootstrap.js --repo <repo>   # idempotent; --dry-run first
 ```
 
 ### What goes in the body
