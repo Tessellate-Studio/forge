@@ -115,6 +115,15 @@ exit it by verifying yourself.
 
 ## Step 1 — Turn the ask into ACCEPTANCE CRITERIA, and clarify real forks
 
+**Is the ask a rule or a reported bug?** ("any time…", "every…", "never…",
+or a complaint the tracker has seen before.) Then build the coverage matrix
+first, per [`workflows.md` → "Every reported rule covers every
+state"](../../standards/workflows.md): search closed issues for the same
+complaint, list every entry point and every state that changes the outcome,
+and write one criterion per cell. The criteria below come from that matrix,
+not from the one screenshot. A fix covering only the reported state is the
+most common way a "fixed" complaint comes back.
+
 Before building, write down 2–5 **objective, checkable** criteria — the things
 you'll measure on the screenshot to decide pass/fail. Vague goals ("looks
 balanced") cause the endless-iteration trap; concrete ones end it. Express them

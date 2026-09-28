@@ -706,6 +706,43 @@ is minutes):
    who else is in the file first (see "Shared planning docs" above).
 3. 3+ entries on one theme → promote to an anti-pattern (app's
    `memory/project_anti_patterns.md`, or here if app-agnostic).
+4. **Search the tracker for the same complaint, too — closed issues
+   included** (`gh search issues -R <repo> "<symptom words>" --state all`).
+   A complaint that comes back after a "fixed" issue closed means the earlier
+   fix covered part of it. Before you write code, say what that fix missed and
+   why, and make your fix cover the gap.
+
+### Every reported rule covers every state — the coverage matrix
+
+When the owner states a behaviour as a rule ("any time a user…", "every
+settings door…", "never show X"), it applies to **every entry point in every
+state**, not just the one in the screenshot. A fix that covers the reported
+state and leaves the rest is a half-fix. It reads as done, the same complaint
+comes back, and the owner has to repeat themselves.
+
+*Precedent (alate, 2026-09-22 → 09-28):* "the settings icon should open
+Measurements" was fixed three times: #1007, #1026, #1119. Each fix covered
+the state it was reported in, with a profile, and left the no-profile case on
+the questionnaire. The fourth report was angry, rightly.
+
+Before writing acceptance criteria for such a rule:
+
+1. **List the entry points.** Grep for every call site that reaches the
+   behaviour: every `navigate('<Screen>')`, every render condition for the
+   element, and every handler. Don't rely on the screens you remember.
+2. **List the states that change the outcome**, e.g. no profile / profile /
+   numbers on file, signed in / out, dark / light canvas, first launch /
+   returning.
+3. **Write one acceptance criterion per cell** (entry point × state), each
+   with its own test. A cell you decide should behave differently is written
+   down with the reason, not left out silently.
+4. **Where the code allows it, put the rule in one place** (one helper that
+   every door calls, one condition every render reads) and add a source-scan
+   test that fails the build on a new bypass. Then the next door added can't
+   drift from the rule either.
+
+Put the matrix in the PR description. That lets the reviewer check coverage,
+not just correctness.
 
 ## TDD — write tests first
 
