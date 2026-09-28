@@ -900,6 +900,12 @@ node tools/labels/bootstrap.js --repo <repo>   # idempotent; --dry-run first
 them.** A test that cannot run on any device or store you have is not a test;
 it is a request for someone to discover that for you. One `curl` first would
 have saved a live store setting being flipped for nothing (alate, 2026-09-05).
+For alate and loom, pick the product **by parameter** from the
+[litmus test catalog](https://github.com/Tessellate-Studio/litmus/blob/main/docs/test-catalog.md)
+(colour, photo, stock, chart, stretch, category, size axis, price → a product
+and URL kept in that state nightly) and name it in the Step — *"an in-stock
+product with a rust garment photo and no colour word → <url>"* — instead of
+hoping a product happens to fit (alate#1049 lost several rounds that way).
 
 **Write Steps machine-first.** The drain executes every step it can reach
 itself — launch/force-stop, `adb shell input tap`/`text`/`keyevent`,
