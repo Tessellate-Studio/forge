@@ -255,8 +255,8 @@ git -C <checkout> status --porcelain | wc -l           # dirty count
 
 Fix only what is provably safe, report the rest:
 
-- Parked on a branch whose PR is **MERGED** → rename to `done/<branch>`,
-  checkout the default branch, `git pull --ff-only`.
+- Parked on a branch whose PR is **MERGED** → checkout the default branch, `git pull --ff-only`, then `git branch -D <branch>` (the PR keeps its commits),
+  per `standards/workflows.md` → "Merged branches".
 - Clean checkout behind origin → `git pull --ff-only`.
 - Dirty files or unpushed commits → **never discard; report** with the file
   list. They may be another live session's work. Unstaged _deletions_ of

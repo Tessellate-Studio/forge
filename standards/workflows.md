@@ -78,7 +78,7 @@ current branch. Use `git worktree add` when the current branch has uncommitted
 work to preserve. Separate code commits from doc commits; run the app's full
 test suite before either commit.
 
-## Merged branches — delete them, or mark them `done/`; both are fine
+## Merged branches — delete them (auto-delete is on in every repo)
 
 **Nothing is lost when a merged branch is deleted.** A PR's commits stay
 reachable at `refs/pull/<n>/head` for the life of the repo — including the
@@ -93,13 +93,15 @@ That recovers the branch tip and its full history for investigation, and it
 works even for a PR that was merged and then reverted — the reverted content
 is still readable at that ref.
 
-So deletion is safe, and it is the simplest end state: leaving GitHub's
-"Automatically delete head branches" (`delete_branch_on_merge`) on is fine, as
-is `gh pr merge --delete-branch`.
+So deletion is the standard (owner decision 2026-09-28, matching common
+industry practice): GitHub's "Automatically delete head branches"
+(`delete_branch_on_merge`) is **on in every Tessellate repo**, and local
+branches and worktrees go once their PR has merged. One worktree per task;
+remove it (`git worktree remove`) when the PR merges, then `git fetch --prune`.
 
-Keeping a merged branch is also fine — **rename it `done/<original>`**
-(`git branch -m <original> done/<original>`). The prefix is a pruning marker,
-not an archive: it records "merged, safe to delete without re-verifying".
+Renaming to `done/<original>` is **retired**. Old `done/` branches are
+pruned with the classify-first procedure below, and it applies just as well to
+any local branch: the prefix only ever recorded "merged, safe to delete".
 
 That marker earns its keep because **under squash merge, git cannot tell you a
 branch was merged.** Squashing rewrites the commits, so the branch tip is never
@@ -158,15 +160,10 @@ One more thing that will bite during the sweep: a branch **checked out in a
 worktree** cannot be deleted at all — git refuses, so finish or
 `git worktree remove` that worktree first.
 
-The two settle into one lifecycle — `done/` is the staging state, deletion is
-the end state — so pick per repo and don't treat the choice as a contradiction:
-
-- **Auto-delete on** — nothing to do; the head branch goes at merge.
-- **Auto-delete off** — rename to `done/<original>` rather than leaving a
-  merged branch under its original name, then prune periodically.
-
-Either way the _remote_ side is settled at merge; `done/` is about the local
-branch list you actually read every day.
+The lifecycle: the remote head branch goes at merge (auto-delete). The local
+branch and worktree go after it, classified against the merge record, never by
+guessing. Never remove a worktree held by a live `wip` claim, one with an open
+PR, or one with uncommitted changes. Report those instead.
 
 Two things stay wrong either way: **leaving a merged branch under its original
 name** (indistinguishable from live work, so every later sweep has to re-verify
