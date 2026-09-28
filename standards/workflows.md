@@ -803,6 +803,39 @@ prose, and prose drifts. A `**Status:**` line, a mirrored heading glyph, an id
 stamped by a second API call, and "one comment per test" as convention are all
 things an issue simply is.)*
 
+### Wiping app data on a real device — back up first, restore after
+
+A test may wipe the app's data on the owner's own phone when it needs a fresh
+state: `pm clear`, signing out, "Delete my profile", "Clear all measurements",
+an onboarding or age-gate reset. That is allowed (owner, 2026-09-28) on four
+conditions, and each is a step the drain RUNS, not a note it writes:
+
+1. **Back up before the first destructive step.** Capture everything the wipe
+   removes that the owner entered: the profile read-back and every answer
+   behind it (open "All N answers"), exact measurements with every collapsed
+   section expanded ("More measurements"), budget and currency, which account
+   is signed in, and any other setting the test touches. Screenshots plus the
+   values written out, kept in the drain's **local scratchpad only** — this is
+   body data: never in an issue, PR, commit, log line or chat summary.
+2. **Know which wipes reach the cloud.** `pm clear` is local: signing back in
+   pulls the synced copy. A delete made while signed in ("Delete my profile",
+   "Clear all measurements", deleting the account) syncs the empty state and
+   overwrites the cloud copy, so the cloud is **not** the backup for those.
+   The scratchpad backup is.
+3. **Can't back up all of it → don't wipe.** A value the backup can't see (a
+   section that won't expand, an answer the app doesn't read back) makes the
+   step `HUMAN:` — label the test `needs-human` and say which value is missing.
+4. **Restore when the check completes — passed, failed or abandoned — before
+   releasing the device claim.** Sign back in, re-enter from the backup, then
+   compare the read-back with the backup screen by screen. An unverified
+   restore counts as not done. The wrap-up states one of: "data wiped → restored
+   and verified", or exactly what is still missing, reported to the owner at once.
+
+*(2026-09-28, drain-c3a5 on 804KPSL1724518: "Delete my profile" for alate#1053
+at 15:45 while signed in, then `pm clear` for alate#1023 at 15:50, no backup,
+no restore. The owner's exact measurements survived only in the drain's own
+earlier screenshots; four of the ten profile answers were unrecoverable.)*
+
 ### Enqueue
 
 ```bash

@@ -445,6 +445,15 @@ the unblock is the user's.
 
 For each OPEN item on the current app:
 
+0. **A step that wipes app data needs a backup first and a verified restore
+   after** — `pm clear`, sign-out, "Delete my profile", "Clear all
+   measurements", any onboarding reset. Back up to your local scratchpad
+   before the first such step, restore before you release the device claim,
+   and wipe nothing you couldn't back up. Full rule:
+   [`workflows.md` → "Wiping app data on a real device"](../../standards/workflows.md).
+   The owner's phone holds their real profile; on 2026-09-28 a drain wiped it
+   with no backup and four answers were lost for good.
+
 1. **Execute every non-`HUMAN:` step yourself** — yourself, not via another
    agent (see "Model"): `adb shell am force-stop` /
    `monkey -p <pkg> 1` or `am start` to launch, `adb shell input tap/swipe/
