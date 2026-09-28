@@ -210,6 +210,12 @@ jobs:
       - name: Upload Inspection Report
         uses: actions/upload-artifact@v4
         if: inputs.generate_report == true
+        # Advisory, like the PR comment below: the verdict already lives in
+        # the step summary and the inspect step's outputs. A full artifact
+        # storage quota ("Artifact storage quota has been hit", alate#1126,
+        # 2026-09-28) otherwise fails every caller's PR check with nothing
+        # wrong in the code.
+        continue-on-error: true
         with:
           name: code-standards-inspection-report
           path: |
