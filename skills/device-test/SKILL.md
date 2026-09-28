@@ -551,7 +551,11 @@ For each OPEN item on the current app:
    (screenshot/logcat; the user's words for a `HUMAN:` step), file it where
    the app's rules say — regression-log row via PR, or a GitHub issue — and
    **label the test `failed`, leaving it OPEN**, with a comment linking the
-   bug. A bug filed as an issue gets `bug` and `P1` in the create call: it
+   bug. **First, size it:** a failure that only reproduces on our own
+   dev/test/seeded setup, or on a path few real users take, is noted on the
+   test and reported in the wrap-up as a won't-fix candidate for the owner —
+   no P1, no chip (`standards/anti-patterns.md` → "Size the fix to how often
+   it really happens"). Otherwise, a bug filed as an issue gets `bug` and `P1` in the create call: it
    is a work item like any other (`${CLAUDE_PLUGIN_ROOT}/standards/workflows.md`
    → "Work items are GitHub issues"), and a failed on-device path is "do
    next". The `device-test` issue itself stays **outside** the P scheme — no

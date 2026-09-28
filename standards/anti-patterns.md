@@ -284,6 +284,29 @@ version of this precedent called merchants unaffected — the same unmeasured
 severity, pointed the other way (forge#89). Severity was never established at
 the entry point in either direction; the grep is what showed it was open.*
 
+## Size the fix to how often it really happens — no over-engineering
+
+Before filing, building or extending a fix, state how often the defect reaches
+real users: the share of real traffic, or who actually hits it. A defect seen
+only on our own dev, test or seeded stores, or on a path a handful of real
+users could ever take, gets a one-line mention and a recommendation (usually
+"won't fix", or the smallest possible change). It does not get a P1, a chip,
+or new machinery. The same test applies to review findings on a fix: when an
+adversarial-review finding lands on a rare path, prefer the smallest fix or a
+documented won't-fix over new layers (migrations, new stores, new abstractions,
+new infrastructure). **Why:** every added layer is permanent maintenance and
+review surface. A rare case that attracts review findings is how a one-line
+tweak becomes a migration nobody needed. The owner wants a lean codebase, and
+that call belongs to the owner, not to the momentum of a queue. *Precedent:
+alate (2026-09) — a device-test drain on the team's own dev store surfaced
+"stores on `<shop>.myshopify.com` are named 'Myshopify'". It was filed, fixed,
+reviewed, and grew a persisted-store migration after a review finding (#1097),
+then closed unmerged by the owner as "a negligible edge case": real brands
+share links on their own domain. The password-protected-store guard
+(#1046/#1050) drew the same "is this even a reality?" question.* Frequency is
+evidence: cite where it comes from (traffic, logs, an owner report), or label
+it a hypothesis, per "Speak from authority".
+
 ## WCAG 2.1 AA is a requirement, not a later polish pass (was #17)
 
 Every screen ships meeting WCAG 2.1 AA: text contrast ≥4.5:1 (3:1 large),
