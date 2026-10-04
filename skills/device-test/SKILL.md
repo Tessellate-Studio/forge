@@ -154,6 +154,14 @@ still exist) keep the queue moving without a manual trigger:
   → "CI spend" for why this is the one standing exception to "no build without
   a human click," and the guardrails that keep it from becoming an
   unconditional timer.
+- **Ship-train apps (alate since 2026-10-04): the drain rides the train.**
+  An app whose `CLAUDE.md` says OTAs ship on a train gets its drain from the
+  train's own scheduled task — right after that train's OTA publishes, one
+  drain tests every item the train carried, instead of one drain per OTA.
+  Don't start a separate drain for a train app just because a merge landed:
+  its items aren't on the phone until the train leaves. Before testing,
+  confirm the running update group is the train's (Step 2 already checks
+  this per item).
 
 Both tasks' prompts just need to say "run the forge:device-test skill" (daily)
 or describe the narrower weekly check above — the actual logic lives here, in
