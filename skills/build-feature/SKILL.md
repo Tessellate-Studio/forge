@@ -403,6 +403,16 @@ good PRs and destroys feedback speed, so the bulk of E2E runs _post_-merge.
    diff genuinely can't ship this way. (Precedent: alate, 2026-08-30 — asked
    "can this ship?" after a fully-verified fix; the user's answer was "I
    don't see why this needs to be an explicit instruction.")
+   **Exception — the app runs a ship train.** If the app's `CLAUDE.md`
+   says OTAs ship on a train (alate since 2026-10-04, pitch-018), do NOT
+   publish after merge: the train's scheduled run carries every merge since
+   the last OTA in ONE publish, and the drain after it tests them together.
+   Say "rides the <time> train" in the report and stop. A per-merge publish
+   on a train app is the waste the train exists to remove (alate: 97 OTAs in
+   30 days, two of them the same commit 45 min apart). Publish immediately
+   only when the owner explicitly asks to ship now — and use the train's own
+   entry point if it has one, so the ship-now carries everything pending.
+   The checks below still apply to whoever publishes (the train included).
    a. **Confirm the diff is OTA-safe first.** An OTA carries JS + assets
    only. If the merge touched anything native-relevant (dependency
    versions, native config fields, build-tool env, platform native
@@ -507,7 +517,9 @@ standard so the next build inherits it.
 - Device loop details, adb discovery, fingerprint caveat: **`references/device-loop.md`**.
 - Ship to production (Step 6, item 3): publish an OTA to the app's LIVE
   channel right after merge, no confirmation needed — self-doable, same as
-  triggering CI. Verify the branch is current with the default branch first
+  triggering CI. **Unless the app runs a ship train** (its `CLAUDE.md` says
+  so — alate does): then the merge rides the next train; publish only on
+  the owner's explicit "ship now". Verify the branch is current with the default branch first
   (stale-branch publishes ship silently with no error), and check the
   channel/runtime against the app's own docs — it's app-specific and changes
   between releases.
