@@ -444,11 +444,21 @@ gh pr list --state open --json number,headRefName,files \
   already have work in flight. When dispatching parallel sessions yourself, name one
   owner per file or area up front — that is the only fix that acts *before* the
   duplicate work exists.
+- **Read what LANDED on your files, not only what is open.** Open PRs miss the change
+  that merged since your branch point: before editing, run
+  `git fetch && git log --oneline <your base>..origin/<default> -- <files you will touch>`
+  and read each hit's diff. A fix written against code that was rewritten an hour ago
+  either conflicts or, worse, merges cleanly and fixes the old shape.
 
 *Precedent for the duplicate case: PRs #379 and #380 were opened three minutes apart
 with the same change (`timeout-minutes` on every CI job) by two sessions; #380 was
 closed as a duplicate, and a cross-session message could not resolve it because both
 branches were already written.*
+
+*Precedent for the landed case: alate #1281 rewrote ExpandedFitAnalysis's re-check row
+30 minutes after #1282 merged a fix to the same lines (2026-10-04). The follow-up fix
+(#1293) was about to be written against the pre-#1281 condition until the owner asked
+for a merged-PR check first.*
 
 **Why:** both branches are isolated, green, and individually correct. The defect
 exists only in their union, so nothing either session can run locally will show it.

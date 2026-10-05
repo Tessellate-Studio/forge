@@ -149,6 +149,19 @@ Then **Read** `alate-verify.png` and measure against the acceptance criteria.
   `"$ADB" $D shell dumpsys activity activities | grep -m1 -i mResumedActivity`
   (the alate activity is `com.tessellate.alate/.MainActivity`; another package
   means your tap missed — relaunch alate).
+- **alate's Home deck (parallax cards), 2026-10-05:** a horizontal swipe must START on
+  the front card (x ≲ 1000 of 1440) — `input swipe 900 1300 120 1300 400`. One that
+  starts on the next card's peeking edge (x ≈ 1100) moves nothing, every time. Read
+  the front card from `uiautomator dump` (`content-desc="<Brand> <Title>. Size …"`
+  with its bounds) after each swipe; deck order is not stable between launches.
+- **Opening the expanded card's full note:** a SLOW drag from mid-card,
+  `input swipe 720 2000 720 900 900`. A fast long swipe from the bottom
+  (`720 2400 720 700 400`) closes the card instead. The footer actions
+  (`expanded-fit-reevaluate`, `-view-on-store`, `-bought`) only exist in the dump
+  after that drag.
+- **Back from alate can land in Chrome** (or whatever app opened a store link last),
+  not on Home. Relaunch with `monkey -p com.tessellate.alate 1` rather than pressing
+  Back to leave a card.
 
 ## Gotchas seen in practice
 
