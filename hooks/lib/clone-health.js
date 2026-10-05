@@ -85,8 +85,60 @@ function missingPluginFiles(dir) {
   );
 }
 
+/**
+ * Packages an install directory cannot load: a declared runtime dependency with no
+ * manifest, or any installed package (scoped or not) that lost its `package.json`.
+ *
+ * WHY (forge#171, 2026-10-04). `claude plugin update` produced 0.21.2 with a half-written
+ * node_modules — commander held only LICENSE + lib/, 273 of 493 packages had no manifest —
+ * so every script needing a dependency died with MODULE_NOT_FOUND, and the repair logged
+ * "repair OK": cache-sync skips node_modules by design, and nothing else looked. A package
+ * directory without its manifest is what an interrupted extract leaves; Node cannot resolve
+ * it. Top-level and one scope deep only — a few hundred stats, cheap enough per repair.
+ *
+ * @param {string} dir
+ * @returns {string[]} sorted package names
+ */
+function brokenDependencies(dir) {
+  if (!dir) {
+    return [];
+  }
+  let declared;
+  try {
+    declared = Object.keys(
+      JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))
+        .dependencies ?? {}
+    );
+  } catch {
+    return [];
+  }
+  const modules = path.join(dir, 'node_modules');
+  const hasManifest = name =>
+    fs.existsSync(path.join(modules, ...name.split('/'), 'package.json'));
+  const listDirs = abs => {
+    try {
+      return fs
+        .readdirSync(abs, { withFileTypes: true })
+        .filter(ent => ent.isDirectory() && !ent.name.startsWith('.'))
+        .map(ent => ent.name);
+    } catch {
+      return [];
+    }
+  };
+  const installed = listDirs(modules).flatMap(name =>
+    name.startsWith('@')
+      ? listDirs(path.join(modules, name)).map(sub => `${name}/${sub}`)
+      : [name]
+  );
+  const broken = new Set(
+    [...declared, ...installed].filter(name => !hasManifest(name))
+  );
+  return [...broken].sort((left, right) => left.localeCompare(right, 'en'));
+}
+
 module.exports = {
   REQUIRED_PLUGIN_FILES,
+  brokenDependencies,
   missingPluginFiles,
   samePath,
   strayWorktrees,
