@@ -406,10 +406,16 @@ under test is in it. Per app, before its first item:
 3. OTA-delivered items: confirm the update published to the production channel
    (`eas update:list --branch production --limit 3` from `mobile/`), then
    force-stop → relaunch → force-stop → relaunch (expo-updates applies on
-   second launch), then — **MANDATORY, not a fallback** — confirm via logcat
-   that the RUNNING bundle is that exact update group and no
-   `UpdateFailedToLoad`/`CheckError` fired (gate + commands:
-   `build-feature/references/device-loop.md` → "MANDATORY before measuring").
+   second launch), then — **MANDATORY, not a fallback** — confirm that the
+   RUNNING bundle is that exact update group and no
+   `UpdateFailedToLoad`/`CheckError` fired. Either proof counts: the update
+   group in logcat, **or the app's own version line** read with `uiautomator
+   dump` (alate: Profile footer, testID `app-version-line`, "alate 1.5.0 ·
+   updated 5 Oct 2026, 23:03" — the publish time to the minute, matched to the
+   train's publish step). Release builds often log no group id, so the footer
+   is usually the one that works; a drain that only tries logcat verifies
+   nothing (alate, 2026-10-05: every OTA test left not run). Gate + commands:
+   `build-feature/references/device-loop.md` → "MANDATORY before measuring".
    A verdict recorded without that confirmation is void — alate #596 proved
    an entire class of binaries silently could not receive ANY OTA, and every
    unconfirmed "verified on device" in that window measured stale JS.
