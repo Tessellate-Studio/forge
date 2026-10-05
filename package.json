@@ -94,7 +94,7 @@
     "validate": "node standards-cli/cli/bp-validate.js",
     "init": "node standards-cli/cli/bp-init.js",
     "docs": "node standards-cli/cli/bp-docs.js",
-    "prepare": "husky install || true",
+    "prepare": "husky install || exit 0",
     "pre-commit": "lint-staged",
     "format": "prettier --write \"**/*.js\" \"**/*.mjs\"",
     "format:check": "prettier --check \"**/*.js\" \"**/*.mjs\"",
