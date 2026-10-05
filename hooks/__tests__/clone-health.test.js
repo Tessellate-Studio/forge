@@ -4,6 +4,7 @@ const path = require('path');
 
 const {
   REQUIRED_PLUGIN_FILES,
+  brokenDependencies,
   missingPluginFiles,
   strayWorktrees,
 } = require('../lib/clone-health.js');
@@ -150,5 +151,54 @@ describe('missingPluginFiles', () => {
     expect(missingPluginFiles(path.join(tmp, 'nope'))).toEqual(
       REQUIRED_PLUGIN_FILES
     );
+  });
+});
+
+describe('brokenDependencies', () => {
+  // forge#171 (2026-10-04): `claude plugin update` left 0.21.2 with commander holding only
+  // LICENSE + lib/ — 273 of 493 packages had no package.json — and the repair said OK.
+  const install = deps => {
+    fs.writeFileSync(
+      path.join(tmp, 'package.json'),
+      JSON.stringify({ name: 'forge', dependencies: deps })
+    );
+  };
+  const pkg = (name, withManifest = true) => {
+    const dir = path.join(tmp, 'node_modules', ...name.split('/'));
+    fs.mkdirSync(path.join(dir, 'lib'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'LICENSE'), 'MIT');
+    if (withManifest) {
+      fs.writeFileSync(
+        path.join(dir, 'package.json'),
+        JSON.stringify({ name })
+      );
+    }
+  };
+
+  it('passes an install whose every dependency has its manifest', () => {
+    install({ commander: '^11.0.0', yaml: '^2.3.0' });
+    pkg('commander');
+    pkg('yaml');
+    pkg('@babel/core');
+    expect(brokenDependencies(tmp)).toEqual([]);
+  });
+
+  it('names a declared dependency that is half-installed or absent', () => {
+    install({ commander: '^11.0.0', yaml: '^2.3.0' });
+    pkg('commander', false);
+    expect(brokenDependencies(tmp)).toEqual(['commander', 'yaml']);
+  });
+
+  it('names a transitive package, scoped or not, that lost its manifest', () => {
+    install({ commander: '^11.0.0' });
+    pkg('commander');
+    pkg('@babel/core', false);
+    pkg('chalk', false);
+    expect(brokenDependencies(tmp)).toEqual(['@babel/core', 'chalk']);
+  });
+
+  it('has nothing to say about a directory with no package.json', () => {
+    expect(brokenDependencies(tmp)).toEqual([]);
+    expect(brokenDependencies('')).toEqual([]);
   });
 });

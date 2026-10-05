@@ -98,6 +98,7 @@ import { shouldSpawnRepair } from './lib/spawn-decision.js';
 import { emit } from './lib/session-start.js';
 import { treeHash, syncTree } from './lib/cache-sync.js';
 import {
+  brokenDependencies,
   missingPluginFiles,
   samePath,
   strayWorktrees,
@@ -416,6 +417,61 @@ function incompleteInstalls(dirs) {
   });
 }
 
+/**
+ * Reinstall the runtime dependencies of every live install that cannot load one (forge#171).
+ * cache-sync never touches node_modules, so a half-written one from `plugin update` stays
+ * broken forever unless something reinstalls it. `--ignore-scripts`: a dependency install
+ * needs no lifecycle scripts, and an old copy's `prepare` failed under cmd.exe (forge#170).
+ * Returns the directories still broken afterwards.
+ */
+function reinstallBrokenDependencies(dirs) {
+  const stillBroken = [];
+  for (const dir of dirs) {
+    const before = brokenDependencies(dir);
+    if (before.length === 0) {
+      continue;
+    }
+    log(
+      `broken dependencies in ${dir}: ${before.slice(0, 5).join(', ')}${
+        before.length > 5 ? ` (+${before.length - 5} more)` : ''
+      } — running npm ci --omit=dev`
+    );
+    try {
+      const npmCi = 'npm ci --omit=dev --ignore-scripts --no-audit --no-fund';
+
+      // npm is npm.cmd on Windows, which Node will not spawn directly; cmd /c runs it
+      // without `shell: true` (DEP0190). The command line is a constant.
+      const [cmd, args] =
+        process.platform === 'win32'
+          ? ['cmd.exe', ['/d', '/s', '/c', npmCi]]
+          : ['npm', npmCi.split(' ').slice(1)];
+      execFileSync(cmd, args, {
+        cwd: dir,
+        stdio: 'ignore',
+        timeout: 5 * 60 * 1000,
+        windowsHide: true,
+      });
+    } catch (err) {
+      log(
+        `  npm ci FAILED in ${dir}: ${String(err?.message ?? err).slice(
+          0,
+          300
+        )}`
+      );
+    }
+    const after = brokenDependencies(dir);
+    log(
+      `  dependencies in ${dir}: ${
+        after.length === 0 ? 'OK' : `${after.length} still broken`
+      }`
+    );
+    if (after.length > 0) {
+      stillBroken.push(dir);
+    }
+  }
+  return stillBroken;
+}
+
 function repair() {
   if (!acquireLock()) {
     log('repair skipped — another repair holds the lock');
@@ -460,7 +516,16 @@ function repair() {
       .map(([d]) => d);
     const versionBefore = entry.version;
 
-    if (!behindBefore && staleBefore.length === 0) {
+    // A half-installed node_modules is drift too, though no file the clone holds differs.
+    const brokenBefore = [...verdicts.keys()].filter(
+      dir => brokenDependencies(dir).length > 0
+    );
+
+    if (
+      !behindBefore &&
+      staleBefore.length === 0 &&
+      brokenBefore.length === 0
+    ) {
       log('no drift — nothing to repair');
 
       // Clear a recorded FAILURE once the problem is gone, so it stops being announced.
@@ -477,7 +542,7 @@ function repair() {
     log(
       `drift detected (behind=${behindBefore ?? 'n/a'}, stale installs=${
         staleBefore.length
-      }) — repairing with ${bin}`
+      }, broken dependencies=${brokenBefore.length}) — repairing with ${bin}`
     );
 
     runCliUpdates(bin, behindBefore, entry, strays);
@@ -506,7 +571,12 @@ function repair() {
     );
     const versionAfter = entryAfter?.version ?? 'unknown';
 
-    const incomplete = incompleteInstalls(dirsAfter);
+    const incomplete = [
+      ...new Set([
+        ...incompleteInstalls(dirsAfter),
+        ...reinstallBrokenDependencies(dirsAfter),
+      ]),
+    ];
     const healthy =
       !behindAfter &&
       staleAfter.length === 0 &&
