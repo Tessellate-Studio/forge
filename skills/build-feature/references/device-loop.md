@@ -124,6 +124,19 @@ window measured old JS and reported it as a verdict on the new code.
 
 - PASS gate: the **update group ID you just published** appears, and no
   `UpdateFailedToLoad`/`CheckError` follows it.
+- **Release builds often log no group id at all** (alate 1.5.0, 2026-10-05:
+  a whole drain verified nothing because of it). The equal proof is the app's
+  own version line. alate shows it on the Profile footer, testID
+  `app-version-line`: "alate 1.5.0 · updated 5 Oct 2026, 23:03" — the update's
+  publish time to the minute, which identifies the group because trains go
+  out minutes-to-hours apart. Read it without guessing taps:
+  ```bash
+  "$ADB" $D shell uiautomator dump /sdcard/u.xml >/dev/null && "$ADB" $D exec-out cat /sdcard/u.xml | grep -o 'text="alate [^"]*"'
+  ```
+  and match the time against the `eas-update.yml` run's "Publish OTA bundle"
+  step (`gh api repos/<o>/<r>/actions/runs/<id>/jobs`). A long-press on the
+  footer copies the full update id for an exact match. "Embedded build — no
+  update applied yet" / no "updated" part = no OTA is running.
 - `Remote update request not successful` / `CheckError` on every launch =
   the binary cannot receive updates AT ALL (missing channel header, wrong
   runtime, dead lane) — stop and diagnose the delivery lane; do NOT keep
