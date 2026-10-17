@@ -57,6 +57,15 @@ const LIFECYCLE = [
       'A plan awaiting owner decision (draft PR): merge = approve, close = reject',
   },
   {
+    // A step only a human can do (console, re-consent, CLI login) is ONE PR
+    // with this label — workflows.md → "Manual steps are PRs". The name is
+    // the one loom and alate already had, kept so no repo gets two.
+    name: 'manual run list',
+    color: '7A8C6E',
+    description:
+      "A step only a human can do: PR body has What's left / Steps / Verify; merge = done",
+  },
+  {
     // Text and colour are the ones standards/workflows.md prescribes.
     name: 'on hold',
     color: 'BCB38A',

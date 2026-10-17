@@ -149,7 +149,8 @@ still exist) keep the queue moving without a manual trigger:
   (alate), a fresh CI build still can't be sideloaded onto a Play-installed
   copy (Play App Signing — see alate regression history, e.g. issue #596); the
   weekly task notes the build is ready and needs Play Console promotion, a
-  step that stays the user's per the manual-runbook rule. **This task never
+  step that stays the user's (a `manual run list` PR, `workflows.md` →
+  "Manual steps are PRs"). **This task never
   fires when no app has an open `needs-build` test** — see `standards/workflows.md`
   → "CI spend" for why this is the one standing exception to "no build without
   a human click," and the guardrails that keep it from becoming an
@@ -222,7 +223,7 @@ from a phone item in exactly three ways:
   workflow performs that deploy, so a test blocked on it is labelled
   `needs-build` with a comment naming `shopify app deploy from loom main`, and
   the unblock stays
-  the user's per the manual-runbook rule. The weekly build task does not cover
+  the user's (a `manual run list` PR). The weekly build task does not cover
   loom for the same reason: there is nothing to `workflow_dispatch`.
 
 `HUMAN:` works identically here, and loom items lean on it harder — the
@@ -658,7 +659,7 @@ same as the SessionStart hook.
 ## What this skill does NOT do
 
 - **No store-console actions** — promoting Play tracks, TestFlight review,
-  anything in a vendor console is the user's (per the manual-runbook rule).
+  anything in a vendor console is the user's (a `manual run list` PR).
 - **No heavy builds from inside a drain** — a drain session (daily or ad hoc)
   never dispatches a build itself; a `needs build` item just gets logged
   (Step 3 case 4) and named in the wrap-up. The one place a build fires

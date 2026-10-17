@@ -237,8 +237,8 @@ click through to learn what to do. Clean session → the single line
   un-strands items whose PR it merged.
 - Building features or investigating non-trivial failures to completion —
   build-feature's job; file and escalate instead.
-- OTA publishes, tag builds, or store-console actions — manual runbook
-  territory, always.
+- OTA publishes, tag builds, or store-console actions — always the owner's,
+  via a `manual run list` PR.
 - Scheduling itself. Manual invocation only.
 
 ## When NOT to use

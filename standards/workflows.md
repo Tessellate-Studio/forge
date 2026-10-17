@@ -36,7 +36,7 @@ process is a defect, whatever else shipped.
 | Minor | Adversarial review on a small diff (`/code-review` covers it) | same |
 | Minor | Closing-retro detail beyond the three questions | build-feature Step 7 |
 | Minor | Collapsing shipped doc entries to tombstones | "Docs stay lean" |
-| Minor | Runbook formatting polish | `docs/manual-runbook.md` |
+| Minor | Formatting polish in a manual-step PR body | "Manual steps are PRs" |
 | Minor | A regression-log entry for a trivial fix | app regression log |
 
 A process not in this table is minor by default. Promoting one to critical is
@@ -404,7 +404,7 @@ entries to a `BACKLOG.md`. (Another app that still has one migrates with
 | "Does the owner approve X?" | A **draft PR labelled `decision`** that adds or edits a doc in `memory/decisions/`. Merge = approve, close = reject |
 | A decided design, and rejected alternatives worth keeping | `memory/decisions/` (ADR / pitch / RFD) |
 | Bug root cause + lesson | `memory/project_regression_log.md` (unchanged) |
-| Exact console steps for a human | `docs/manual-runbook.md` (unchanged) |
+| Exact steps only a human can do | ONE **PR labelled `manual run list`**: body = What's left / Steps / Verify; merge = done ("Manual steps are PRs") |
 | A long product brief (tens of KB, many sections) | `docs/briefs/<name>.md`, linked from its issue |
 | Weekly priorities | The **roadmap Artifact** that `roadmap-pulse` refreshes each run. There is no `WEEKLY_DIGEST.md` |
 
@@ -775,7 +775,8 @@ migration the feature will use) says `Refs #N` instead, so the issue stays
 open until the user-facing change lands.
 
 If the change also originated from — or changes the truth of — a
-regression-log row, a RELEASE checklist line or a runbook TODO, **update that
+regression-log row, a RELEASE checklist line, a runbook TODO or an open
+`manual run list` PR, **update that
 entry in the same PR** that ships the change: status (DONE + date), the PR
 number, and the merged SHA once it lands. A tracked item whose fix shipped but
 whose entry still says "open" is how work gets re-done and users re-ask.
@@ -1252,58 +1253,67 @@ by the presence of the `schedule:` key.
 every private repo's Actions stopped mid-session. Public repos kept running,
 which is what made it legible as a budget problem rather than a config one._
 
-## External-tool actions — the manual runbook
+## Manual steps are PRs
 
-Every app keeps one `docs/manual-runbook.md`: the standing runbook for setups a
-**human** must perform in someone else's console — the steps no script can take
-for them. (Called `user-actions-tracker.md` until 2026-08-11. A procedure large
-enough to deserve its own file still gets one, shaped by
-`docs/_USER_DOC_TEMPLATE.md`; the manual runbook is where everything else lives.)
+_Owner decision 2026-10-17; first used in loom#240. Until then this section
+was "External-tool actions — the manual runbook", and every app logged these
+steps in `docs/manual-runbook.md`._
 
-When a session decides which external tool/provider to use for a setup (DNS,
-email, OAuth app, CI secret, …), an entry lands in it **before the session
-ends** — actual provider,
-actual values, numbered copy-pasteable steps (never "if you choose A vs B"
-branches), verification command(s), and a "where to look" diagnostic. Not an
-evaluation of options (that's the issue, or the decision doc in
-`memory/decisions/`); only the decided outcome. The issue holds _what + why_;
-the runbook holds _exactly how_. Cross-link, don't copy.
+A step only a **human** can do is raised as **one PR labelled
+`manual run list`**. That covers someone else's console (DNS, a Vercel env
+var, an OAuth app, a CI secret), a merchant or store re-consent, a CLI that
+needs the owner's login, and a store submission. `tools/labels` creates the
+label in every repo. Before raising one, check for an open `manual run list`
+PR that already covers the step.
 
-### The runbook's shape — same in every repo
+When a session decides on an external setup, the PR is raised **before the
+session ends**. It names the actual provider and actual values, gives numbered
+copy-pasteable steps (never "if you choose A vs B" branches), and ends with a
+verify the owner can run. It doesn't evaluate options: that belongs in the
+issue, or the decision doc in `memory/decisions/`. The issue holds _what +
+why_; the PR holds _exactly how_. Cross-link, don't copy.
 
-One header block (purpose + status legend + the move-to-Done rule), a **Status at
-a glance** table linking to the sections, then one section per open setup:
+- **Draft** until the owner has done the steps. The owner runs **Verify**,
+  marks the PR ready and merges it. **The merge is the done record.** An agent
+  never merges a `manual run list` PR on CI green alone, because CI can't see
+  whether the human step happened.
+- **The diff records the outcome.** It retires the step's old
+  `docs/manual-runbook.md` section, if there is one, and adds its one-line
+  `## Done` entry, plus anything else in the repo that finishing the step
+  changes. No new open sections go in the runbook file.
+- **Claims about outside state are dated** ("version 33 active, checked
+  2026-10-17"), because they rot without the repo changing
+  (`authoritative-claims.md`).
+- A procedure big enough for its own file still gets one, shaped by
+  `docs/_USER_DOC_TEMPLATE.md`. The PR links it.
+
+**Existing `docs/manual-runbook.md` entries** stay until they're done. Each
+one is finished through a `manual run list` PR whose diff moves it to
+`## Done`. Once no open sections are left, the file is just the Done list.
+
+### The PR body — same in every repo
 
 ```markdown
-## <Setup name>
+**Manual step:** <one line: what and why, link the issue>. Merge once
+**Verify** passes; the merge is the done record.
 
-**Status:** <emoji> <one line — what state it is actually in>
+**What's left:** <one line: the action, or "nothing, blocked on X">
 
-**What's left:** <one line — the action, or "nothing, blocked on X">
+**Already done (checked <date>):** <only when part of it is done>
 
 **Steps:**
 
 1. <copy-pasteable, with the real values>
 
-**Verify:** <command(s), then checkboxes for what a good result looks like>
+**Verify:** <command(s), then what a good result looks like>
 ```
 
-Legend: ✅ done · 🟡 in progress (action left) · 🚧 blocked (not on you) ·
-📖 reference · 🔲 not started.
-
-**When a setup is finished, MOVE IT.** Delete its section, add a one-liner under
-a `## Done` heading at the bottom, and repoint its table row at `#done`. A
-finished setup left as a full section is the main way this file rots — it reads
-as outstanding work and buries the items that actually are. A small residual is
-fine in a Done one-liner; a whole section is not. If half an item is still
-running, split it.
-
 **What does NOT belong:** why the decision was made, what was evaluated and
-rejected, what changed in which PR, narrated findings. That is the issue's job
-(or the decision doc's) and git history's job. If a paragraph would still read fine with _"probably"_ in it,
-or if it tells a story rather than issuing an instruction, it is not runbook
-content. A reader should be able to scan the table, find their one action, and
-do it without reading a word of context.
+rejected, narrated findings. That is the issue's job (or the decision doc's).
+If a paragraph would still read fine with _"probably"_ in it, or it tells a
+story rather than giving an instruction, it isn't step content. The owner
+should be able to read the body top to bottom and do the step without any
+other context.
 
 ## Doc placement
 
