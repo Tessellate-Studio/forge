@@ -58,7 +58,7 @@ Copy and adapt the template:
 
 | File | Purpose | Audience | Update |
 |---|---|---|---|
-| **manual-runbook.md** | The standing runbook for setups only a human can do in an external console: what's left → steps → verify. Shape: `workflows.md` → "External-tool actions" | The operator | When a setup is decided, and again when it's finished |
+| **manual-runbook.md** | **Legacy.** Since 2026-10-17 a step only a human can do is a PR labelled `manual run list` (`workflows.md` → "Manual steps are PRs"). This file keeps its existing entries until each is done, plus their `## Done` one-liners. No new open sections | The operator | Only when a `manual run list` PR finishes one of its entries |
 | **LAUNCH_SEQUENCE.md** | Launch playbook (phases, gates, external setup) | Product + Ops | When launch strategy changes |
 | **[DEPENDENCY_ALERTS.md](../../forge/standards/doc-placement.md)** | Dependabot + npm audit triage | Backend team | When alert arrives |
 | ... |

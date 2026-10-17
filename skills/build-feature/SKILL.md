@@ -502,7 +502,7 @@ way to know).
 
 Route the answers, don't just state them: an unexercised seam worth
 protecting → regression log or a test; a user-invisible systemic risk → fix it
-or file an issue (`wi new --priority P0..P3`) or a runbook entry; an
+or file an issue (`wi new --priority P0..P3`) or a `manual run list` PR; an
 efficiency lesson that generalizes → promote into the relevant skill or
 standard so the next build inherits it.
 
@@ -563,4 +563,4 @@ standard so the next build inherits it.
 - Worktree cleanup (Step 6): `git worktree list` → remove stale → `git worktree prune`.
 - Closing retro (Step 7, mandatory): least-confident seams / what the user
   can't see / what would've been faster — answered with evidence, then routed
-  (test, runbook entry, or skill update).
+  (test, `manual run list` PR, or skill update).

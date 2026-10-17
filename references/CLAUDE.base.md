@@ -65,16 +65,19 @@ All in `forge/standards/workflows.md` unless noted:
 - **Work items are GitHub issues** — file new work with `wi new --priority P0..P3`
   (exactly one P label), never a `BACKLOG.md` entry. Owner yes/no → a draft
   `decision` PR (`forge/standards/workflows.md` → "Work items are GitHub issues").
-- **External-tool decisions** — decided setups go in
-  `docs/manual-runbook.md` before the session ends, in a fixed format:
-  **What's left:** [one line] · **Steps:** [numbered, copy-pasteable] ·
-  **Verify:** [how to confirm it worked]. Finished setups move to a `## Done`
-  one-liner. History, context and rejected options go in the issue (decided
-  designs: `memory/decisions/`); the runbook holds exactly-how, nothing else
-  (`forge/standards/workflows.md`).
+- **Manual steps are PRs** — a step only a human can do (an external
+  console, a re-consent, a CLI login) is ONE draft PR labelled
+  `manual run list`, raised before the session ends. Its body uses a fixed
+  format: **What's left:** [one line] · **Steps:** [numbered, copy-pasteable] ·
+  **Verify:** [how to confirm it worked]. The owner does the steps and merges;
+  the merge is the done record. Check for an open one before raising another.
+  History and rejected options go in the issue (decided designs:
+  `memory/decisions/`). `docs/manual-runbook.md` keeps only its existing
+  entries until each is done (`forge/standards/workflows.md` → "Manual steps
+  are PRs").
 - **Doc placement** — one location per doc type: `forge/standards/doc-placement.md`.
 - **Standalone runbooks** — a procedure big enough to need its own file (rather
-  than a `manual-runbook.md` section) follows `docs/_USER_DOC_TEMPLATE.md`: what
+  than a manual-step PR body) follows `docs/_USER_DOC_TEMPLATE.md`: what
   this is → numbered steps with real links → how to verify. Same anatomy, own
   file.
 
@@ -113,7 +116,7 @@ optional and discovered from the repo when absent.
 - **Work items** — GitHub issues, P0–P3 (`gh issue list -l P1`); check them
   before proposing "should we build X?". Owner yes/no → draft `decision` PRs.
 - `USER_PATHS.md` — happy + edge + uncovered user flows.
-- `docs/manual-runbook.md` — every decided external-tool setup, exact steps.
+- Open PRs labelled `manual run list` — every step only a human can do, with exact steps.
 - `memory/` — app-specific regression log, anti-patterns, design vision.
 
 ## Testing

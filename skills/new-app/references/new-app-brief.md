@@ -19,8 +19,8 @@ package id, or platform.
 - **First screens / surfaces:** <the 1–3 things a user sees first>
 - **Domain anti-patterns to seed:** <anything app-specific you already know NOT to
   build — goes into memory/, separate from the shared set>
-- **External setups expected:** <DNS, OAuth, email, payments — tracked in
-  docs/manual-runbook.md as they're decided>
+- **External setups expected:** <DNS, OAuth, email, payments. Each one is
+  raised as a `manual run list` PR once decided>
 
 ## What the skill does NOT need
 

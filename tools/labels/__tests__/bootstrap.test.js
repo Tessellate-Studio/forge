@@ -85,6 +85,19 @@ describe('canonical set', () => {
     }
   });
 
+  // Owner decision 2026-10-17: a step only a human can do is ONE PR with this
+  // label (What's left / Steps / Verify in the body; merge = done), replacing
+  // new docs/manual-runbook.md entries. The name is the one loom and alate
+  // already used, so no repo ends up with two labels for the same thing.
+  test('manual run list says a merged PR is the done record', () => {
+    const label = L.canonicalFor('loom').find(
+      l => l.name === 'manual run list'
+    );
+    expect(label).toBeDefined();
+    expect(label.description).toMatch(/PR/);
+    expect(label.description).toMatch(/merge/i);
+  });
+
   test('every repo gets P, type, lifecycle, provenance and device-test labels', () => {
     const names = L.canonicalFor('badige').map(l => l.name);
     for (const n of [
@@ -95,6 +108,7 @@ describe('canonical set', () => {
       'chore',
       'refactor',
       'decision',
+      'manual run list',
       'on hold',
       'claimed',
       'needs-input',
