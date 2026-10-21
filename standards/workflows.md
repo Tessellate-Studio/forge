@@ -246,6 +246,16 @@ nothing having run. It confirms green on two reads, and ends on one `RESULT:`
 line: exit 0 green · 10 red · 11 no checks ran (10 min) · 12 timed out (2 h). The
 `--watch` form is still accepted by the hook; it is just the one that cries wolf.
 
+**A repo with no CI exits 0 as `NO CI`, after a 60-second grace.** With no
+workflow files at the PR head and no required checks on the base branch, nothing
+will ever register, so the gate used to sit out its 10-minute window, exit 11,
+and leave a docs repo unmergeable through any sanctioned route
+(tessellate-pages#45, 2026-10-21). Any check that does register in the grace
+(an app status, a workflow the PR adds) is still waited on and must pass, and a
+read that fails counts as CI, so the gate never skips CI it could not see.
+safe-merge still refuses zero checks, so an automated merge into a no-CI repo
+stays a human call.
+
 **[enforced] A hook refuses an ungated merge — this is no longer only prose.**
 `hooks/merge-gate.mjs` runs on `PreToolUse` for `Bash` and `PowerShell` and
 denies the tool call outright unless the command is one of the two sanctioned

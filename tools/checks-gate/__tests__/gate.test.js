@@ -1,6 +1,11 @@
 'use strict';
 
-const { classifyRead, waitForChecks, RESULT } = require('../lib/gate');
+const {
+  classifyRead,
+  repoHasCi,
+  waitForChecks,
+  RESULT,
+} = require('../lib/gate');
 
 // Real `gh pr checks <n> -R Tessellate-Studio/alate --json name,bucket` output,
 // read 2026-09-10. #791 merged green; #679 merged past a failed `backend`.
@@ -196,5 +201,92 @@ describe('waitForChecks — polls until a real answer', () => {
       'pending',
       'green',
     ]);
+  });
+});
+
+// tessellate-pages has no workflows and no required checks, so `gh pr checks`
+// stays empty for ever. The gate sat out its 10-minute register window and
+// exited NO_CHECKS, and the merge hook (correctly) refused a merge that did not
+// wait on the gate — so a docs repo could not be merged at all (2026-10-21,
+// tessellate-pages#45).
+describe('repoHasCi — does this repo have any CI to wait for?', () => {
+  it('is false only when there are no workflow files and no required checks', () => {
+    expect(repoHasCi({ workflowFiles: [], requiredChecks: [] })).toBe(false);
+  });
+
+  it('ignores files in .github/workflows that are not workflows', () => {
+    expect(
+      repoHasCi({ workflowFiles: ['README.md'], requiredChecks: [] })
+    ).toBe(false);
+  });
+
+  it.each([
+    ['a .yml workflow', { workflowFiles: ['ci.yml'], requiredChecks: [] }],
+    ['a .yaml workflow', { workflowFiles: ['ci.yaml'], requiredChecks: [] }],
+    [
+      'a required status check (external CI)',
+      { workflowFiles: [], requiredChecks: ['vercel'] },
+    ],
+  ])('is true with %s', (_label, repo) => {
+    expect(repoHasCi(repo)).toBe(true);
+  });
+
+  it.each([
+    ['the workflows read failed', { workflowFiles: null, requiredChecks: [] }],
+    [
+      'the branch-protection read failed',
+      { workflowFiles: [], requiredChecks: null },
+    ],
+    ['nothing was read', {}],
+  ])('fails closed (true) when %s', (_label, repo) => {
+    expect(repoHasCi(repo)).toBe(true);
+  });
+});
+
+describe('waitForChecks — a repo with no CI', () => {
+  const run = (reads, options = {}) => {
+    let clock = 0;
+    let index = 0;
+    return waitForChecks({
+      read: async () => reads[Math.min(index++, reads.length - 1)],
+      sleep: async ms => {
+        clock += ms;
+      },
+      now: () => clock,
+      pollMs: 20_000,
+      registerTimeoutMs: 600_000,
+      timeoutMs: 7_200_000,
+      hasCi: false,
+      noCiGraceMs: 60_000,
+      ...options,
+    });
+  };
+
+  it('ends with NO_CI after the short grace, not the 10-minute register window', async () => {
+    const outcome = await run([NO_CHECKS]);
+    expect(outcome.result).toBe(RESULT.NO_CI);
+    expect(outcome.elapsedMs).toBeGreaterThanOrEqual(60_000);
+    expect(outcome.elapsedMs).toBeLessThan(600_000);
+  });
+
+  it('still waits for a check that registers inside the grace, and needs it green', async () => {
+    const outcome = await run([NO_CHECKS, PENDING, GREEN, GREEN]);
+    expect(outcome.result).toBe(RESULT.GREEN);
+  });
+
+  it('still reports red when a check that registered fails', async () => {
+    const outcome = await run([NO_CHECKS, RED]);
+    expect(outcome.result).toBe(RESULT.RED);
+  });
+
+  it('never reads a gh that cannot answer as NO_CI', async () => {
+    const outcome = await run([TLS]);
+    expect(outcome.result).toBe(RESULT.TIMED_OUT);
+  });
+
+  it('leaves repos with CI unchanged: nothing running is still NO_CHECKS', async () => {
+    const outcome = await run([NO_CHECKS], { hasCi: true });
+    expect(outcome.result).toBe(RESULT.NO_CHECKS);
+    expect(outcome.elapsedMs).toBeGreaterThanOrEqual(600_000);
   });
 });
