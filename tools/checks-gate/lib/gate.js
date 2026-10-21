@@ -28,8 +28,30 @@ const RESULT = {
   GREEN: 'GREEN',
   RED: 'RED',
   NO_CHECKS: 'NO_CHECKS',
+
+  /** The repo has no CI at all, and nothing registered in the grace window. */
+  NO_CI: 'NO_CI',
   TIMED_OUT: 'TIMED_OUT',
 };
+
+/**
+ * Does the repo have any CI a PR could be waiting on? False only when BOTH
+ * reads succeeded and found nothing: no workflow files in .github/workflows
+ * (at the PR's head, so a PR that adds the first workflow counts) and no
+ * required status checks on the base branch (external CI such as a Vercel
+ * check). A read that failed is `null` and counts as CI: when in doubt, wait.
+ *
+ * @param {{workflowFiles?: string[]|null, requiredChecks?: string[]|null}} repo
+ */
+function repoHasCi({ workflowFiles, requiredChecks } = {}) {
+  if (!Array.isArray(workflowFiles) || !Array.isArray(requiredChecks)) {
+    return true;
+  }
+  return (
+    workflowFiles.some(name => /\.ya?ml$/i.test(name)) ||
+    requiredChecks.length > 0
+  );
+}
 
 const namesWhere = (checks, predicate) =>
   checks.filter(predicate).map(check => check.name || 'unnamed');
@@ -130,9 +152,19 @@ function verdictFor(current, tracker, elapsedMs, limits) {
     return RESULT.TIMED_OUT;
   }
   const neverRan = !tracker.seenRunning && current.state === 'absent';
-  return neverRan && elapsedMs >= limits.registerTimeoutMs
-    ? RESULT.NO_CHECKS
-    : null;
+  return neverRan ? nothingRanVerdict(elapsedMs, limits) : null;
+}
+
+/**
+ * Nothing has run yet. With CI, give up after the register window. With no
+ * CI, nothing will ever register, so stop after a short grace (an app check
+ * can still post a status) and say so as NO_CI rather than NO_CHECKS.
+ */
+function nothingRanVerdict(elapsedMs, limits) {
+  if (limits.hasCi === false) {
+    return elapsedMs >= limits.noCiGraceMs ? RESULT.NO_CI : null;
+  }
+  return elapsedMs >= limits.registerTimeoutMs ? RESULT.NO_CHECKS : null;
 }
 
 /**
@@ -142,7 +174,9 @@ function verdictFor(current, tracker, elapsedMs, limits) {
  * workflow whose checks register a little after another's cannot let the early
  * set pass for the whole gate. NO_CHECKS applies only while nothing has ever
  * run; a gh that keeps failing is TIMED_OUT, never NO_CHECKS — "could not
- * read" and "nothing ran" are different findings.
+ * read" and "nothing ran" are different findings. With `hasCi: false` (see
+ * repoHasCi) nothing-ran ends after `noCiGraceMs` as NO_CI; anything that
+ * does register is still waited on and must still pass.
  *
  * @returns {Promise<{result: string, detail: string, checks: object[], elapsedMs: number}>}
  */
@@ -182,4 +216,4 @@ async function waitForChecks({
   }
 }
 
-module.exports = { classifyRead, waitForChecks, RESULT };
+module.exports = { classifyRead, repoHasCi, waitForChecks, RESULT };

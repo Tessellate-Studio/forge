@@ -10,13 +10,18 @@
 // the incidents. It waits for checks to appear, retries a failed read, and ends
 // on one RESULT line.
 //
+// A repo with no CI at all (no workflow files, no required checks) has nothing
+// to wait for: after a short grace it ends NO_CI with exit 0, so the same
+// command merges a docs repo instead of sitting out the register window and
+// failing NO_CHECKS (tessellate-pages#45, 2026-10-21).
+//
 // No dependency beyond Node, same as safe-merge: this runs by absolute path out
 // of a plugin cache, where a missing package fails somewhere nobody sees.
 
 'use strict';
 
 const { spawn } = require('child_process');
-const { waitForChecks, RESULT } = require('./lib/gate');
+const { repoHasCi, waitForChecks, RESULT } = require('./lib/gate');
 
 const EXIT = {
   GREEN: 0,
@@ -27,27 +32,30 @@ const EXIT = {
   TIMED_OUT: 12,
 };
 
-const DEFAULTS = { poll: 20, registerTimeout: 600, timeout: 7200 };
+const DEFAULTS = {
+  poll: 20,
+  registerTimeout: 600,
+  timeout: 7200,
+  noCiGrace: 60,
+};
 
-const USAGE = `checks-gate — exit 0 only when a PR's checks are green
+const USAGE = `checks-gate — exit 0 only when a PR's checks are green (or its repo has no CI)
 
   --repo              <owner/name>  required
   --pr                <number>      required
   --poll              <seconds>     between reads            (default ${DEFAULTS.poll})
   --register-timeout  <seconds>     for any check to start   (default ${DEFAULTS.registerTimeout})
   --timeout           <seconds>     for all checks to finish (default ${DEFAULTS.timeout})
+  --no-ci-grace       <seconds>     repos with no CI: wait this long for an
+                                    app check before NO_CI   (default ${DEFAULTS.noCiGrace})
 
-Exit: 0 green (only) · 10 red · 11 no checks ran · 12 timed out · 2 usage/help · 1 internal
+Exit: 0 green, or no CI in the repo · 10 red · 11 no checks ran · 12 timed out · 2 usage/help · 1 internal
 Progress goes to stderr; the one RESULT line goes to stdout.`;
 
 /** Run gh, capturing both streams. Never rejects: a failed read is data here. */
-function readChecks(repo, pr) {
+function gh(args) {
   return new Promise(resolve => {
-    const child = spawn(
-      'gh',
-      ['pr', 'checks', pr, '-R', repo, '--json', 'name,bucket'],
-      { shell: false }
-    );
+    const child = spawn('gh', args, { shell: false });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', chunk => {
@@ -56,9 +64,65 @@ function readChecks(repo, pr) {
     child.stderr.on('data', chunk => {
       stderr += chunk;
     });
-    child.on('error', error => resolve({ stdout: '', stderr: error.message }));
-    child.on('close', () => resolve({ stdout, stderr }));
+    child.on('error', error =>
+      resolve({ stdout: '', stderr: error.message, code: 1 })
+    );
+    child.on('close', code => resolve({ stdout, stderr, code }));
   });
+}
+
+const readChecks = (repo, pr) =>
+  gh(['pr', 'checks', pr, '-R', repo, '--json', 'name,bucket']);
+
+/**
+ * One `gh api` list read: the names, [] when GitHub says 404 (nothing there),
+ * or null when the read failed any other way — repoHasCi treats null as CI.
+ */
+async function apiList(path, jq) {
+  const read = await gh(['api', path, '--jq', jq]);
+  if (read.code === 0) {
+    return read.stdout
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean);
+  }
+  return /HTTP 404/.test(read.stderr) ? [] : null;
+}
+
+/** Whether the PR's repo has any CI: workflows at its head, or required checks on its base. */
+async function readRepoHasCi(repo, pr) {
+  const view = await gh([
+    'pr',
+    'view',
+    pr,
+    '-R',
+    repo,
+    '--json',
+    'headRefOid,baseRefName',
+  ]);
+  let head;
+  try {
+    head = JSON.parse(view.stdout);
+  } catch {
+    return true;
+  }
+  const branch = encodeURIComponent(head.baseRefName);
+  const [workflowFiles, classic, rulesets] = await Promise.all([
+    apiList(
+      `repos/${repo}/contents/.github/workflows?ref=${head.headRefOid}`,
+      '.[].name'
+    ),
+    apiList(
+      `repos/${repo}/branches/${branch}/protection/required_status_checks`,
+      '.contexts[]'
+    ),
+    apiList(
+      `repos/${repo}/rules/branches/${branch}`,
+      '.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context'
+    ),
+  ]);
+  const requiredChecks = classic && rulesets ? [...classic, ...rulesets] : null;
+  return repoHasCi({ workflowFiles, requiredChecks });
 }
 
 function parseArgs(argv) {
@@ -100,6 +164,12 @@ function render(outcome) {
   const lines = {
     [RESULT.GREEN]: [`RESULT: GREEN — ${outcome.detail}`, EXIT.GREEN],
     [RESULT.RED]: [`RESULT: RED — ${outcome.detail}`, EXIT.RED],
+    [RESULT.NO_CI]: [
+      `RESULT: NO CI — the repo has no workflows and no required checks, and nothing registered within ${Math.round(
+        outcome.elapsedMs / 1000
+      )}s`,
+      EXIT.GREEN,
+    ],
     [RESULT.NO_CHECKS]: [
       `RESULT: NO CHECKS — nothing ran within ${after} (${outcome.detail})`,
       EXIT.NO_CHECKS,
@@ -112,11 +182,26 @@ function render(outcome) {
   return lines[outcome.result];
 }
 
+/** The progress header on stderr: what is gated, and how long it may wait. */
+function announce(label, seconds, hasCi) {
+  if (!hasCi) {
+    process.stderr.write(
+      `checks-gate ${label}: no CI in this repo — waiting ${seconds.noCiGrace}s for an app check\n`
+    );
+  }
+  process.stderr.write(
+    `checks-gate ${label}: every ${seconds.poll}s, up to ${minutes(
+      seconds.timeout * 1000
+    )}\n`
+  );
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
 
   // Not EXIT.GREEN: this is a gate, and `cli.js --help && gh pr merge` must
-  // not merge. Exit 0 means the checks are green, and nothing else.
+  // not merge. Exit 0 means the checks are green, or the repo has no CI at
+  // all — nothing else.
   if (options.help) {
     process.stdout.write(`${USAGE}\n`);
     return EXIT.USAGE;
@@ -139,12 +224,8 @@ async function main() {
   }
 
   const label = `${options.repo}#${options.pr}`;
-  process.stderr.write(
-    `checks-gate ${label}: every ${seconds.poll}s, up to ${minutes(
-      seconds.timeout * 1000
-    )}\n`
-  );
-
+  const hasCi = await readRepoHasCi(options.repo, options.pr);
+  announce(label, seconds, hasCi);
   const outcome = await waitForChecks({
     read: () => readChecks(options.repo, options.pr),
     sleep: ms => new Promise(resolve => setTimeout(resolve, ms)),
@@ -152,6 +233,8 @@ async function main() {
     pollMs: seconds.poll * 1000,
     registerTimeoutMs: seconds.registerTimeout * 1000,
     timeoutMs: seconds.timeout * 1000,
+    hasCi,
+    noCiGraceMs: seconds.noCiGrace * 1000,
     onProgress: read => {
       if (read.state !== 'green') {
         process.stderr.write(`  ${read.state}: ${read.detail}\n`);
