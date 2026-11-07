@@ -690,3 +690,7 @@ same as the SessionStart hook.
 - Ad hoc *web* checks on loom that were never enqueued — loom's **queue** is
   in scope (Scope table), but this skill only ever drains enqueued items; a
   one-off "look at the storefront for me" is not a drain.
+
+---
+
+**Report markers.** Start each finding line in the final report with one marker from the fixed legend in `standards/workflows.md` → "Summary markers" (👀 needs the owner · ⚠️ against a recommendation · ✅ done · 💡 idea · ℹ️ info · 🟣 decision recorded · 🟡 watching · 💤 nothing to do · 🚨 urgent/failed). No other markers.

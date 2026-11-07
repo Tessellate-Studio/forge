@@ -804,6 +804,39 @@ open until the user closed it by hand hours later.) Use the exact issue
 number, one keyword per issue, in the PR body — that's checked at merge time
 and survives squash merges, unlike a commit message buried mid-branch.
 
+## Summary markers — one legend for every report
+
+Owner decision 2026-11-07. Chat renders markdown, so colour is carried by
+emoji. Every final report, summary and status update — interactive session,
+subagent, or scheduled task — starts each highlighted point with exactly one
+marker from this fixed set:
+
+| Marker | Meaning |
+|---|---|
+| 👀 | Needs a human: the owner's action, review or decision |
+| ⚠️ | Warning: goes against a recommendation or suggestion |
+| ✅ | Done: closed, merged, dismissed, passing |
+| 💡 | Idea or suggestion |
+| ℹ️ | Information or context |
+| 🟣 | Decision made or recorded (a standing decision) |
+| 🟡 | Watch: left open on purpose, waiting, no action yet |
+| 💤 | Nothing to do, skipped, none |
+| 🚨 | Urgent or failed: real exposure, failures, no-patch cases. Rare |
+
+- **One marker per line, most urgent first** (🚨 → 👀 → ⚠️ → 🟡 → the rest).
+- **No new markers.** A meaning the set cannot express goes in words, or is
+  proposed to the owner as a change to this table.
+- **Summary only.** Code, logs, quoted output and tool narration stay
+  unmarked. It layers on the shape in `CLAUDE.md` → "How to communicate":
+  the **Done:** headline and **You:** / **Me next:** / **Docs:** sections stay,
+  and their lines carry markers (**You:** lines are 👀).
+- **Skills with their own report format** (security-sweep, crash-monitor,
+  roadmap-pulse, device-test, status-check) keep their sections and tables and
+  put the marker at the start of each finding line.
+- **Machine-wide copy.** The same table lives in `~/.claude/CLAUDE.md` so
+  sessions outside a forge-wired repo follow it too. This section is the
+  source of truth; if they disagree, this one wins.
+
 ## Device-test queue — enqueue what only a human with the phone can verify
 
 Some changes need a human holding the device: gesture feel, animation quality,

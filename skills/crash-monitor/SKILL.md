@@ -365,3 +365,7 @@ If nothing was actioned: `"No real issues — quiet day"`.
 - Keep the TLDR genuinely simple — assume the reader is not a developer
 - Silence when nothing is wrong is correct behaviour, not a bug
 - The auto-ship-log row is written by the command, not by you. If it exits `11` the row is MISSING — add it by hand and flag it, loudly
+
+---
+
+**Report markers.** Start each finding line in the final report with one marker from the fixed legend in `standards/workflows.md` → "Summary markers" (👀 needs the owner · ⚠️ against a recommendation · ✅ done · 💡 idea · ℹ️ info · 🟣 decision recorded · 🟡 watching · 💤 nothing to do · 🚨 urgent/failed). No other markers.

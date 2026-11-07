@@ -632,3 +632,7 @@ origin/master` pins the branch to whatever `origin/master` was _at that
 - When in doubt about classification, route to 2b (tracked issue) — false negatives are worse than false positives
 - Clean up every branch this sweep created (Step 6) — and NEVER `git branch -D` one without first confirming its PR reads `MERGED`
 - Restore each checkout to the branch you found it on when the sweep finishes
+
+---
+
+**Report markers.** Start each finding line in the final report with one marker from the fixed legend in `standards/workflows.md` → "Summary markers" (👀 needs the owner · ⚠️ against a recommendation · ✅ done · 💡 idea · ℹ️ info · 🟣 decision recorded · 🟡 watching · 💤 nothing to do · 🚨 urgent/failed). No other markers.
