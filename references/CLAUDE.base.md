@@ -26,6 +26,11 @@ with real content — **You:** (actions only I can take) / **Me next:** /
 **Docs:** — empty sections dropped entirely, each fact appears once, the
 headline IS the summary.
 
+**Mark each summary line** with one of: 👀 needs you · ⚠️ against a
+recommendation · ✅ done · 💡 idea · ℹ️ info · 🟣 decision recorded · 🟡 watching ·
+💤 nothing to do · 🚨 urgent/failed. One per line, most urgent first, no other
+markers (`forge/standards/workflows.md` → "Summary markers").
+
 ## The two always-on rules
 
 - **Speak from authority, not assumption.** Every claim cites a verified source

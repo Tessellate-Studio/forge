@@ -246,3 +246,7 @@ click through to learn what to do. Clean session → the single line
 - Mid-task: loops are supposed to be open while work is in flight.
 - A fresh session with no history: there is nothing to inventory.
 - The user wants cross-project status or priorities — that's roadmap-pulse.
+
+---
+
+**Report markers.** Start each finding line in the final report with one marker from the fixed legend in `standards/workflows.md` → "Summary markers" (👀 needs the owner · ⚠️ against a recommendation · ✅ done · 💡 idea · ℹ️ info · 🟣 decision recorded · 🟡 watching · 💤 nothing to do · 🚨 urgent/failed). No other markers.

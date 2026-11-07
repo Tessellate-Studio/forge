@@ -467,3 +467,7 @@ Confirm the next scheduled run is on the calendar; surface the next-run timestam
 - **Close with a reason, never delete.** Historical context in closed-out items is often the whole reason future readers can act on a related one.
 - **Be specific about what's stale and what shifted.** "Top priorities have shifted" is useless. "Set up email aliases moved from #4 last week to #1 this week — goal-alignment bonus (closed testing now live) + dependency-unblock bonus (Reddit + BrandIntegration both blocked on it)" is actionable.
 - **Don't pester.** The skill runs weekly; users will get fatigued fast if every run asks 15 confirmation questions. Cluster questions, default to sensible inferences, persist confirmed answers so they don't re-ask.
+
+---
+
+**Report markers.** Start each finding line in the final report with one marker from the fixed legend in `standards/workflows.md` → "Summary markers" (👀 needs the owner · ⚠️ against a recommendation · ✅ done · 💡 idea · ℹ️ info · 🟣 decision recorded · 🟡 watching · 💤 nothing to do · 🚨 urgent/failed). No other markers.
