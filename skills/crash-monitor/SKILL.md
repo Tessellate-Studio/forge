@@ -7,10 +7,11 @@ description: Daily crash and issue monitor for Tessellate apps — triages Sentr
 
 You are a crash monitor, issue fixer, and auto-shipper for Tessellate apps. Find problems, fix them, ship the fixes, and escalate only when genuinely ambiguous. Offending commits are easy to revert, so the cost of auto-shipping is low — the cost of waiting is high.
 
-Two failure modes this skill exists to prevent, in tension with each other:
+Three failure modes this skill exists to prevent, the first two in tension with each other:
 
 - **Acting on noise.** Dev-mode hot-reload errors and SDK sample events vastly outnumber real crashes. Filtering happens in Step 0, *before* any analysis, so no effort is spent reasoning about artefacts.
 - **Shipping a wrong fix repeatedly.** Auto-merge without memory will re-apply a fix that was already reverted. Step 1.6's cooldown is what stops that loop; it is not optional bookkeeping.
+- **Reporting without acting.** An issue that reaches the summary as "new, 1 event, not investigated" or "left open, watching" is a run that did nothing about it: the reader gets a problem and no answer. Every issue that survives Step 0 leaves the run with a stated root-cause finding (Step 2) and exactly one disposition (Step 4). A report of a problem with no investigation and no course of action is not an acceptable output of this skill.
 
 The caller supplies scope — which repos, where they are checked out, and the Sentry org. Those are environment config and live in the invoking prompt or scheduled task, not here.
 
@@ -133,6 +134,18 @@ issue behind them have nothing to claim. Full rule:
 - If it references a specific file/line, read that source
 - Determine whether this is a code fix, a config issue, or needs more information
 
+### What every investigation must produce
+
+Investigating means reaching a **finding**, not opening the issue. Before Step 4, each issue has all three of:
+
+1. **Root cause, labelled.** One line, marked `verified` (you read the failing code and can point at the line, or you reproduced it) or `hypothesis` (you could not). Say which. "The stack trace points at X" is a location, not a cause.
+2. **Evidence.** What you read or queried to get there: file and line, the events you opened (not only the issue summary — open several events and compare their tags and extras, because one event can mislead), the logs you pulled. If a tool was unavailable or returned nothing, say that instead of dropping the check.
+3. **Impact.** Who is hurt and how: users, platforms and releases from the events; whether data is at risk; whether the app heals itself (a retry, the next push) or the user is stuck. A single event is not a reason to skip this — see Step 0.
+
+A single event still gets all three. If the cause is genuinely not knowable from what exists today, that is itself the finding: write `cause not established`, list what you checked, and name the evidence that is missing. That routes to 4d, not to silence.
+
+The run is unattended. "Ask the user" is not a finding or a disposition; the only way to put a question to a human is 4b or 4c, which file it where they will see it.
+
 ## Step 3: Check for duplicates
 
 ```
@@ -143,6 +156,32 @@ gh pr list -R <github-repo> --search "{issue-id-or-title}" --state all
 Skip if a matching open OR merged PR, or an open issue, already exists. For GitHub Issues already fixed by a merged PR, close the issue with a comment linking to it.
 
 ## Step 4: Take action
+
+### Every issue gets exactly one disposition
+
+An issue that survived Step 0 does not leave this step without one of these. Choose by what the Step 2 finding supports:
+
+| Disposition | When | What exists afterwards |
+|---|---|---|
+| **Resolve as already-fixed** | The fix shipped and the issue has not recurred ("Closing what is already fixed", below) | Issue resolved, PR named in `reason` |
+| **4a: fix and merge** | Verified cause, small fix, the confidence command allows it | Merged PR |
+| **4b: fix, needs a decision** | Verified or likely cause, but ambiguous, risky, multi-file, or a path the command refuses | Open PR labelled `needs-input` with the decision inline |
+| **4c: config or environment** | The cause is outside the repo | Filed issue with the manual steps |
+| **4d: cause not established** | Intermittent, one-off, or the event lacks the data to decide | A PR or issue that adds the missing signal, plus a dated re-check (below) |
+| **Already tracked** | An open PR or issue already covers this exact failure with a stated next step | Cite its number and the next step; do not file a second one |
+
+Not dispositions: "left unresolved", "watching", "new, not yet investigated", "needs a look". If your report would use any of those words as the outcome, you have not finished the issue. "Watching" is only ever part of 4d, where it carries a named signal and a date.
+
+### 4d. Cause not established — add the signal, then re-check
+
+Some issues cannot be fixed on the evidence in hand: a one-off failure on a code path that has since changed, an event that carries only `{feature, op}`, a transient with nothing to read. Closing them as "not relevant" throws the report away; leaving them open with no plan is the failure this skill exists to prevent. Instead:
+
+1. **State what is missing.** The specific field, log line or timing that would decide the cause (the HTTP status of a failed edge-function call, how long a request ran, whether the app was in the foreground).
+2. **Add it.** Open a PR that records that signal on the event (a reporting-only change: a Sentry extra or tag, never a change to what the code does on failure), or file an issue if the signal needs an owner. Allow-list what you attach; never put request bodies or user data on an event.
+3. **Say when and how to re-read.** In the PR or issue: the issue ID, the field to read, and the run date after which to look. The next run re-opens it from there. Route the PR through the confidence command like any other fix; a sync, persistence or migration path goes to a human as 4b.
+4. **Resolve the Sentry issue only if it has not recurred and the new signal now exists**, with a `reason` naming the PR. It will reopen itself if it fires again, with the new data on it. Otherwise leave it open and cite the PR.
+
+When the new signal does arrive, that is a new Step 2: read the events, reach the finding, and pick a real disposition. Two rounds of 4d on the same issue with no finding in the second means the signal chosen was the wrong one: say so and choose another.
 
 ### Closing what is already fixed
 
@@ -344,6 +383,7 @@ Push-notify: `"Config issue needs manual action — <repo>: <short description>.
 - GitHub Issues scanned (per repo)
 - Issues filtered out — count plus reason buckets (dev-env, dev-path, dev-noise tag, stale, already-addressed). Every bucket is structural, so counts are enough; if you ever find yourself writing a "low-volume" bucket, you have reinvented the filter Step 0 removed.
 - **The unresolved count, before and after this run** (e.g. `alate: 9 unresolved → 4`). The backlog is the number this skill exists to drive down, and a run that leaves it unchanged should say so plainly rather than let it pass unremarked.
+- **A line per issue that survived Step 0**, each with: the short ID; the root cause marked `verified` or `hypothesis`; the evidence in a clause; the disposition from Step 4; and the next step with its owner and date (the PR or issue link; for 4d, the field to read and the re-check date). An issue listed without a root cause and a disposition means the run is unfinished for that issue. Finish it before reporting, or say plainly which step was blocked and by what.
 - Real issues investigated (count)
 - **Issues resolved as already-fixed** (with the short ID and the PR that fixed each) — see Step 4
 - PRs opened and auto-merged (with links)
@@ -356,6 +396,7 @@ If nothing was actioned: `"No real issues — quiet day"`.
 
 ## CRITICAL RULES
 
+- NEVER report an issue without a Step 2 finding and a Step 4 disposition. "New", "not investigated", "left open" and "needs a look" are not outcomes; a one-event issue gets the same treatment as a chronic one
 - NEVER silence an error by wrapping it in try/catch without fixing the cause
 - NEVER disable or remove functionality as a "fix" for a config issue
 - NEVER commit secrets, env values, or API keys
