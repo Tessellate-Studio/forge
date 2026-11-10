@@ -183,6 +183,16 @@ Some issues cannot be fixed on the evidence in hand: a one-off failure on a code
 
 When the new signal does arrive, that is a new Step 2: read the events, reach the finding, and pick a real disposition. Two rounds of 4d on the same issue with no finding in the second means the signal chosen was the wrong one: say so and choose another.
 
+### Re-checking: before you hand a fix over, and before you judge one
+
+Three checks that each caught a real mistake while this skill's rules were being written (the ALATE-1Z sync-failure chain, alate#1627/#1699/#1733/#1822). They are part of the job, not extras.
+
+1. **Review your own fix, twice.** Any PR this skill opens that is more than a few lines, or that puts new data into an error report, gets `/code-review` at high effort before it is handed over. Fix every real finding, then review again, and stop only when a round returns no correctness finding. The second round matters: on alate#1822 round one's fix named the host that answered after a redirect, and round two found that this host had never been checked against the opt-out list, so the fix itself leaked an opted-out brand's hostname. Anything newly reported off-device (hosts, headers, ids) is checked for what it can expose, not just for whether it works. This does not replace the confidence command, which still decides the merge.
+2. **Prove the fix is where the user is, before reading the evidence.** A merged PR is not a shipped one. Before deciding whether a fix worked, show that the merge commit is an ancestor of the last successful publish for the platform in question (an OTA run, a deploy, a store release; for an edge function, the deployed version), and note the date of that publish. Events from before it say nothing about the fix, and "quiet since the merge" is not a verdict when the publish came later or never came. If nothing has shipped, say so, name what is blocking it, and do not close or re-judge anything yet.
+3. **Read all the events since the ship, not one.** Open every event on the new build (the issue summary and one sample have misled this work twice) and tabulate the field the fix added. State how many events fit the hypothesis and how many do not. An event that contradicts it goes in the report, not under it. The hypothesis is written down *before* the data arrives, with what would refute it, so the result can be `verified`, `refuted` or `inconclusive (n events, needs more)` and not a story fitted afterwards.
+
+A fix judged on fewer events than the issue's usual interval (a failure that fires about daily is not tested by two quiet days) is `inconclusive`; say which date a verdict becomes possible.
+
 ### Closing what is already fixed
 
 Now that the query returns the standing backlog rather than one day of it, most of what you see on a healthy app is **already fixed and never closed**. Resolve those. It is the cheapest real work in this skill and the reason the backlog stops growing.
@@ -384,6 +394,7 @@ Push-notify: `"Config issue needs manual action — <repo>: <short description>.
 - Issues filtered out — count plus reason buckets (dev-env, dev-path, dev-noise tag, stale, already-addressed). Every bucket is structural, so counts are enough; if you ever find yourself writing a "low-volume" bucket, you have reinvented the filter Step 0 removed.
 - **The unresolved count, before and after this run** (e.g. `alate: 9 unresolved → 4`). The backlog is the number this skill exists to drive down, and a run that leaves it unchanged should say so plainly rather than let it pass unremarked.
 - **A line per issue that survived Step 0**, each with: the short ID; the root cause marked `verified` or `hypothesis`; the evidence in a clause; the disposition from Step 4; and the next step with its owner and date (the PR or issue link; for 4d, the field to read and the re-check date). An issue listed without a root cause and a disposition means the run is unfinished for that issue. Finish it before reporting, or say plainly which step was blocked and by what.
+- **Re-checks due**: every dated 4d re-check that has come due, with its verdict (`verified`, `refuted`, `inconclusive` and the date a verdict becomes possible) and the evidence from "Re-checking" above: whether the fix has shipped (publish date) and how many events were read.
 - Real issues investigated (count)
 - **Issues resolved as already-fixed** (with the short ID and the PR that fixed each) — see Step 4
 - PRs opened and auto-merged (with links)
