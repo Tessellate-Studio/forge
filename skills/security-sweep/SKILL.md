@@ -54,6 +54,15 @@ repo root has its own lockfile too, but it audits clean; don't stop there.
   four to five branches a cycle; unless they are cleaned up they accumulate in
   every repo indefinitely.
 - alate's `master` is the default branch; so is badige's. litmus uses `main`.
+- **Audit `origin/<default>`, never the local checkout's lockfile.** Run
+  `git fetch`, then `git rev-list --count HEAD..origin/<default>` and
+  `git diff --name-only HEAD origin/<default> | grep package-lock` for every
+  package root *before* the first `npm audit`. A checkout that is behind with a
+  changed lockfile gives a stale audit: on 2026-11-09 badige was 4 commits
+  behind, and its fixes for `node-forge`, `joi` and `fast-uri` (#115) were
+  already merged, so the first pass chased findings that no longer existed.
+  When behind, audit from a scratch worktree on `origin/<default>` (or
+  fast-forward a clean checkout) and treat that as the baseline.
 
 ## Step 0: Dependabot PR triage (daily)
 
@@ -303,6 +312,26 @@ These are safe to fix automatically:
    disposition log on 2026-09-15. The re-resolve moved both to 4.1.11 and the
    fix shipped on 2026-09-21.
 
+   **The plain re-resolve is the weaker check.** On 2026-11-09 it moved nothing
+   in six of seven package roots, while a **targeted update per vulnerable
+   package** found real fixes (badige `semver`, `joi`, `node-forge`,
+   `fast-uri`; alate `minimatch`; litmus `undici`, `ip-address`). Run both,
+   targeted second, in a scratch copy of `package.json` + `package-lock.json`
+   so the checkout is untouched:
+
+   ```bash
+   for p in <each package with an object in via>; do
+     npm update "$p" --package-lock-only --no-save --ignore-scripts
+   done
+   npm audit --json
+   ```
+
+   It is slow (about 10 minutes across seven roots) — run it in the background.
+   Read the version diff: a fix that drags a transitive across a major (alate
+   `minimatch` 9→11 pulling `brace-expansion` 2→5) is not a safe-pass fix;
+   route it to 2c/2b. Then re-apply only the accepted updates in the real
+   worktree.
+
    Run it against **every** package root, not just the ones that look
    promising. When it finds nothing, that is worth saying: the "capped"
    verdicts then rest on two independent checks instead of one.
@@ -494,6 +523,23 @@ create a parallel one**:
 Read the existing file before writing. These logs carry prior triage decisions
 with real reasoning — check whether a finding is already dispositioned and say
 "unchanged from <date>" rather than re-deriving or contradicting it.
+
+**Fold the log entry into the fix PR — never open a separate docs-only PR.**
+The dated entry is committed on the same branch as the lockfile fix (a second
+commit is fine) and ships and merges with it. A docs-only PR has no gate that
+merges it: `safe-merge` is built for lockfile fixes, so docs PRs sat open and
+green for a week (2026-11-02 → 11-09) and the log on the default branch lagged
+the sweep. `safe-merge` accepts a lockfile + `docs/` diff (badige#117).
+
+- **App with a fix PR:** add the entry on that branch before opening the PR.
+- **App with no fix this run:** add an "unchanged from <date>" entry only when
+  something moved (a verdict expired, an alert cleared, a new advisory). If
+  nothing changed, no entry and no PR — silence is correct. When an entry *is*
+  warranted with no fix PR, open one docs-only PR and merge it in the same run
+  through `apps/alate/scripts/merge-on-green.sh <pr> --squash` run from that
+  repo's checkout. Do not leave it open for a later run.
+- Before finishing, `gh pr list --search "security-sweep in:head" --state open`
+  must show nothing this sweep opened.
 
 Update each with dated entries:
 
