@@ -167,11 +167,24 @@ Then **Read** `alate-verify.png` and measure against the acceptance criteria.
   starts on the next card's peeking edge (x ≈ 1100) moves nothing, every time. Read
   the front card from `uiautomator dump` (`content-desc="<Brand> <Title>. Size …"`
   with its bounds) after each swipe; deck order is not stable between launches.
-- **Opening the expanded card's full note:** a SLOW drag from mid-card,
-  `input swipe 720 2000 720 900 900`. A fast long swipe from the bottom
-  (`720 2400 720 700 400`) closes the card instead. The footer actions
-  (`expanded-fit-reevaluate`, `-view-on-store`, `-bought`) only exist in the dump
-  after that drag.
+- **A drag UP DELETES the fit, on the deck AND on the open card** (alate#1834 /
+  #1859, 2026-11-14/15). The "Fit deleted" Undo toast lasts seconds; after it the
+  deletion syncs to every device. **Never swipe vertically while
+  `merged-home` or `expanded-fit-root` is in the dump** (the open card sits inside
+  merged-home): not to scroll, not to "advance", not to reach a footer. If a tap
+  did not navigate, re-dump and re-tap; never swipe to find the target. This has
+  deleted the owner's fits three times (2026-10-09, 2026-10-12, 2026-11-15).
+- **Opening the expanded card's full note:** TAP the lower half of the open
+  card ("Tap for the full note"). Before 2026-11-14 this was a slow drag from
+  mid-card, `input swipe 720 2000 720 900 900`. **That drag now deletes the
+  fit.** The footer actions (`expanded-fit-reevaluate`, `-view-on-store`,
+  `-bought`) appear in the dump once the note is open.
+- **A fit deleted by mistake:** Undo while the toast shows. After that, the
+  product link is still in the synced `fit_history` row (`deleted_at` set,
+  `url` kept): read it, then share it back,
+  `am start -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT '<url>' -n com.tessellate.alate/.MainActivity`
+  (Git Bash: `MSYS_NO_PATHCONV=1`). The size and note come back; what the owner
+  added by hand (a "Bought it" answer) does not.
 - **Back from alate can land in Chrome** (or whatever app opened a store link last),
   not on Home. Relaunch with `monkey -p com.tessellate.alate 1` rather than pressing
   Back to leave a card.
