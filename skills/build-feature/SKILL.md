@@ -347,7 +347,19 @@ tooling included);** skip with a one-line note for a true one-liner:
    fix and watch the test go red; `curl` the endpoint) or say it is a
    hypothesis. Full rule: `${CLAUDE_PLUGIN_ROOT}/standards/authoritative-claims.md`
    → "Reading is not running".
-5. Commit the cleanups separately (`chore: simplify <scope>`) — don't fold them
+5. **Changed an engine that has a persona test bed?** (alate: anything under
+   `backend/sdk/fitGuidance`, `sdk/sizeFinder`, `sdk/shared/lengthOptions`, or note
+   wording.) Run BOTH scripts from `backend/` and read every line they print:
+   `npx tsx scripts/persona-fit.ts` (49 personas x the garment corpus) and
+   `npx tsx scripts/persona-families.ts` (bodies identical but for one axis).
+   Each moved row is a "was / now": decide whether the new answer is right, and
+   only then run the same script with `--update` in the same PR. An oracle
+   finding (a bigger body got a smaller size, a size off the chart, a leaked
+   placeholder) is reported to the owner as an issue with the persona or family,
+   the garment and the answer. Never loosen, skip or special-case it. Do not run
+   `--update` to make a red check green without reading the diff. CI shows the
+   same was/now output in the job summary when the backend suite fails.
+6. Commit the cleanups separately (`chore: simplify <scope>`) — don't fold them
    into the feature/fix commit.
 
 Full platform rule: `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Quality
