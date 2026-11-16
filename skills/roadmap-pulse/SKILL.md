@@ -120,7 +120,8 @@ gh pr list    -R <repo> --state open -L 200 --label decision --json number,title
 **What each open issue is**, for everything below: `title` is the issue title;
 `description` is the body's `### What` section, else the first 500 characters
 of the body; `P` is its P label (none, or several, is a lint finding — see
-Step 1); `held` is `on hold`; `needs-you` is `needs-input`.
+Step 1); `held` is `on hold`; `needs-you` is `needs-input`; `answered` is
+`owner-replied` (act on these first, `workflows.md` → "Owner answers").
 
 ### Other inputs
 
