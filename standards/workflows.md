@@ -695,6 +695,29 @@ content any more, because each is its own issue: claim it (`wip claim`)
 instead of checking a file. Full rule:
 [`anti-patterns.md` → "Concurrent branches collide in content"](./anti-patterns.md).
 
+## Root-cause fixes, not band-aids
+
+Owner decision 2026-11-16; binds every session, agent and scheduled task.
+Fix the mechanism that let the bug happen, not only the case that showed it.
+Before proposing or building a fix, answer: **why could this happen at all,
+and has this shape of bug happened before?** If it has, the fix removes the
+shape (one shared source, a rule the code enforces, a test that compares whole
+outputs), not one more instance. The pre-flight below is how you find out
+whether it has happened before.
+
+When a contained fix is the right first step (to stop harm now), label it as
+**contained, not the root fix** in the report and the PR body, and name the
+root fix alongside it, with what it would take. Never present a contained fix
+as the solution, and never offer a band-aid as the recommendation without
+saying so.
+
+This sets the *kind* of fix, not its size: a rare defect still gets the
+smallest fix that removes its cause ([`anti-patterns.md`](./anti-patterns.md)
+→ "Size the fix to how often it really happens"), and a cause must be proven
+before it is named ([`anti-patterns.md`](./anti-patterns.md) → "A cause is a
+controlled comparison"). A rule the owner states covers every state: see
+"Every reported rule covers every state" below.
+
 ## Bug-fix pre-flight — read the regression log FIRST
 
 Before writing any code for a reported bug, read the app's
@@ -822,8 +845,14 @@ marker from this fixed set:
 | 🟡 | Watch: left open on purpose, waiting, no action yet |
 | 💤 | Nothing to do, skipped, none |
 | 🚨 | Urgent or failed: real exposure, failures, no-patch cases. Rare |
+| 🐛 | Bug: the work is a bug fix, or a line names a bug (found, fixed, still open) |
 
 - **One marker per line, most urgent first** (🚨 → 👀 → ⚠️ → 🟡 → the rest).
+- **Say it is a bug, up front** (owner, 2026-11-16). When the task is a bug
+  fix, the first line of every report and status update starts with 🐛 and
+  says, in plain words, what was broken for the person using the product. A
+  bug fix must never read like a feature or a chore. *Precedent: a chat about
+  the alate#1898 fix (PR #1903) gave no sign it was a bug.*
 - **No new markers.** A meaning the set cannot express goes in words, or is
   proposed to the owner as a change to this table.
 - **Summary only.** Code, logs, quoted output and tool narration stay
