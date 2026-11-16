@@ -305,7 +305,9 @@ then closed unmerged by the owner as "a negligible edge case": real brands
 share links on their own domain. The password-protected-store guard
 (#1046/#1050) drew the same "is this even a reality?" question.* Frequency is
 evidence: cite where it comes from (traffic, logs, an owner report), or label
-it a hypothesis, per "Speak from authority".
+it a hypothesis, per "Speak from authority". Small is not the same as
+shallow: the small fix still removes the cause, and a contained fix is labelled
+as one ([`workflows.md`](./workflows.md) → "Root-cause fixes, not band-aids").
 
 ## WCAG 2.1 AA is a requirement, not a later polish pass (was #17)
 
