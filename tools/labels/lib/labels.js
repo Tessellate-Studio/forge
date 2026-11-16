@@ -84,6 +84,16 @@ const LIFECYCLE = [
       'Blocked on a human answer that is not a doc approval, or on an open decision PR',
   },
   {
+    // The answer to needs-input (owner, 2026-11-17). The owner and every agent
+    // post as one GitHub account, so only a label says "a person answered
+    // here". Not a needs-* shade: it is a go signal, not a block, so it wears
+    // a sage green no other label uses.
+    name: 'owner-replied',
+    color: '5F8A6B',
+    description:
+      'The owner answered in a comment: act on it next, then remove this label',
+  },
+  {
     // Not FBCA04 (P2's colour, until 2026-09-25) — an untriaged issue must
     // not read as a P2.
     name: 'needs-triage',
@@ -116,7 +126,8 @@ const DEVICE_TEST = [
   {
     name: 'needs-build',
     color: NEEDS_SHADES[3],
-    description: 'No installable build can reach this test yet',
+    description:
+      'No installable build can reach this test yet (a build state, not an owner answer)',
   },
   {
     name: 'parked',

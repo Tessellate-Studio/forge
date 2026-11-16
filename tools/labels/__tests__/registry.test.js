@@ -96,3 +96,31 @@ describe('priority reads at a glance', () => {
     expect(clashes).toEqual([]);
   });
 });
+
+// Owner, 2026-11-17: an agent cannot tell an owner comment from its own (one
+// GitHub account), so an answered question needs a label of its own. The
+// owner used `needs-build` for it, which drains read as "wait for a binary",
+// and the answers on alate #650 and #925 sat unread.
+describe('owner-replied answers needs-input', () => {
+  it('is registered as a lifecycle label, next to needs-input', () => {
+    const spec = L.labelSpec('owner-replied');
+    expect(L.LIFECYCLE).toContain(spec);
+    expect(spec.description).toMatch(/owner answered/i);
+    expect(L.LIFECYCLE.map(l => l.name)).toContain('needs-input');
+  });
+
+  it('has a colour no other label wears', () => {
+    const c = L.labelSpec('owner-replied').color.toLowerCase();
+    const others = [...registry.values()].filter(
+      l => l.name !== 'owner-replied'
+    );
+    expect(others.filter(l => l.color.toLowerCase() === c)).toEqual([]);
+  });
+
+  it('needs-build says it is about a build, never an answer', () => {
+    expect(L.labelSpec('needs-build').description).toMatch(/build/i);
+    expect(L.labelSpec('needs-build').description).toMatch(
+      /not an owner answer/i
+    );
+  });
+});
