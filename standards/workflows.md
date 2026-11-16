@@ -1026,6 +1026,38 @@ cross-references make finding them a lookup rather than a search.
 the context is warm has real Steps and a real Expect; one written later from
 the diff has neither.
 
+### Hand-off to the train and back — the parent does not wait holding a claim
+
+(owner, 2026-11-16.) The session that built a change and enqueued its device
+test is the **parent**. After the enqueue the parent does not sit on the issue:
+
+1. **Release your claim on the device-test issue** at the hand-off
+   (`wip release <repo>#<n>`), and leave one comment saying who picks it up on
+   a result ("Handed to the OTA train and its drain. Parent session <id>
+   resumes on the verdict."). A live claim "waiting on human" or "waiting on the
+   train" reads to every drain as somebody else's test, and the issue then sits
+   untested for days (alate#1785: nine days, the claim was the only thing
+   blocking it).
+2. **Arm a Monitor on the issue and carry on** with the next task. Watch the
+   issue's state, labels and comment count (`gh issue view <n> --json
+   state,labels,comments`), one line per change, never a sleep loop. Name the
+   issue and the PR in the monitor's description.
+3. **The train does the rest.** The OTA train publishes, its drain claims the
+   test under its own `--holder`, runs it, posts the per-step verdict as a
+   comment with the evidence, sets the labels (`failed`, or closes the issue
+   `completed`), and **releases its claim** (device-test Step 4). Nothing waits on
+   the parent.
+4. **On the verdict, the parent picks it up:** passed means nothing more, move
+   on; failed means `wip claim` the issue again and fix it through the normal
+   PR flow (a new enqueue for the fix); needs-human or parked means tell the
+   owner, with what blocks it. The parent never re-runs a drain's steps on the
+   phone to double-check unless the owner asks.
+
+*Why:* two things went wrong without this. A parent kept its 🚧 claim "waiting
+on human" while the train had no way to take the test, and a parent polled with
+sleeps instead of listening. The claim marks who is working; a session that is
+only waiting is not working.
+
 ### Claiming the device — claim the tests you run, with the phone named
 
 `dtq` answers _what is pending_. **Is anyone on the device right now** is
