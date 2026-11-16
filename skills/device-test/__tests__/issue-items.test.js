@@ -172,3 +172,57 @@ describe('priority and ownership, straight off the labels', () => {
     expect(itemFromIssue(issue(), 'alate').claimed).toBe(false);
   });
 });
+
+describe('code tier — CODE: steps are counted off the unticked boxes', () => {
+  const bodyWith = steps =>
+    [
+      '- **Verifies:** #739',
+      '- **Steps:**',
+      ...steps,
+      '- **Expect:**',
+      '  1. ok',
+    ].join('\n');
+
+  it('counts only unticked CODE: steps, so a drain ticking one shrinks it', () => {
+    const item = itemFromIssue(
+      issue({
+        body: bodyWith([
+          '  - [ ] 1. CODE: persona-fit',
+          '  - [x] 2. CODE: jest',
+          '  - [ ] 3. HUMAN: judge the layout',
+          '  - [ ] 4. tap Save',
+          '  - [ ] 5. CODE: store-probe',
+        ]),
+      }),
+      'alate'
+    );
+    expect(item.codeSteps).toBe(2);
+  });
+
+  it('is zero for a phone-only test and for an empty body', () => {
+    expect(itemFromIssue(issue(), 'alate').codeSteps).toBe(0);
+    expect(itemFromIssue(issue({ body: null }), 'alate').codeSteps).toBe(0);
+  });
+
+  it('does not count the word CODE: mid-sentence or a fenced quote of a step', () => {
+    const item = itemFromIssue(
+      issue({
+        body: bodyWith([
+          '  - [ ] 1. open the CODE: field',
+          '```',
+          '  - [ ] 2. CODE: quoted example',
+          '```',
+        ]),
+      }),
+      'alate'
+    );
+    expect(item.codeSteps).toBe(0);
+  });
+
+  it('a CODE: step never labels the test needs-human', () => {
+    const { labelsFor } = require('../scripts/enqueue');
+    expect(labelsFor({ steps: ['CODE: persona-fit', 'tap Save'] })).toEqual([
+      'device-test',
+    ]);
+  });
+});

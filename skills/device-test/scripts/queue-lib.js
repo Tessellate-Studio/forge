@@ -136,6 +136,23 @@ const ITEM_GLYPHS = Object.values(GLYPHS);
 const ITEM_HEADING = new RegExp(`^###\\s*(?:${ITEM_GLYPHS.join('|')})`, 'gm');
 
 /**
+ * Unticked `CODE:` steps in a body — what a worktree check can still verify
+ * without a phone (the "code tier", workflows.md → "Device-test queue").
+ *
+ * An UNTICKED box only: a drain ticks a step when it runs it, so a ticked
+ * CODE: step is already done and must not keep the test on the board's
+ * "code-checkable" count. Counted over a code-masked copy so a comment or a
+ * fenced example QUOTING `- [ ] 1. CODE:` is not mistaken for a real step.
+ */
+const CODE_STEP = /^[ \t]*[-*][ \t]+\[ \][ \t]+(?:\d+\.[ \t]*)?CODE:/gm;
+
+function codeStepCount(body) {
+  const masked = maskCode(body);
+  CODE_STEP.lastIndex = 0;
+  return (masked.match(CODE_STEP) || []).length;
+}
+
+/**
  * How many tests this ONE issue body is carrying.
  *
  * One issue per test. Stack two into one body and the second has no row on
@@ -317,6 +334,12 @@ function itemFromIssue(issue, repoKey) {
     needsRuntime: field('Needs runtime'),
     needsHuman: has(LABELS.NEEDS_HUMAN),
 
+    // Unticked `CODE:` steps: work a worktree check can do before (or instead
+    // of) any phone sitting. Read off the body, like the other free-text
+    // fields — there is no label for it, because a label would have to be
+    // kept in sync with the ticks and drift (the same lesson as RFD-003).
+    codeSteps: codeStepCount(body),
+
     // Priority and ownership are labels too, so the board ranks and shows
     // who is on a test without opening it.
     priority:
@@ -385,6 +408,7 @@ module.exports = {
   // expectedGlyph, headingDrift, the restamp pass — went with the Status line.
   ITEM_GLYPHS,
   itemHeadingCount,
+  codeStepCount,
 
   // Re-exported so callers get the whole queue surface from one require.
   ...require('./claim-lib'),
