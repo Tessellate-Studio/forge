@@ -32,4 +32,9 @@ describe('forge-label', () => {
   it('usage error without a key', () => {
     expect(run([]).code).toBe(2);
   });
+  it('--repo before the key: its value is not taken as the key', () => {
+    expect(run(['--repo', 'alate', 'P1'], [{ name: '🔴 P1' }]).out).toEqual([
+      '🔴 P1',
+    ]);
+  });
 });

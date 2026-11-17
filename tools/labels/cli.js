@@ -15,8 +15,10 @@ function main(
   argv,
   { run = execFileSync, out = console.log, err = console.error } = {}
 ) {
-  const key = argv.find(a => !a.startsWith('--'));
   const at = argv.indexOf('--repo');
+  const key = argv.find(
+    (a, i) => !a.startsWith('--') && (at < 0 || i !== at + 1)
+  );
   const repo = at >= 0 ? argv[at + 1] : null;
   if (!key || (at >= 0 && !repo)) {
     err('usage: forge-label <key> [--repo <name|owner/name>]');

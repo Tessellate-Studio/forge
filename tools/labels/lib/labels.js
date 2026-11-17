@@ -195,16 +195,11 @@ function displayName(key, { emoji = EMOJI_NAMES } = {}) {
  *  and `labelKey('bug')` are both `bug`. Matching on keys is what lets code
  *  work before, during and after the rename. Unknown names come back as-is. */
 function labelKey(name) {
-  const s = String(name || '');
-  const sp = s.indexOf(' ');
-  if (sp > 0) {
-    const rest = s.slice(sp + 1);
-    if (EMOJI_BY_KEY.get(keyOf(rest)) === s.slice(0, sp)) {
-      return rest;
-    }
-  }
-  return s;
+  // The SAME rule every app workflow inlines (one rule, not two): a leading
+  // non-ASCII word is the label's emoji. `manual run list` keeps its words.
+  return String(name || '').replace(EMOJI_PREFIX, '');
 }
+const EMOJI_PREFIX = /^\P{ASCII}+ /u;
 
 /** Does live name `name` stand for `key`? (case-insensitive, like GitHub) */
 function isLabel(name, key) {
@@ -331,7 +326,6 @@ const RETIRED = {
     'blocked',
     'needs-review',
     'repeat-issue',
-    'github_actions',
     'pending-change',
   ],
   forge: [

@@ -67,7 +67,7 @@ jobs:
 
             const drop = (k) =>
               github.rest.issues.removeLabel({ owner, repo, issue_number: pr.number, name: nameOf(k) })
-                .catch((e) => core.info(`#${pr.number}: '${name}' already gone (${e.status}).`));
+                .catch((e) => core.info(`#${pr.number}: '${nameOf(k)}' already gone (${e.status}).`));
 
             if (labels.includes('gate-blocked')) {
               await drop('gate-blocked');

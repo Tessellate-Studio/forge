@@ -18,7 +18,10 @@ describe('display name and key', () => {
     expect(L.labelKey('🐛 bug')).toBe('bug');
     expect(L.labelKey('bug')).toBe('bug');
     expect(L.labelKey('🐛 Bug')).toBe('Bug');
-    expect(L.labelKey('🔴 P2')).toBe('🔴 P2'); // wrong emoji: not P2's name
+
+    // One rule everywhere (the app workflows inline it too): any leading
+    // non-ASCII word is an emoji, so a hand-made `🔴 P2` still means P2.
+    expect(L.labelKey('🔴 P2')).toBe('P2');
     expect(L.labelKey('manual run list')).toBe('manual run list');
     expect(L.labelKey(undefined)).toBe('');
   });
