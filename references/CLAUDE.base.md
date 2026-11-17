@@ -124,7 +124,7 @@ optional and discovered from the repo when absent.
 
 ## Planning docs
 
-- **Work items** — GitHub issues, P0–P3 (`gh issue list -l P1`); check them
+- **Work items** — GitHub issues, P0–P3 (`gh issue list -l "$(forge-label P1 2>/dev/null || echo P1)"`: labels may carry an emoji, so type the key through `forge-label`, RFD 005); check them
   before proposing "should we build X?". Owner yes/no → draft `decision` PRs.
 - `USER_PATHS.md` — happy + edge + uncovered user flows.
 - Open PRs labelled `manual run list` — every step only a human can do, with exact steps.

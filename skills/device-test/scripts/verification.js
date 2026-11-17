@@ -28,7 +28,13 @@
 
 const path = require('path');
 
-const { REPOS, LABELS, itemFromIssue, parseGh } = require('./queue-lib');
+const {
+  REPOS,
+  LABELS,
+  itemFromIssue,
+  parseGh,
+  labelKey,
+} = require('./queue-lib');
 
 const { gh } = require(path.join(
   __dirname,
@@ -97,7 +103,7 @@ function deviceVerification({ repoDef, pr, prLabels, issues, error }) {
     };
   }
 
-  const labels = prLabels.map(l => String(l).toLowerCase());
+  const labels = prLabels.map(l => labelKey(String(l)).toLowerCase());
   if (labels.includes(UNVERIFIED_LABEL)) {
     return {
       status: 'clear',

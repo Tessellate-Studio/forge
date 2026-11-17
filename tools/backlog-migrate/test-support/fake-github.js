@@ -85,6 +85,30 @@ class FakeGitHub {
       .find(i => i.number === n)
       .comments.push({ body });
   }
+  labelledItems(repo, name) {
+    return this._repo(repo)
+      .filter(i => i.labels.some(l => l.name === name))
+      .map(i => i.number);
+  }
+  addLabelTo(repo, n, name) {
+    this._write('addLabelTo', [repo, n, name]);
+    const i = this._repo(repo).find(x => x.number === n);
+    if (!i.labels.some(l => l.name === name)) {
+      i.labels.push({ name });
+    }
+  }
+  removeLabelFrom(repo, n, name) {
+    this._write('removeLabelFrom', [repo, n, name]);
+    const i = this._repo(repo).find(x => x.number === n);
+    i.labels = i.labels.filter(l => l.name !== name);
+  }
+  deleteLabel(repo, name) {
+    this._write('deleteLabel', [repo, name]);
+    this.labels[repo] = this.labels[repo].filter(l => l.name !== name);
+    this._repo(repo).forEach(i => {
+      i.labels = i.labels.filter(l => l.name !== name);
+    });
+  }
   addLabels(repo, n, labels) {
     this._write('addLabels', [repo, n, labels.join(',')]);
     const i = this._repo(repo).find(x => x.number === n);

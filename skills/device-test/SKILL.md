@@ -632,7 +632,7 @@ For each OPEN item on the current app:
    next". The `device-test` issue itself stays **outside** the P scheme — no
    P label on a test, ever; roadmap-pulse excludes that queue:
    ```bash
-   gh issue edit <n> -R Tessellate-Studio/<repo> --add-label failed
+   gh issue edit <n> -R Tessellate-Studio/<repo> --add-label "$(forge-label failed --repo <repo> 2>/dev/null || echo failed)"
    ```
    **A failure is open work, not a closed run.** The test is retired only when
    a later drain re-runs it after the fix lands and it passes — which is why

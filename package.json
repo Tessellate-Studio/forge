@@ -13,7 +13,8 @@
     "wip": "tools/work-claim/cli.js",
     "forge-wip": "tools/work-claim/cli.js",
     "wi": "tools/work-item/cli.js",
-    "forge-issue-forms": "tools/issue-forms/cli.js"
+    "forge-issue-forms": "tools/issue-forms/cli.js",
+    "forge-label": "tools/labels/cli.js"
   },
   "files": [
     "index.js",

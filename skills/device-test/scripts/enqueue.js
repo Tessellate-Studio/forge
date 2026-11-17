@@ -11,7 +11,7 @@
 
 const path = require('path');
 
-const { LABELS, PRIORITY } = require('./queue-lib');
+const { LABELS, PRIORITY, labelKey, resolveLabels } = require('./queue-lib');
 
 const { gh } = require(path.join(
   __dirname,
@@ -124,7 +124,7 @@ const DEFAULT_PRIORITY = 'P2';
 function priorityFrom(labelLists) {
   const found = (labelLists || [])
     .flat()
-    .map(String)
+    .map(n => labelKey(String(n)))
     .filter(n => PRIORITY.test(n))
     .sort();
   return found[0] || DEFAULT_PRIORITY;
@@ -235,6 +235,15 @@ async function enqueue({ repo, intent, fields, dryRun }) {
     return { action: 'append', number: existing.number };
   }
 
+  // Send the repo's LIVE names: `labels` holds keys, and GitHub silently
+  // creates a label for a name it does not have (github/docs#35718).
+  // `gh label list`, not `gh api --paginate`: the latter concatenates pages
+  // as `][`, which JSON.parse rejects once a repo has over 100 labels.
+  const live = JSON.parse(
+    (await gh(['label', 'list', '-R', repo, '-L', '500', '--json', 'name'])) ||
+      '[]'
+  );
+  const names = resolveLabels(labels, live);
   const created = await gh([
     'api',
     `repos/${repo}/issues`,
@@ -242,7 +251,7 @@ async function enqueue({ repo, intent, fields, dryRun }) {
     `title=${title}`,
     '-f',
     `body=${body}`,
-    ...labels.flatMap(l => ['-f', `labels[]=${l}`]),
+    ...names.flatMap(l => ['-f', `labels[]=${l}`]),
   ]);
   return { action: 'create', number: JSON.parse(created).number };
 }

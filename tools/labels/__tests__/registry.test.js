@@ -90,7 +90,7 @@ describe('priority reads at a glance', () => {
   it('no other label wears a priority colour', () => {
     const pColors = new Set(L.PRIORITY.map(p => p.color.toLowerCase()));
     const clashes = [...registry.values()]
-      .filter(l => !L.PRIORITY.includes(l))
+      .filter(l => !L.PRIORITY.some(p => p.name === l.key))
       .filter(l => pColors.has(l.color.toLowerCase()))
       .map(l => `${l.name} ${l.color}`);
     expect(clashes).toEqual([]);
@@ -104,7 +104,7 @@ describe('priority reads at a glance', () => {
 describe('owner-replied answers needs-input', () => {
   it('is registered as a lifecycle label, next to needs-input', () => {
     const spec = L.labelSpec('owner-replied');
-    expect(L.LIFECYCLE).toContain(spec);
+    expect(L.LIFECYCLE.map(l => l.name)).toContain(spec.key);
     expect(spec.description).toMatch(/owner answered/i);
     expect(L.LIFECYCLE.map(l => l.name)).toContain('needs-input');
   });
