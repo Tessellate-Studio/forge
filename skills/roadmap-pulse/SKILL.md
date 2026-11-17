@@ -215,7 +215,7 @@ Block shape and field meanings: [`references/digest-format.md`](references/diges
 
 ### Step 1 — Honesty pass
 
-For each open item, scan for state claims and verify each against the source of truth. Full detection logic in [`references/staleness-detection.md`](references/staleness-detection.md) — read it before running.
+For each open item, scan for state claims and verify each against the source of truth. Also list every `device-test` + `needs-build` item open over 14 days (`dtq` marks them `STALE`) under "decide these": it needs one of the three exits in `standards/workflows.md` → "needs-build is a queue with an owner". Report only; never dispatch a build. Full detection logic in [`references/staleness-detection.md`](references/staleness-detection.md) — read it before running.
 
 | Failure mode | Check | Cron action | Manual-run action |
 |---|---|---|---|
