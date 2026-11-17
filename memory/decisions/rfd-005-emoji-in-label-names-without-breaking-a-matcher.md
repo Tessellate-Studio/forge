@@ -102,11 +102,11 @@ keeps `name` (what GitHub shows). A new map gives the emoji:
 
 ```js
 const EMOJI = {
-  bug: '🐛', feature: '✨', chore: '🧹', refactor: '♻️',
+  bug: '🐛', feature: '✨', chore: '🧹', refactor: '🔁',
   P0: '🚨', P1: '🔴', P2: '🟡', P3: '🟢',
   'needs-triage': '🔎', 'needs-human': '👀', decision: '🟣',
-  'needs-build': '🔧', parked: '🅿️', failed: '❌',
-  mobile: '📱', backend: '🖥️', scraper: '🕸️', 'fit-engine': '📏', infra: '🛠️',
+  'needs-build': '🔧', parked: '💤', failed: '❌',
+  mobile: '📱', backend: '💻', scraper: '🧲', 'fit-engine': '📏', infra: '🧰',
 };
 const EMOJI_NAMES = false; // the one switch (step 4)
 ```
@@ -117,7 +117,10 @@ names. Exports: `labelName(key)` and `labelKey(name)` (strips a known emoji
 prefix, so `labelKey('🐛 bug') === labelKey('bug') === 'bug'`).
 
 Marker overlap, per the owner: 🐛 bug, 🚨 P0 (urgent), 👀 needs-human (needs a
-human), 🟣 decision (decision made / to make), 🟡 P2 (the marker's "watch").
+human), 🟣 decision (decision made / to make), 🟡 P2 (the marker's "watch"),
+💤 parked (the marker for "nothing to do, skipped"). Every emoji in the map
+is ONE code point with no U+FE0F (owner, open question 3), so the name a
+person types in search is the name GitHub stores.
 `needs-decision` in the preview is a legacy alate label that duplicates the
 canonical `decision` (same description, `gh label list`, 2026-11-17); the
 emoji goes on `decision`, and `needs-decision` is folded into it (open
@@ -211,7 +214,17 @@ No change. Labels are metadata; the GitHub token scopes already in use cover
 5. **Scheduled-task prompts and memory notes** that type `-l <key>`: update to
    resolve, or to the `wi`/`dtq` commands that already resolve.
 
-## Open Questions
+## Decided
+
+Owner, 2026-11-17, answering the four open questions below with "Yes, all
+four" (the recommendations):
+1. alate's `needs-decision` is folded into the canonical `decision` in step 3.
+2. Only the labels in the map get emoji for now; others stay bare until asked.
+3. Single-code-point emoji only: 🔁 refactor, 💤 parked, 💻 backend,
+   🧰 infra, 🧲 scraper (the map above already uses them).
+4. Native emoji, not `:shortcode:` names.
+
+## Open Questions (answered, kept for the record)
 
 1. **Fold `needs-decision` into `decision`** (alate only, same description)?
    Recommended: yes, rename-merge in step 3, emoji on `decision`.
