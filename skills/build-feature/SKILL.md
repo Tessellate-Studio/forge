@@ -369,14 +369,6 @@ tooling included);** skip with a one-line note for a true one-liner:
    the garment and the answer. Never loosen, skip or special-case it. Do not run
    `--update` to make a red check green without reading the diff. CI shows the
    same was/now output in the job summary when the backend suite fails.
-   **Writing a NEW oracle about a rule? Read the rule's own header comment first.**
-   Look for its by-design limits: words like "only", "on purpose", "deliberately",
-   "narrow", "by design", "(owner, <date>)", and what the rule reads ("the shopper's OWN
-   measured waist (a chip has none)"). An oracle that assumes more than the rule promises
-   reports a design as a bug (alate, 2026-11-17: "the same cm gives the same size by any route"
-   produced 32 findings, all one deliberate tape-only waistband rule). Where a rule is
-   deliberately narrower than the oracle, list the exception WITH its reason in the oracle's
-   code and print it on every run; never drop it silently.
 6. Commit the cleanups separately (`chore: simplify <scope>`) — don't fold them
    into the feature/fix commit.
 
