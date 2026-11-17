@@ -494,6 +494,31 @@ master`). It does NOT block (the change already merged): on red, log a
 cmd /c "rmdir /s /q Z:\<dir>"; subst Z: /d` as a fallback for orphaned
    directories that `git worktree remove` can't delete. Don't leave worktree
    directories cluttering the project's parent folder.
+9. **When the change has to be deployed by hand** (an edge function, a worker,
+   anything that is not built and shipped by CI). Four rules from the ALATE-2B
+   chain (alate#1935, #1937, #1931, 2026-11-17):
+   - **Look for the automation first.** Search open PRs and issues for the
+     deploy path (`gh pr list --search deploy`, the repo's workflows) before
+     deploying by hand. The hand deploy was done an hour before the open PR
+     that automates it was found (alate#1934).
+   - **A deploy ships everything merged since the last one, not only your
+     change.** Compare the deployed version's date with the log of the paths it
+     bundles, and check that every column, table or trigger the newer code needs
+     exists in production before you send it. Say in the report what else went
+     out with it.
+   - **After a refactor merges next to other work, grep merged master for every
+     use of a name you removed or moved.** Two PRs can merge side by side with no
+     conflict and still be broken together (alate#1937: a handler stopped
+     receiving `requestId` while a newly merged block still logged it). Code the
+     compiler does not see (Deno functions outside the tsconfig) will not tell
+     you; run the grep, then add a test that would have caught it.
+   - **A tool that takes pasted file content is a transcription, not a copy.**
+     Hash the source files against merged master first, deploy the smallest
+     function first, smoke-test that it boots and answers from your own code,
+     and report that the content was not byte-compared and what was not
+     exercised (a signed-in call). Edit code with Edit and Write; a `node -e`
+     with backslashes in a shell string strips them (it corrupted a regex test
+     twice in this chain).
 
 ## Step 7 — Closing retro (MANDATORY — answer in the final report, don't skip)
 
