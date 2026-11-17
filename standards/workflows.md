@@ -1138,22 +1138,25 @@ cross-references make finding them a lookup rather than a search.
 the context is warm has real Steps and a real Expect; one written later from
 the diff has neither.
 
-### Hand-off to the train and back — the parent does not wait holding a claim
+### Hand-off to the train and back — the parent lets go, then checks once after the drain
 
 (owner, 2026-11-16.) The session that built a change and enqueued its device
-test is the **parent**. After the enqueue the parent does not sit on the issue:
+test is the **parent**. It does not wait on the issue, and it does not poll it:
 
-1. **Release your claim on the device-test issue** at the hand-off
-   (`wip release <repo>#<n>`), and leave one comment saying who picks it up on
-   a result ("Handed to the OTA train and its drain. Parent session <id>
-   resumes on the verdict."). A live claim "waiting on human" or "waiting on the
-   train" reads to every drain as somebody else's test, and the issue then sits
-   untested for days (alate#1785: nine days, the claim was the only thing
-   blocking it).
-2. **Arm a Monitor on the issue and carry on** with the next task. Watch the
-   issue's state, labels and comment count (`gh issue view <n> --json
-   state,labels,comments`), one line per change, never a sleep loop. Name the
-   issue and the PR in the monitor's description.
+1. **Let go of the claim when your own task is done** (`wip release
+   <repo>#<n>`), and leave one comment saying who picks it up on a result
+   ("Handed to the OTA train and its drain. Parent session <id> checks after
+   the drain."). A live claim "waiting on human" or "waiting on the train" reads
+   to every drain as somebody else's test, and the issue then sits untested
+   (alate#1785: nine days, the claim was the only thing blocking it). The parent
+   holds no claim while the train and the drain run.
+2. **Check the drain's ticket once, about an hour after the next train slot**
+   (the trains run 13:00 and 23:30 IST, so about 14:00 and 00:30), by a
+   one-shot scheduled wake-up, not a loop and not a Monitor on the issue:
+   `gh issue view <n> --json state,labels,comments` and read what the drain
+   posted since the hand-off. Nothing posted yet: say so and check again after
+   the next slot; the train may not have run, and a poll in between finds
+   nothing the schedule does not.
 3. **The train does the rest.** The OTA train publishes, its drain claims the
    test under its own `--holder`, runs it, posts the per-step verdict as a
    comment with the evidence, sets the labels (`failed`, or closes the issue
@@ -1165,10 +1168,10 @@ test is the **parent**. After the enqueue the parent does not sit on the issue:
    owner, with what blocks it. The parent never re-runs a drain's steps on the
    phone to double-check unless the owner asks.
 
-*Why:* two things went wrong without this. A parent kept its 🚧 claim "waiting
-on human" while the train had no way to take the test, and a parent polled with
-sleeps instead of listening. The claim marks who is working; a session that is
-only waiting is not working.
+*Why:* a parent that kept its 🚧 claim blocked the test, and one that watched
+the issue with no drain running only polled an empty thread (alate#1785 and
+#1878, 2026-11-16). The claim marks who is working; a session that is only
+waiting is not working, and the schedule says when an answer can exist.
 
 ### Claiming the device — claim the tests you run, with the phone named
 
