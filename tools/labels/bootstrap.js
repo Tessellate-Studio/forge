@@ -27,6 +27,7 @@ const {
   planLabels,
   retiredFor,
   labelKey,
+  resolveLabel,
 } = require('./lib/labels');
 
 async function bootstrap({
@@ -118,7 +119,7 @@ async function bootstrap({
 /** Retired names that exist in the repo and are NOT canonical (a retired
  *  entry can never take out a label the registry still wants). */
 function planRetire(existing, canonical, retired) {
-  const keep = new Set(canonical.map(l => (l.key || l.name).toLowerCase()));
+  const keep = new Set(canonical.map(l => l.key.toLowerCase()));
   const wanted = new Set(retired.map(n => n.toLowerCase()));
   return existing
     .map(l => l.name)
@@ -130,10 +131,7 @@ function planRetire(existing, canonical, retired) {
 function liveMap(existing, canonical) {
   const out = {};
   for (const want of canonical) {
-    const have = existing.find(
-      l => labelKey(l.name).toLowerCase() === want.key.toLowerCase()
-    );
-    out[want.key] = have ? have.name : want.name;
+    out[want.key] = resolveLabel(want.key, existing) || want.name;
   }
   return out;
 }

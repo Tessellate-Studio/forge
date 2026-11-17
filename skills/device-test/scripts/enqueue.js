@@ -11,17 +11,7 @@
 
 const path = require('path');
 
-const { LABELS, PRIORITY, labelKey } = require('./queue-lib');
-const { resolveLabel } = require(path.join(
-  __dirname,
-  '..',
-  '..',
-  '..',
-  'tools',
-  'labels',
-  'lib',
-  'labels.js'
-));
+const { LABELS, PRIORITY, labelKey, resolveLabels } = require('./queue-lib');
 
 const { gh } = require(path.join(
   __dirname,
@@ -247,11 +237,13 @@ async function enqueue({ repo, intent, fields, dryRun }) {
 
   // Send the repo's LIVE names: `labels` holds keys, and GitHub silently
   // creates a label for a name it does not have (github/docs#35718).
+  // `gh label list`, not `gh api --paginate`: the latter concatenates pages
+  // as `][`, which JSON.parse rejects once a repo has over 100 labels.
   const live = JSON.parse(
-    (await gh(['api', `repos/${repo}/labels?per_page=100`, '--paginate'])) ||
+    (await gh(['label', 'list', '-R', repo, '-L', '500', '--json', 'name'])) ||
       '[]'
   );
-  const names = labels.map(k => resolveLabel(k, live) || k);
+  const names = resolveLabels(labels, live);
   const created = await gh([
     'api',
     `repos/${repo}/issues`,

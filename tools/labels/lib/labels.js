@@ -210,10 +210,15 @@ function isLabel(name, key) {
  *  objects), or undefined. Writers send THIS, never a key: GitHub silently
  *  creates a label for an unknown name (github/docs#35718). */
 function resolveLabel(key, liveLabels) {
-  const hit = (liveLabels || [])
+  return (liveLabels || [])
     .map(l => (typeof l === 'string' ? l : l.name))
     .find(n => isLabel(n, key));
-  return hit;
+}
+
+/** Keys → the names to SEND: each key's live name, or the key itself when the
+ *  repo has none (the old behaviour). The one place writers do this. */
+function resolveLabels(keys, liveLabels) {
+  return keys.map(k => resolveLabel(k, liveLabels) || k);
 }
 
 /** The registry entry for one label, by key or display name — for code that
@@ -414,7 +419,7 @@ function planLabels(existing, canonical) {
   }
   const out = { create: [], edit: [], ok: [], merge: [], legacy: [] };
   for (const want of canonical) {
-    const haves = byKey.get(keyOf(want.key || want.name)) || [];
+    const haves = byKey.get(keyOf(want.key)) || [];
     const have =
       haves.find(h => h.name.toLowerCase() === want.name.toLowerCase()) ||
       haves[0];
@@ -466,4 +471,5 @@ module.exports = {
   labelKey,
   isLabel,
   resolveLabel,
+  resolveLabels,
 };

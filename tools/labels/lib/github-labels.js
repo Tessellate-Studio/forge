@@ -5,18 +5,15 @@
 // an issue. The REST issues endpoints serve PRs too, so one path covers both.
 
 const { execFileSync } = require('child_process');
-const { makeGithub } = require('../../backlog-migrate/lib/github');
-
-const OWNER = 'Tessellate-Studio';
-const slug = repo => (repo.includes('/') ? repo : `${OWNER}/${repo}`);
+const { makeGithub, slug } = require('../../backlog-migrate/lib/github');
 
 function defaultRun(args) {
-  return execFileSync('gh', args, { encoding: 'utf8' });
+  return execFileSync('gh', args, { encoding: 'utf8', maxBuffer: 1 << 28 });
 }
 
 function makeLabelGithub({ run = defaultRun } = {}) {
   return {
-    ...makeGithub(),
+    ...makeGithub({ run }),
     labelledItems: (repo, name) =>
       run([
         'api',

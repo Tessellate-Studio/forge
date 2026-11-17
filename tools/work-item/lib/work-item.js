@@ -8,7 +8,7 @@
 //   * list-before-create: a full LIST of open issues, never the search API,
 //     whose index lags by minutes and has filed duplicates (§5.3).
 
-const { AREA, labelKey, resolveLabel } = require('../../labels/lib/labels');
+const { AREA, labelKey, resolveLabels } = require('../../labels/lib/labels');
 const { overlap } = require('../../backlog-migrate/lib/classify');
 
 // Must stay identical to the field labels in templates/issue-forms/*.yml —
@@ -178,7 +178,7 @@ function wiNew(o, { gh, dryRun = false }) {
   // `issue.labels` holds keys; send the repo's LIVE names, because GitHub
   // silently creates a label for a name it does not have (RFD 005).
   const live = gh.listLabels(issue.repo);
-  const labels = issue.labels.map(k => resolveLabel(k, live) || k);
+  const labels = resolveLabels(issue.labels, live);
   const made = gh.createIssue(issue.repo, { ...issue, labels });
   return { status: 'created', issue, created: made };
 }

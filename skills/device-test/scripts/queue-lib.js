@@ -38,7 +38,7 @@ const {
 ));
 
 // RFD 005: match labels by KEY, so `👀 needs-human` and `needs-human` are one.
-const { labelKey } = require(path.join(
+const { labelKey, resolveLabels } = require(path.join(
   __dirname,
   '..',
   '..',
@@ -411,6 +411,7 @@ function daysSince(iso) {
 
 module.exports = {
   labelKey,
+  resolveLabels,
   REPOS,
   STATUS,
   LABELS,
