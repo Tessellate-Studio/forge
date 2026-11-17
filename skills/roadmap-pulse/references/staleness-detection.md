@@ -236,6 +236,8 @@ GitHub labels have no mutual exclusion, so the P scheme is enforced here and by 
 | **No P label, or more than one** | Every open work issue has exactly one of `P0`–`P3` | List it; propose one P with the reason |
 | **Stale `P0`** | No activity (`updatedAt`) for 14 days on a blocker | List it: either it isn't a P0 or it is stuck |
 | **`needs-input` > 14 days** | The question has gone unanswered | List it under "needs you", flagged |
+| **`owner-replied` open > 3 days** | The owner answered and no session acted on it | List it first under "needs you", flagged; never mark it stale |
+| **`needs-build` on a non-`device-test` item** | `needs-build` is a device-test state; on anything else it is almost always an owner answer in the wrong label | List it; propose `owner-replied` |
 | **`on hold` past its review-by date** | Read the date from the comment that applied the label | **Post a reminder comment**. Never close, never merge (`workflows.md` → "On hold") |
 | **Dead `claimed`** | The claim's last touch is older than `wip`'s staleness window | Run `wip sweep` (it owns that label) |
 | **`needs-input` on a `decision` PR** | Closing a decision PR is a valid answer, so it must not also carry `needs-input` | List it |

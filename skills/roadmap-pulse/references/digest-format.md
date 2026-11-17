@@ -42,7 +42,9 @@ the run metadata. Every row links to its source (issue URL or PR URL).
 
 2. **Awaiting your yes/no** — open `decision` PRs across the repos in scope,
    oldest first; any open > 14 days is flagged. Not scored.
-3. **Needs you** — open `needs-input` issues, oldest first; > 14 days flagged.
+3. **Needs you** — first, open `owner-replied` items (you answered; the pulse
+   acts on or assigns each one, `workflows.md` → "Owner answers"); then open
+   `needs-input` issues, oldest first; > 14 days flagged.
 4. **Close these?** — issues with a `<!-- pulse:suspect-shipped -->` evidence
    comment, each with the one-line evidence (merged PR, SHA). A manual run
    closes them on the owner's word.

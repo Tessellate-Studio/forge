@@ -472,7 +472,7 @@ the body, because a field and a label drift apart.
 | Priority | `P0` blocker / pre-launch · `P1` do next · `P2` soon · `P3` later | **Exactly one** on every open work issue. There is no `P4`: "someday" is `P3` plus a `Deferred until: <trigger>` line in the body |
 | Type | `bug` · `feature` · `chore` · `refactor` (`enhancement` reads as `feature`) | At most one |
 | Area | loom: `admin-ui api sdk extension supabase infra` · alate: `mobile backend scraper fit-engine infra` | **At least one on every open work issue in loom and alate** (owner ruling 2026-09-25; `wi new` refuses without `--area`). Every other repo gets no area labels. Never inferred by a tool — the filer picks it |
-| Lifecycle | `decision` · `on hold` · `claimed` · `needs-input` · `needs-triage` | See the matrix below |
+| Lifecycle | `decision` · `on hold` · `claimed` · `needs-input` · `owner-replied` · `needs-triage` | See the matrix below |
 | Queues | `device-test` + `needs-human` `needs-build` `parked` `failed` | A separate system ("Device-test queue" below). A `device-test` issue carries the P label inherited from what it verifies (`dtq enqueue`, default `P2`) so drains and escalation can rank it; roadmap-pulse still never scores one |
 | Provenance | `migrated-from-backlog`, `crash-monitor`, `security-sweep`, `auto-generated`, `ci-failure`, `ops-alert` | Set by the filing tool |
 
@@ -500,11 +500,22 @@ starts on it claims it straight away rather than leaving it looking free.
 |---|---|---|---|---|
 | `decision` | **PRs only** (draft) | A plan awaiting the owner's yes/no | Not scored. Listed under "awaiting your yes/no", oldest first | Surfaced after 14 days open |
 | `needs-input` | Issues (and non-decision PRs) | Blocked on a human answer that is *not* a doc approval, or on an open decision PR (`Blocked on decision #N` in the body) | Scored, listed under "needs you", never auto-built | Surfaced after 14 days |
+| `owner-replied` | Issues, PRs | The owner answered in a comment (the answer to `needs-input`). See "Owner answers" below | Listed first under "needs you" as **answered, act on it**; never scored stale; may be auto-built if it otherwise qualifies | Removed by the session that acts on the answer |
 | `on hold` | Issues, PRs | "Not now" was decided. The applying comment states a review-by date (see "On hold" below) | Scored, ranked after every non-held item, never auto-built | Past the date → reminder comment, never closed |
 | `claimed` | Issues, PRs | A live session owns it (`wip`) | Scored normally; skipped by auto-build unless the claim is the pulse's own | `wip sweep` |
 | `device-test` | Issues | A queued on-device test | Excluded (different queue) | device-test skill |
 | `needs-triage` | Issues | Filed without a P label | Scored provisionally; a P is proposed | Listed every week until it has exactly one P |
 
+- **Owner answers (owner, 2026-11-17).** The owner and every agent post as
+  one GitHub account, so a comment alone cannot say who wrote it. The
+  handshake is two labels: an agent blocked on the owner adds `needs-input`
+  and asks one question; the owner answers in a comment and swaps
+  `needs-input` for `owner-replied` (or adds it to any item they commented on).
+  Any session or scheduled task that meets an open `owner-replied` item reads
+  the newest owner comment and acts on it **before** its other work, then
+  removes `owner-replied` in the same step as its reply. `needs-build` is never
+  an owner answer: it means only "no installable build can reach this test",
+  and drains skip it (it hid alate #650 and #925 for a month).
 - **Never put `needs-input` on a `decision` PR.** Closing a decision PR is a
   valid answer (reject). `pr-close-label-guard.yml` skips `decision`-labelled
   PRs so that answer isn't turned into a follow-up issue.

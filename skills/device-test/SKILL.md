@@ -369,6 +369,11 @@ Classify every open test by its labels first, then (for the rest) by Steps:
   more cheap look in case a human already installed a newer build since the
   label was added — if it's now satisfiable, remove `needs-build` and treat it
   like any other test this run; if still blocked, leave it exactly as-is.
+- **Labelled `owner-replied`** — the owner answered a question on this test.
+  Read the newest owner comment first and do what it says (re-run, change a
+  step, park it, close it) before classifying it further; remove
+  `owner-replied` in the same step as your reply (`workflows.md` → "Owner
+  answers"). Never read `needs-build` as an owner answer.
 - **Labelled `parked`** — parked by decision. Skip it on every run and list
   it in the wrap-up; only the user un-parks a test.
 - **Has `CODE:` steps** (any state above except `parked`): those run first in
