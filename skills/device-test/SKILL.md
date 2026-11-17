@@ -539,6 +539,10 @@ For each OPEN item on the current app:
      esac
    }
    tap()  { need_app || return 1; adb shell input tap "$1" "$2"; }
+   # Prefer a label to a pixel: the layout may have moved since your last screenshot (a banner pushed
+   # the buttons down and a pixel tap hit "Bought it", 2026-11-17). Refuses a missing or ambiguous label
+   # and any label that changes the account unless the step says so (--allow-destructive).
+   tap_label() { need_app || return 1; node "${CLAUDE_PLUGIN_ROOT}/skills/device-test/scripts/tap-label.js" "$@"; }
    shot() { need_app || return 1; adb exec-out screencap -p > "$1"; need_app || return 1; }
    ```
    A step that cannot show the app owned the screen reports no verdict:
