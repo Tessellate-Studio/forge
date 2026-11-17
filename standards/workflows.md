@@ -950,33 +950,37 @@ nothing is parsed out of prose.
 | Passed | closed, reason `completed` | `device-test` |
 | Withdrawn / superseded | closed, reason `not_planned` | `device-test` |
 
-### needs-build is a queue with an owner, not a parking lot
+### needs-build is an AGENT work item, never an owner wait
 
-Owner decision 2026-11-18 (forge#196). The label used to mean only "wait", so
-nothing owned the wait: alate #1589, #1590, #1591 and #1638 sat 28-31 days
-behind the V2 gate and #1756 sat 14 days waiting for a dev build, while the
-drain skipped them and the owner's feedback on them reached no agent.
+Owner decision 2026-11-18 (forge#196). `needs-build` tells an agent "pick this
+up": get a build that can carry this test, apply the owner's feedback if any,
+and drain it. It is never a note that the owner must act. The old reading
+("wait") left alate #1589, #1590, #1591 and #1638 for 28-31 days behind the V2
+gate and #1756 for 14 days, and the owner's feedback on them reached no agent.
 
-1. **Name the blocker when you set the label.** The comment that adds
-   `needs-build` starts with three lines: `Blocker: binary` (a build must be
-   installed) or `Blocker: gate` (a feature gate or decision keeps it out of
-   every build); `Unblock:` the exact next action; `Owner:` who does it (an
-   agent session, the weekly build task, or the owner). A `needs-build` item
-   without them is invalid: the next drain adds them or removes the label.
-2. **Owner feedback is read even here.** `owner-replied` on a `needs-build`
+1. **Every `needs-build` item has an agent owner and a next action.** The
+   comment that adds the label starts with `Blocker: binary` (a build must be
+   installed) or `Blocker: gate` (a feature gate keeps it out of every build)
+   and `Next:` the exact action an agent takes. No `Owner:` line is needed:
+   the owner is always an agent. If only the owner can unblock it (a store
+   console step, a taste decision), that is `needs-input`, not `needs-build`.
+2. **Owner feedback is read and applied.** `owner-replied` on a `needs-build`
    item is acted on before anything else (see "Owner answers"). If the answer
    asks for a change, spawn a fix chip via `forge:build-feature` and record
    its `task_id` on the item, exactly as for a `failed` test.
-3. **Fourteen days, then a forced decision.** `dtq` marks a `needs-build` item
-   older than 14 days `STALE`, and roadmap-pulse lists each one in its
-   honesty pass. The item then goes one of three ways, recorded in a comment:
-   (a) one on-demand gate-open dev build is dispatched and the item drained
-   against it (needs the owner's explicit OK, is one `workflow_dispatch`,
-   never a schedule, per "CI spend"); (b) it rides the next release; (c) it is
-   withdrawn (`not_planned`). Leaving it as it is is not an option.
-4. **A gate is a work item.** Many items blocked by one `Blocker: gate` are
-   one problem: file one issue for flipping or retiring the gate, with an
-   owner, and link every blocked test to it.
+3. **Agents work the queue, and 14 days is the alarm.** Any session or
+   scheduled task that finds a `needs-build` item takes it: claim it, do the
+   `Next:` action, then re-drain. `dtq` marks one older than 14 days `STALE`
+   and roadmap-pulse lists it. A stale item is a failure of the agents, not a
+   question for the owner: the next session takes it, or withdraws it
+   (`not_planned`) with a reason.
+4. **Builds stay cloud-only and on demand.** An agent dispatches the one
+   gate-open dev build with `workflow_dispatch` (never a schedule), per "CI
+   spend". Whether that needs the owner's click each time is the open point
+   in forge#196; until the owner decides, the agent asks once per batch.
+5. **A gate is a work item.** Many items blocked by one `Blocker: gate` are
+   one problem: file one issue for the gate, assigned to an agent, and link
+   every blocked test to it.
 
 **A failed test stays OPEN**, labelled `failed`, linking the bug it produced.
 It is retired only when a later drain re-runs it after the fix lands and it
