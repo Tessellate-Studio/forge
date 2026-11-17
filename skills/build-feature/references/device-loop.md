@@ -154,7 +154,16 @@ Then **Read** `alate-verify.png` and measure against the acceptance criteria.
 
 ## Navigating the app over adb (to reach other screens)
 
-- Tap by pixel: `"$ADB" $D shell input tap <X> <Y>` (device is 1440×2880; the
+- **Tap by LABEL, not by pixel** (2026-11-17): `node ${CLAUDE_PLUGIN_ROOT}/skills/device-test/scripts/tap-label.js "Re-check" --device $SERIAL`
+  reads `uiautomator dump` now and taps the control whose text or content-desc is exactly that. A
+  "Profile changed since this check" banner pushed the card's action row down on the Pixel; a pixel tap
+  at the old Re-check position landed on "Bought it" and added a purchase to the owner's account. It
+  refuses a label that is not on screen (and lists what is), refuses two matches (`--index n`), and
+  refuses a label that changes the account (Bought it, Delete, Sign out, ...) unless the step passes
+  `--allow-destructive`. `--dry-run` prints what it would tap. Pixel taps stay for what has no label
+  (a deck card, a scroll): **take a fresh screenshot immediately before such a tap**, never reuse
+  coordinates from an earlier one on a screen whose content can load or shift.
+- Tap by pixel (only when there is no label): `"$ADB" $D shell input tap <X> <Y>` (device is 1440×2880; the
   screencap is full-res — multiply your %-estimates by 1440/2880).
 - Scroll: `"$ADB" $D shell input swipe 720 2200 720 600 250`.
 - Back / wake: `input keyevent KEYCODE_BACK` / `KEYCODE_WAKEUP`.
