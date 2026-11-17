@@ -28,7 +28,10 @@ describe('canonical forms', () => {
     '%s: its type label + needs-triage, no P label, shared sections',
     t => {
       const y = YAML.parse(forms.find(f => f.name === `${t}.yml`).text);
-      expect(y.labels).toEqual([t, 'needs-triage']);
+
+      // Both forms of each key (RFD 005); the KEYS are the type + needs-triage.
+      const { labelKey } = require('../../labels/lib/labels');
+      expect([...new Set(y.labels.map(labelKey))]).toEqual([t, 'needs-triage']);
 
       // Priority is a label set at triage, never a dropdown (RFD 004 §2).
       expect(JSON.stringify(y)).not.toMatch(/"P[0-3]"|priority/i);
@@ -83,17 +86,25 @@ describe('sync / check', () => {
   });
 });
 
-// RFD 005: forms carry the live label names, rendered from the registry.
+// RFD 005: a form lists each label bare AND with its emoji, so whichever the
+// repo has is applied (GitHub drops the other) across the rename.
 describe('renderLabels', () => {
   const { renderLabels } = require('../lib/forms');
   const form = 'name: Bug\nlabels: ["bug", "needs-triage"]\nbody: []\n';
-  it('keeps bare names while the emoji switch is off', () => {
-    expect(renderLabels(form)).toBe(form);
+  const both =
+    'name: Bug\nlabels: ["bug", "🐛 bug", "needs-triage", "🔎 needs-triage"]\nbody: []\n';
+  it('lists both forms of every emoji-able key', () => {
+    expect(renderLabels(form)).toBe(both);
   });
-  it('renders emoji names when the switch is on, and is idempotent', () => {
-    const on = renderLabels(form, { emoji: true });
-    expect(on).toContain('labels: ["🐛 bug", "🔎 needs-triage"]');
-    expect(renderLabels(on, { emoji: true })).toBe(on);
-    expect(renderLabels(on, { emoji: false })).toBe(form);
+  it('is idempotent and leaves a key without an emoji alone', () => {
+    expect(renderLabels(both)).toBe(both);
+    const other = 'labels: ["device-test"]\n';
+    expect(renderLabels(other)).toBe(other);
+  });
+  it('the shipped canonical forms already carry both forms', () => {
+    const { canonical } = require('../lib/forms');
+    for (const f of canonical().filter(x => x.name !== 'config.yml')) {
+      expect(f.text).toMatch(/labels: \["\w[\w-]*", "\S+ \w[\w-]*"/);
+    }
   });
 });

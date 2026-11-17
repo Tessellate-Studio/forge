@@ -23,17 +23,21 @@ const TARGET = path.join('.github', 'ISSUE_TEMPLATE');
 const hash = text =>
   crypto.createHash('sha256').update(text.replace(/\r\n/g, '\n')).digest('hex');
 
-// The templates name labels by KEY; a form's `labels:` must carry the LIVE
-// name, because GitHub silently drops a label the repo does not have (RFD 005).
-// Rendering here means the emoji switch changes every form in one place.
-function renderLabels(text, opts) {
-  return text.replace(/^labels:\s*\[(.*)\]\s*$/m, (line, list) => {
-    const names = list
+// The templates name labels by KEY. A form cannot look a name up when someone
+// files it, and GitHub silently DROPS a form label the repo does not have
+// (RFD 005). So every key is listed in BOTH forms, bare and with its emoji:
+// whichever the repo has is applied, the other is dropped, and a form works
+// before, during and after the rename without being synced again.
+function renderLabels(text) {
+  return text.replace(/^labels:[ \t]*\[(.*)\][ \t]*$/m, (line, list) => {
+    const keys = list
       .split(',')
-      .map(s => s.trim().replace(/^"|"$/g, ''))
-      .filter(Boolean)
-      .map(k => JSON.stringify(displayName(labelKey(k), opts)));
-    return `labels: [${names.join(', ')}]`;
+      .map(s => labelKey(s.trim().replace(/^"|"$/g, '')))
+      .filter(Boolean);
+    const names = [
+      ...new Set(keys.flatMap(k => [k, displayName(k, { emoji: true })])),
+    ];
+    return `labels: [${names.map(n => JSON.stringify(n)).join(', ')}]`;
   });
 }
 
