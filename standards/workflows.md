@@ -311,6 +311,45 @@ documenting why not to. `safe-merge` already says it: _a gate the caller can
 decline to invoke is not a gate_. That was true of `safe-merge` itself until
 this hook.
 
+## Every forge PR bumps the plugin version — [enforced], against the CURRENT base
+
+**Bump `.claude-plugin/plugin.json` `version` in the same PR, strictly above
+master's version as it is when the PR merges** — not as it was when the branch
+was cut. `claude plugin update` compares version strings only, so a change
+that lands without a new version is never delivered to anyone (README →
+"Freshness check"). Patch for docs and fixes, minor for new behaviour.
+
+When another PR merges first with the version you picked, yours goes red:
+re-bump above the new master version and push. That is the check working.
+
+Three places enforce it, all from one rule in `tools/plugin-version/lib/bump.js`:
+
+- **CI `Plugin version`** (`ci.yml`, on every PR): reads master's tip through
+  the API at run time and fails when the PR's version is equal, lower, missing
+  or not semver.
+- **The post-merge sweep** (same job, on every push to master): re-judges every
+  open PR against the new tip and posts the commit status
+  `Plugin version (vs latest master)` on its head. A PR whose version was just
+  taken turns red without anyone pushing to it.
+- **`checks-gate`**, after the checks are green, re-reads the rule against the
+  base's current tip, so the seconds between a merge and the sweep posting
+  cannot let a stale green through. Both sanctioned merge routes run it. Repos
+  with no `.claude-plugin/plugin.json` on the base skip this; a read that keeps
+  failing is red.
+
+Local check before pushing: `git fetch origin master && node
+tools/plugin-version/cli.js --base-ref origin/master`.
+
+_Why:_ forge#183 and forge#184 were open together and both bumped 0.21.9 →
+0.21.10. #183 merged first; #184's squash then carried no version change, so
+its rules were unreachable until forge#186 bumped by hand (2026-11-17). The
+rule had been prose, and each PR's CI was green against a master that no
+longer existed.
+
+**What this does not catch:** a merge that skips checks-gate — the
+`gh pr checks --watch && gh pr merge` form the hook still accepts, or the
+GitHub UI — in the window before the sweep posts. Use checks-gate.
+
 ## Local gates stay light — the runner is the authoritative gate
 
 The laptop is not CI. Full test suites, full-repo typechecks and full-repo

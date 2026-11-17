@@ -73,7 +73,7 @@
     "./integrations": "./standards-cli/lib/integrations/index.js"
   },
   "scripts": {
-    "test": "npm run test:standards && npm run test:rubric && npm run test:workflows && npm run test:hooks && npm run test:brief && npm run test:device-test && npm run test:safe-merge && npm run test:checks-gate && npm run test:work-claim && npm run test:backlog-migrate && npm run test:labels && npm run test:work-item && npm run test:issue-forms",
+    "test": "npm run test:standards && npm run test:rubric && npm run test:workflows && npm run test:hooks && npm run test:brief && npm run test:device-test && npm run test:safe-merge && npm run test:checks-gate && npm run test:work-claim && npm run test:backlog-migrate && npm run test:labels && npm run test:work-item && npm run test:issue-forms && npm run test:plugin-version",
     "test:standards": "jest --config standards-cli/jest.config.js",
     "test:rubric": "jest --config rubric/jest.config.js",
     "test:workflows": "jest --config references/jest.config.js",
@@ -87,6 +87,7 @@
     "test:labels": "jest --config tools/labels/jest.config.js",
     "test:work-item": "jest --config tools/work-item/jest.config.js",
     "test:issue-forms": "jest --config tools/issue-forms/jest.config.js",
+    "test:plugin-version": "jest --config tools/plugin-version/jest.config.js",
     "test:coverage": "jest --config standards-cli/jest.config.js --coverage && jest --config rubric/jest.config.js --coverage",
     "lint": "eslint --ext .js,.mjs standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/ hooks/ skills/ --fix",
     "lint:check": "eslint --ext .js,.mjs standards-cli/lib/ standards-cli/cli/ rubric/lib/ rubric/cli/ tools/ hooks/ skills/",
