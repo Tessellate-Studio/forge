@@ -128,6 +128,12 @@ and write one criterion per cell. The criteria below come from that matrix,
 not from the one screenshot. A fix covering only the reported state is the
 most common way a "fixed" complaint comes back.
 
+**Building a test bed or a model on a domain word? Define the word first.** ("persona",
+"fully on numbers", "a wardrobe", "in range".) Write one line saying what it means plus two
+example entries, and get the owner's yes BEFORE generating anything from it. alate, 2026-11-17: 49
+personas were built from "numbers or not" as one yes/no axis, and the owner's first look was "none of
+them is fully based on numbers" (nine had five of eight tape numbers, twenty had none).
+
 Before building, write down 2–5 **objective, checkable** criteria — the things
 you'll measure on the screenshot to decide pass/fail. Vague goals ("looks
 balanced") cause the endless-iteration trap; concrete ones end it. Express them
@@ -363,6 +369,14 @@ tooling included);** skip with a one-line note for a true one-liner:
    the garment and the answer. Never loosen, skip or special-case it. Do not run
    `--update` to make a red check green without reading the diff. CI shows the
    same was/now output in the job summary when the backend suite fails.
+   **Writing a NEW oracle about a rule? Read the rule's own header comment first.**
+   Look for its by-design limits: words like "only", "on purpose", "deliberately",
+   "narrow", "by design", "(owner, <date>)", and what the rule reads ("the shopper's OWN
+   measured waist (a chip has none)"). An oracle that assumes more than the rule promises
+   reports a design as a bug (alate, 2026-11-17: "the same cm gives the same size by any route"
+   produced 32 findings, all one deliberate tape-only waistband rule). Where a rule is
+   deliberately narrower than the oracle, list the exception WITH its reason in the oracle's
+   code and print it on every run; never drop it silently.
 6. Commit the cleanups separately (`chore: simplify <scope>`) — don't fold them
    into the feature/fix commit.
 
