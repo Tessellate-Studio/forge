@@ -976,8 +976,9 @@ gate and #1756 for 14 days, and the owner's feedback on them reached no agent.
    (`not_planned`) with a reason.
 4. **Builds stay cloud-only and on demand.** An agent dispatches the one
    gate-open dev build with `workflow_dispatch` (never a schedule), per "CI
-   spend". Whether that needs the owner's click each time is the open point
-   in forge#196; until the owner decides, the agent asks once per batch.
+   spend". The owner pre-approved this (2026-11-18, "yes, on demand"): no ask
+   each time. One build per batch of waiting items, never `on: push`, never
+   `schedule:`, and only when an open `needs-build` item needs it.
 5. **A gate is a work item.** Many items blocked by one `Blocker: gate` are
    one problem: file one issue for the gate, assigned to an agent, and link
    every blocked test to it.
