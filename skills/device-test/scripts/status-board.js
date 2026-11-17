@@ -80,10 +80,19 @@ function renderRepo(result, opts) {
   const withdrawn = result.items.filter(i => i.state === STATUS.WITHDRAWN);
   const needsHuman = open.filter(i => i.needsHuman).length;
 
+  // Tests with CODE: steps still unticked: a worktree check can verify those
+  // steps with no phone, so the owner can see how much of the queue never
+  // needed one. Counts open/failed tests, not needs-build ones — a build-
+  // blocked test's CODE: steps still run, but it is counted where it is.
+  const codeCheckable = [...open, ...failed].filter(
+    i => i.codeSteps > 0
+  ).length;
+
   const counts = [
     `${open.length} open`,
     `${failed.length} failed`,
     `${needsHuman} needs-human`,
+    codeCheckable ? `${codeCheckable} with CODE: steps` : null,
     `${needsBuild.length} needs-build`,
     parked.length ? `${parked.length} parked` : null,
     `${done.length} done`,
@@ -169,8 +178,11 @@ function renderRepo(result, opts) {
         ? chalk.bold(item.priority)
         : chalk.dim('P?');
       const claimed = item.claimed ? chalk.yellow(' 🚧') : '';
+
+      // `🧪N` = N steps a worktree check can still run, no phone needed.
+      const code = item.codeSteps ? chalk.cyan(` 🧪${item.codeSteps}`) : '';
       lines.push(
-        `  ${statusIcon(item)}  ${priority}  ${id}${claimed}  ${clip(
+        `  ${statusIcon(item)}  ${priority}  ${id}${claimed}${code}  ${clip(
           item.title,
           72
         )}${ageStr}${notes}  ${pr}  ${chalk.dim(extra)}`
@@ -241,16 +253,22 @@ function render(results, opts, devices) {
         if (i.state === STATUS.OPEN && i.needsHuman) {
           acc.needsHuman += 1;
         }
+        if (
+          (i.state === STATUS.OPEN || i.state === STATUS.FAILED) &&
+          i.codeSteps > 0
+        ) {
+          acc.codeCheckable += 1;
+        }
       });
       return acc;
     },
-    { open: 0, failed: 0, needsHuman: 0, needsBuild: 0 }
+    { open: 0, failed: 0, needsHuman: 0, needsBuild: 0, codeCheckable: 0 }
   );
 
   out.push(chalk.gray('─'.repeat(60)));
   out.push(
     chalk.bold(
-      `Totals: ${totals.open} open, ${totals.failed} failed, ${totals.needsHuman} needs-human, ${totals.needsBuild} needs-build across ${results.length} repos`
+      `Totals: ${totals.open} open, ${totals.failed} failed, ${totals.needsHuman} needs-human, ${totals.codeCheckable} with CODE: steps, ${totals.needsBuild} needs-build across ${results.length} repos`
     )
   );
   if (!opts.all) {

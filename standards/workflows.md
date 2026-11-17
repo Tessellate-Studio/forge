@@ -917,7 +917,9 @@ sitting.
 **Queue only what you cannot verify yourself.** adb screenshots, logcat,
 `adb shell input` taps on a connected device, jest, Metro — all self-serve; do
 those and don't queue them. The queue holds the residue that needs human hands
-or human judgment.
+or human judgment. A step you could not run yourself *this turn* but that a
+worktree check can verify stays in the queue tagged `CODE:` (see "Code tier"
+below) rather than waiting for a phone.
 
 **A test is one GitHub issue in the app's own repo, labelled `device-test`.**
 Its id is the issue number (`alate#712`) — which exists at creation, never
@@ -1059,6 +1061,48 @@ itself — launch/force-stop, `adb shell input tap`/`text`/`keyevent`,
 judgment or a human-only surface (gesture feel, camera/biometrics,
 real-account sign-ins, iOS/TestFlight where there is no adb). Prefix those
 `HUMAN:`; that prefix is what labels the issue `needs-human`.
+
+**Code tier — prefer a worktree check to a phone.** Not every device-test
+needs a phone (owner, 2026-11-17). A step that a check in a worktree can
+verify gets the prefix `CODE:` (beside `HUMAN:`), and the drain runs it with no
+adb and no device claim, before any phone step. It is a preference, not a hard
+rule: where a step *can* be code-checked, do it that way.
+
+- **Who tags.** The enqueuing session tags the steps it knows are
+  code-checkable. The drain may also reclassify an *untagged* step as `CODE:`
+  when it plainly is one (its Expect is engine output, a probe result or a
+  jest assertion, not a pixel or a gesture), and says so in its evidence
+  comment. A step never carries both prefixes; `CODE:` adds no label (it needs
+  no person), `HUMAN:` still labels `needs-human`.
+- **What counts, in alate:** engine output is checkable —
+  `cd backend && npx tsx scripts/persona-fit.ts` (personas only, never the
+  owner's profile); a product's scrape is saved once and replayed —
+  `npx tsx scripts/persona-product.ts <url> --save scrape.json`, then
+  `--file scrape.json` for every rerun (never loop live APIs or brand sites);
+  `npx tsx scripts/store-probe.ts '<url>'`; targeted jest. Layout, keyboard,
+  first-frame photo and gesture feel are **not** checkable that way and stay
+  phone steps.
+- **Evidence goes in two places.** A per-step comment on the test issue AND on
+  the verifying PR (`Verifies:`): the command, its output, the persona ids.
+  The step's box is ticked on the issue. A claim without the command and
+  output is not evidence.
+- **Verdict.** A test whose every step is `CODE:` closes `completed` with no
+  device. A test with mixed steps keeps only the phone steps open, boxes
+  unticked, so the phone drain shrinks. A `CODE:` failure is filed exactly like
+  a device failure (`failed` label, a `bug` issue, a chip).
+- **Timing.** The code tier needs no OTA, so it runs on the PR **before
+  merge** and does not wait for the ship train; the train never waits on the
+  drain either. Code-checking early is the point: a wrong answer is found
+  while the fix is one commit away.
+- **Board.** `dtq` shows `🧪N` on a test with N unticked `CODE:` steps and
+  counts those tests in the repo and totals lines.
+
+*(Worked example, alate 2026-11-17, ten unrun items: #1693 (length sentence by
+height) and #1876 (stocked sizes plus the custom route) were fully
+persona-checkable — all `CODE:`, closed with no phone. #1856 steps 1, 5 and 6
+(Custom fit verdict, Tjori S/L) are engine output and steps 2-4 are jest —
+all `CODE:`. #1687's backend half is a `store-probe`. #1713, #1748 and #1751
+(layout, keyboard, first-frame photos) stay phone-only.)*
 
 **Steps are independent unless a step says otherwise.** The drain runs every
 step still reachable after one fails, and records each step's own outcome —

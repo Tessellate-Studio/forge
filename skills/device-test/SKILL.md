@@ -237,7 +237,8 @@ untested for no stated reason.
 ### Step 0 — Preflight
 
 1. **Phone connected?** `adb devices` — if no device and the user didn't say
-   the phone is nearby, say what's needed and stop **for the phone apps**.
+   the phone is nearby, say what's needed and stop **for the phone apps**
+   (Step 2b's `CODE:` steps still run — they never need one).
    iOS-only items can still proceed (TestFlight, no adb) — flag that
    screenshots will be the user's job — and so can every **loom** item, which
    never uses adb at all (Scope table → "loom is in scope"). No phone is a
@@ -370,6 +371,9 @@ Classify every open test by its labels first, then (for the rest) by Steps:
   like any other test this run; if still blocked, leave it exactly as-is.
 - **Labelled `parked`** — parked by decision. Skip it on every run and list
   it in the wrap-up; only the user un-parks a test.
+- **Has `CODE:` steps** (any state above except `parked`): those run first in
+  Step 2b, whatever else is true of the test — including `needs-build`, whose
+  code steps need no build. What is left after Step 2b is classified below.
 - **Open, agent-runnable** (no `HUMAN:` prefix anywhere — every step is
   adb-executable, or browser-executable on loom): **just run them (Step 2 →
   3), no question asked.** This is the self-maintenance path — the user should
@@ -455,6 +459,40 @@ label it `needs-build`, comment `shopify app deploy from loom main (confirm in
 Partner Dashboard → extension version history)`, and name it in the wrap-up. The
 weekly build task doesn't cover loom: there is no workflow to dispatch, so
 the unblock is the user's.
+
+### Step 2b — Code tier: run the `CODE:` steps first, no phone
+
+Not every device-test needs a phone. Before any phone step, for each open
+test that has `CODE:` steps (or steps you can plainly reclassify — see the
+rule in [`workflows.md` → "Code tier"](../../standards/workflows.md); it is the
+single home, this step only runs it), verify them in a **worktree off
+`origin/master`** (or the verifying PR's branch for a not-yet-merged PR). This
+needs **no adb and no device claim**, so it runs even when the phone is held,
+disconnected or absent, and it runs before Step 0.4's claim matters.
+
+1. **Run the check, never the owner's data.** alate, from `backend/`:
+   `npx tsx scripts/persona-fit.ts` (personas only, never the owner's profile);
+   `npx tsx scripts/persona-product.ts <url> --save scrape.json` **once**, then
+   `--file scrape.json` for every rerun — never loop live APIs or brand
+   sites; `npx tsx scripts/store-probe.ts '<url>'`; targeted jest. Read every
+   line the script prints (build-feature Step 5.5 item 5).
+2. **Tick the step's box** on the issue as you RUN it, pass or fail, and post
+   one **evidence comment per step on the test issue AND on the verifying PR**:
+   the command, the output that decided it, the persona ids. Say so when you
+   reclassified an untagged step.
+3. **Verdict.** Every step of the test was `CODE:` and all passed → close
+   `completed` (Step 3 case 2), no device. Mixed → leave the test open with
+   only the phone steps unticked; Step 3 then walks just those, so the phone
+   drain shrinks. A `CODE:` step that fails is a failure: Step 3 case 3 in
+   full (`failed` label, `bug` + `P1` issue, chip) — it is not softer for not
+   needing a phone.
+4. **It does not wait for a train, and the train does not wait for it.** The
+   code tier needs no OTA, so it may run on a PR before merge; a ship-train
+   app's drain still rides the train for the phone steps, and the train
+   never holds for either.
+
+Same model rule as the rest: you run this yourself inside the one sonnet
+subagent — no nested agents.
 
 ### Step 3 — Execute the items, agent-first
 
@@ -640,7 +678,8 @@ only covers a session that *crashed*; a session that finished and left a claim
 standing has told everyone else the device is busy. Then run `dtq` and confirm
 Devices reads `free`.
 
-One table: item · app · verdict (✅ agent-verified, with screenshot / ✅ human-
+One table: item · app · verdict (✅ code-verified, no device — with the evidence
+comment link / ✅ agent-verified, with screenshot / ✅ human-
 confirmed / ❌ → filed link + chip `task_id` (or "chip re-spawned", or how
 many drains it has been open) / 🔧 needs build → what would unblock it / 🙋
 needs-human → the specific `HUMAN:` steps waiting). Identify each test by its
