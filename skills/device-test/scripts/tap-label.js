@@ -22,20 +22,30 @@
 
 const { spawnSync } = require('node:child_process');
 
-const ENTITIES = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'", '&#10;': '\n' };
-const decode = (s) => s.replace(/&(amp|lt|gt|quot|apos|#10);/g, (m) => ENTITIES[m] ?? m);
+const ENTITIES = {
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&apos;': "'",
+  '&#10;': '\n',
+};
+const decode = s =>
+  s.replace(/&(amp|lt|gt|quot|apos|#10);/g, m => ENTITIES[m] ?? m);
 
 /** The controls in a `uiautomator dump`: text, content-desc, clickable and bounds. */
 function parseNodes(xml) {
   const nodes = [];
   for (const m of xml.matchAll(/<node\b[^>]*?\/?>/g)) {
     const tag = m[0];
-    const attr = (name) => {
+    const attr = name => {
       const a = tag.match(new RegExp(`\\b${name}="([^"]*)"`));
       return a ? decode(a[1]) : '';
     };
     const b = attr('bounds').match(/\[(\d+),(\d+)\]\[(\d+),(\d+)\]/);
-    if (!b) continue;
+    if (!b) {
+      continue;
+    }
     nodes.push({
       text: attr('text'),
       desc: attr('content-desc'),
@@ -46,46 +56,76 @@ function parseNodes(xml) {
   return nodes;
 }
 
-const centerOf = ([l, t, r, b]) => [Math.round((l + r) / 2), Math.round((t + b) / 2)];
+const centerOf = ([l, t, r, b]) => [
+  Math.round((l + r) / 2),
+  Math.round((t + b) / 2),
+];
 
 /** Labels whose tap changes the account or leaves the app: never tapped by accident. */
-const DESTRUCTIVE = /^(bought it|delete|remove|sign out|log out|clear|reset|buy|pay|place order|send|submit|confirm|unlink)\b/i;
-const isDestructive = (label) => DESTRUCTIVE.test(label.trim());
+const DESTRUCTIVE =
+  /^(bought it|delete|remove|sign out|log out|clear|reset|buy|pay|place order|send|submit|confirm|unlink)\b/i;
+const isDestructive = label => DESTRUCTIVE.test(label.trim());
 
-const labelOf = (n) => (n.text || n.desc || '').trim();
+const labelOf = n => (n.text || n.desc || '').trim();
 
 function choose(nodes, label, opts = {}) {
   const { contains = false, index, allowDestructive = false } = opts;
   const want = label.trim().toLowerCase();
-  const hits = nodes.filter((n) => {
-    const has = [n.text, n.desc].map((s) => s.trim().toLowerCase()).filter(Boolean);
-    return has.some((s) => (contains ? s.includes(want) : s === want));
+  const hits = nodes.filter(n => {
+    const has = [n.text, n.desc]
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean);
+    return has.some(s => (contains ? s.includes(want) : s === want));
   });
   if (hits.length === 0) {
     const seen = [...new Set(nodes.map(labelOf).filter(Boolean))].slice(0, 40);
-    throw new Error(`"${label}" is not on screen. Labels that are: ${seen.join(' | ') || '(none)'}`);
+    throw new Error(
+      `"${label}" is not on screen. Labels that are: ${
+        seen.join(' | ') || '(none)'
+      }`
+    );
   }
+
   // A Pressable and the Text inside it both say the same thing; only the clickable one is the control.
   if (hits.length > 1 && index === undefined) {
-    const clickable = hits.filter((n) => n.clickable);
-    if (clickable.length === 1) hits.splice(0, hits.length, clickable[0]);
+    const clickable = hits.filter(n => n.clickable);
+    if (clickable.length === 1) {
+      hits.splice(0, hits.length, clickable[0]);
+    }
   }
   if (hits.length > 1 && index === undefined) {
-    throw new Error(`${hits.length} matches for "${label}"; pass --index 0..${hits.length - 1} to say which`);
+    throw new Error(
+      `${hits.length} matches for "${label}"; pass --index 0..${
+        hits.length - 1
+      } to say which`
+    );
   }
   const hit = hits[index ?? 0];
-  if (!hit) throw new Error(`--index ${index} is out of range for ${hits.length} match(es)`);
+  if (!hit) {
+    throw new Error(
+      `--index ${index} is out of range for ${hits.length} match(es)`
+    );
+  }
   if (isDestructive(labelOf(hit)) && !allowDestructive) {
-    throw new Error(`"${labelOf(hit)}" changes the account; the step must say so and pass --allow-destructive`);
+    throw new Error(
+      `"${labelOf(
+        hit
+      )}" changes the account; the step must say so and pass --allow-destructive`
+    );
   }
   return hit;
 }
 
 function adb(args, device) {
   const bin = process.env.ADB || 'adb';
-  const r = spawnSync(bin, device ? ['-s', device, ...args] : args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+  const r = spawnSync(bin, device ? ['-s', device, ...args] : args, {
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
+  });
   if (r.status !== 0) {
-    const e = new Error(`adb ${args.join(' ')} failed: ${(r.stderr || r.stdout || '').trim()}`);
+    const e = new Error(
+      `adb ${args.join(' ')} failed: ${(r.stderr || r.stdout || '').trim()}`
+    );
     e.adb = true;
     throw e;
   }
@@ -93,13 +133,20 @@ function adb(args, device) {
 }
 
 function main(argv) {
-  const label = argv.find((a, i) => !a.startsWith('--') && argv[i - 1] !== '--index' && argv[i - 1] !== '--device');
+  const label = argv.find(
+    (a, i) =>
+      !a.startsWith('--') &&
+      argv[i - 1] !== '--index' &&
+      argv[i - 1] !== '--device'
+  );
   if (!label) {
-    console.error('usage: node tap-label.js "<label>" [--contains] [--index n] [--allow-destructive] [--dry-run] [--device serial]');
+    console.error(
+      'usage: node tap-label.js "<label>" [--contains] [--index n] [--allow-destructive] [--dry-run] [--device serial]'
+    );
     return 1;
   }
-  const flag = (n) => argv.includes(n);
-  const val = (n) => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : undefined);
+  const flag = n => argv.includes(n);
+  const val = n => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : undefined);
   const device = val('--device');
   try {
     // uiautomator cannot dump while the screen is animating ("could not get idle state"): one retry.
@@ -116,8 +163,14 @@ function main(argv) {
       allowDestructive: flag('--allow-destructive'),
     });
     const [x, y] = centerOf(hit.bounds);
-    console.log(`${flag('--dry-run') ? 'would tap' : 'tap'} "${labelOf(hit)}" at ${x},${y}`);
-    if (!flag('--dry-run')) adb(['shell', 'input', 'tap', String(x), String(y)], device);
+    console.log(
+      `${flag('--dry-run') ? 'would tap' : 'tap'} "${labelOf(
+        hit
+      )}" at ${x},${y}`
+    );
+    if (!flag('--dry-run')) {
+      adb(['shell', 'input', 'tap', String(x), String(y)], device);
+    }
     return 0;
   } catch (e) {
     console.error(e.message);
@@ -125,6 +178,8 @@ function main(argv) {
   }
 }
 
-if (require.main === module) process.exit(main(process.argv.slice(2)));
+if (require.main === module) {
+  process.exit(main(process.argv.slice(2)));
+}
 
 module.exports = { parseNodes, choose, centerOf, isDestructive, DESTRUCTIVE };
