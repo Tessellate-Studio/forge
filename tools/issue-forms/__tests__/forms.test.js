@@ -82,3 +82,18 @@ describe('sync / check', () => {
     log.mockRestore();
   });
 });
+
+// RFD 005: forms carry the live label names, rendered from the registry.
+describe('renderLabels', () => {
+  const { renderLabels } = require('../lib/forms');
+  const form = 'name: Bug\nlabels: ["bug", "needs-triage"]\nbody: []\n';
+  it('keeps bare names while the emoji switch is off', () => {
+    expect(renderLabels(form)).toBe(form);
+  });
+  it('renders emoji names when the switch is on, and is idempotent', () => {
+    const on = renderLabels(form, { emoji: true });
+    expect(on).toContain('labels: ["🐛 bug", "🔎 needs-triage"]');
+    expect(renderLabels(on, { emoji: true })).toBe(on);
+    expect(renderLabels(on, { emoji: false })).toBe(form);
+  });
+});

@@ -540,7 +540,7 @@ forge predates the tool, do the same by hand: list the open issues
 for a duplicate, then `gh issue create -R <repo> --label <P> --label <type> …`
 with every label in the create call (one write, one notification).
 
-**A missing label fails the whole create.** `gh issue create --label P1`
+**A missing label fails the whole create.** `gh issue create --label "$(forge-label P1 --repo <repo>)"`
 refuses outright in a repo that has no `P1` label, and not every repo has the
 set yet (litmus had none on 2026-09-19). Before filing into a repo for the
 first time, check `gh label list -R <repo> -L 200`. Missing → run

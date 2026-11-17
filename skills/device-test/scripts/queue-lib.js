@@ -37,6 +37,18 @@ const {
   'claim.js'
 ));
 
+// RFD 005: match labels by KEY, so `👀 needs-human` and `needs-human` are one.
+const { labelKey } = require(path.join(
+  __dirname,
+  '..',
+  '..',
+  '..',
+  'tools',
+  'labels',
+  'lib',
+  'labels.js'
+));
+
 // maskCode rides along on this same require: it is a markdown utility, not a
 // claim concept, and the claim files are already its only other caller.
 const { minutesSince, maskCode } = require(path.join(
@@ -282,7 +294,9 @@ async function fetchDeviceClaims() {
  */
 function itemFromIssue(issue, repoKey) {
   const body = issue.body || '';
-  const names = (issue.labels || []).map(l => (l.name || l).toLowerCase());
+  const names = (issue.labels || []).map(l =>
+    labelKey(l.name || l).toLowerCase()
+  );
   const has = name => names.includes(name);
   const open = issue.state !== 'closed';
 
@@ -344,7 +358,7 @@ function itemFromIssue(issue, repoKey) {
     // who is on a test without opening it.
     priority:
       (issue.labels || [])
-        .map(l => String(l.name || l))
+        .map(l => labelKey(String(l.name || l)))
         .find(n => PRIORITY.test(n)) || null,
     claimed: has(CLAIM_LABEL),
 
@@ -396,6 +410,7 @@ function daysSince(iso) {
 }
 
 module.exports = {
+  labelKey,
   REPOS,
   STATUS,
   LABELS,

@@ -95,7 +95,7 @@ gh issue list -R <repo> --state open -L 1000 \
   --json number,title,body,labels,createdAt,updatedAt,url,issueType,parent,subIssuesSummary,blockedBy,blocking,closedByPullRequestsReferences
 gh issue list -R <repo> --state closed -L 300 --search "closed:>=<lastRunDate>" \
   --json number,title,stateReason,closedAt,closedByPullRequestsReferences,labels
-gh pr list    -R <repo> --state open -L 200 --label decision --json number,title,createdAt,isDraft,url
+gh pr list    -R <repo> --state open -L 200 --label "$(forge-label decision --repo <repo>)" --json number,title,createdAt,isDraft,url
 ```
 
 - **Cross-check the count, and fail the run on a mismatch.** A partial list is

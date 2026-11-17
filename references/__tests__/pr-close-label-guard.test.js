@@ -126,4 +126,21 @@ describe('pr-close-label-guard', () => {
     expect(calls.removeLabel.map(c => c.name)).toEqual(['gate-blocked']);
     expect(calls.create).toHaveLength(0);
   });
+
+  // RFD 005: labels may carry an emoji; the guard matches by key.
+  test('reads 🟣 decision as decision', async () => {
+    const { calls, logs } = await runGuard({
+      labels: ['🟣 decision'],
+      merged: true,
+    });
+    expect(calls.create).toHaveLength(0);
+    expect(logs.join('\n')).toMatch(/'decision' PR merged/);
+  });
+
+  test('a multi-word ASCII label keeps its first word', async () => {
+    const { calls } = await runGuard({
+      labels: ['manual run list', 'needs-input'],
+    });
+    expect(calls.create).toHaveLength(1);
+  });
 });

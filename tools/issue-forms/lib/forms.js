@@ -6,6 +6,7 @@
 const nodeFs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { displayName, labelKey } = require('../../labels/lib/labels');
 
 const CANONICAL_DIR = path.join(
   __dirname,
@@ -22,6 +23,20 @@ const TARGET = path.join('.github', 'ISSUE_TEMPLATE');
 const hash = text =>
   crypto.createHash('sha256').update(text.replace(/\r\n/g, '\n')).digest('hex');
 
+// The templates name labels by KEY; a form's `labels:` must carry the LIVE
+// name, because GitHub silently drops a label the repo does not have (RFD 005).
+// Rendering here means the emoji switch changes every form in one place.
+function renderLabels(text, opts) {
+  return text.replace(/^labels:\s*\[(.*)\]\s*$/m, (line, list) => {
+    const names = list
+      .split(',')
+      .map(s => s.trim().replace(/^"|"$/g, ''))
+      .filter(Boolean)
+      .map(k => JSON.stringify(displayName(labelKey(k), opts)));
+    return `labels: [${names.join(', ')}]`;
+  });
+}
+
 function canonical({ fs = nodeFs, dir = CANONICAL_DIR } = {}) {
   return fs
     .readdirSync(dir)
@@ -29,7 +44,7 @@ function canonical({ fs = nodeFs, dir = CANONICAL_DIR } = {}) {
     .sort()
     .map(name => ({
       name,
-      text: fs.readFileSync(path.join(dir, name), 'utf8'),
+      text: renderLabels(fs.readFileSync(path.join(dir, name), 'utf8')),
     }));
 }
 
@@ -76,4 +91,12 @@ function sync(dest, { fs = nodeFs, dir = CANONICAL_DIR } = {}) {
   return written;
 }
 
-module.exports = { check, sync, canonical, hash, CANONICAL_DIR, TARGET };
+module.exports = {
+  check,
+  sync,
+  canonical,
+  hash,
+  renderLabels,
+  CANONICAL_DIR,
+  TARGET,
+};
