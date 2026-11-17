@@ -22,6 +22,7 @@
 
 const { spawn } = require('child_process');
 const { repoHasCi, waitForChecks, RESULT } = require('./lib/gate');
+const { STATE: BUMP, checkPrBump } = require('../plugin-version/lib/remote');
 
 const EXIT = {
   GREEN: 0,
@@ -48,6 +49,9 @@ const USAGE = `checks-gate — exit 0 only when a PR's checks are green (or its 
   --timeout           <seconds>     for all checks to finish (default ${DEFAULTS.timeout})
   --no-ci-grace       <seconds>     repos with no CI: wait this long for an
                                     app check before NO_CI   (default ${DEFAULTS.noCiGrace})
+
+A repo that ships a Claude plugin (.claude-plugin/plugin.json on the base) is
+also RED unless the PR's version is above the base's CURRENT one, read at exit.
 
 Exit: 0 green, or no CI in the repo · 10 red · 11 no checks ran · 12 timed out · 2 usage/help · 1 internal
 Progress goes to stderr; the one RESULT line goes to stdout.`;
@@ -242,9 +246,47 @@ async function main() {
     },
   });
 
-  const [line, code] = render(outcome);
+  const final =
+    outcome.result === RESULT.GREEN
+      ? await bumpGate(options.repo, options.pr, outcome)
+      : outcome;
+  const [line, code] = render(final);
   process.stdout.write(`${line}\n`);
   return code;
+}
+
+/**
+ * Green CI is a statement about the base as it was when CI ran. A repo that
+ * ships a Claude plugin (.claude-plugin/plugin.json on the base) must also
+ * carry a version strictly above the base's CURRENT tip, read now — another PR
+ * may have merged with the same version since (forge#183/#184, 2026-11-17).
+ * Repos with no manifest on the base skip this. A read that keeps failing is
+ * RED, never green: the gate does not pass what it could not check.
+ */
+async function bumpGate(repo, pr, outcome) {
+  let check;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    check = await checkPrBump(gh, repo, pr);
+    if (check.state !== 'error') {
+      break;
+    }
+    process.stderr.write(`  plugin version read failed: ${check.detail}\n`);
+    await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
+  }
+  if (check.state === BUMP.SKIP) {
+    return outcome;
+  }
+  if (check.state === BUMP.OK) {
+    return { ...outcome, detail: `${outcome.detail}; ${check.detail}` };
+  }
+  return {
+    ...outcome,
+    result: RESULT.RED,
+    detail:
+      check.state === BUMP.FAIL
+        ? check.detail
+        : `could not confirm the plugin version bump: ${check.detail}`,
+  };
 }
 
 main()

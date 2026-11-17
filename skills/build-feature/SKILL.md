@@ -59,7 +59,11 @@ exit it by verifying yourself.
 2. **Bug-fix? Read the app's regression log first.** If this is fixing reported
    behaviour, read the app's in-repo `memory/project_regression_log.md` end to end
    and its domain `memory/project_anti_patterns.md`. Patch from a matching entry
-   rather than re-discovering.
+   rather than re-discovering. Then answer, before any code: why could this
+   happen at all, and has this shape of bug happened before? If it has, the
+   fix removes the shape, not one more instance
+   (`${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Root-cause fixes, not
+   band-aids").
 3. **Branch placement.** If the change doesn't belong on the current branch, cut
    `feat/<slug>` or `fix/<slug>` off the default branch automatically — don't ask.
    Keep code commits separate from doc commits.
@@ -464,7 +468,16 @@ master`). It does NOT block (the change already merged): on red, log a
    Skip only for changes that touch no user-facing flow.
 6. Report with the **bottom line first**, the measured verdicts, the screenshot,
    and only the sections that have real content (per the repo's communication
-   style). If you added a regression-worthy fix, log it.
+   style). If you added a regression-worthy fix, log it. Mark each line per
+   `${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Summary markers".
+   **A bug fix says so up front:** the first line of the report (and of every
+   status update) starts with 🐛 and says, in plain words, what was broken for
+   the person using the product. **A contained fix says so too:** if what
+   shipped stops the harm without removing the cause, the report and the PR
+   body say **contained, not the root fix** and name the root fix with what it
+   would take; never present it as the solution
+   (`${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Root-cause fixes, not
+   band-aids").
 7. **Release the work claim.** If you claimed an issue/PR at Step 0 item 4,
    `wip release <repo>#<n>` before reporting — and do it whether the build
    shipped, stalled, or you are handing back unfinished. A merged PR does not

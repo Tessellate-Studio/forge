@@ -311,6 +311,45 @@ documenting why not to. `safe-merge` already says it: _a gate the caller can
 decline to invoke is not a gate_. That was true of `safe-merge` itself until
 this hook.
 
+## Every forge PR bumps the plugin version — [enforced], against the CURRENT base
+
+**Bump `.claude-plugin/plugin.json` `version` in the same PR, strictly above
+master's version as it is when the PR merges** — not as it was when the branch
+was cut. `claude plugin update` compares version strings only, so a change
+that lands without a new version is never delivered to anyone (README →
+"Freshness check"). Patch for docs and fixes, minor for new behaviour.
+
+When another PR merges first with the version you picked, yours goes red:
+re-bump above the new master version and push. That is the check working.
+
+Three places enforce it, all from one rule in `tools/plugin-version/lib/bump.js`:
+
+- **CI `Plugin version`** (`ci.yml`, on every PR): reads master's tip through
+  the API at run time and fails when the PR's version is equal, lower, missing
+  or not semver.
+- **The post-merge sweep** (same job, on every push to master): re-judges every
+  open PR against the new tip and posts the commit status
+  `Plugin version (vs latest master)` on its head. A PR whose version was just
+  taken turns red without anyone pushing to it.
+- **`checks-gate`**, after the checks are green, re-reads the rule against the
+  base's current tip, so the seconds between a merge and the sweep posting
+  cannot let a stale green through. Both sanctioned merge routes run it. Repos
+  with no `.claude-plugin/plugin.json` on the base skip this; a read that keeps
+  failing is red.
+
+Local check before pushing: `git fetch origin master && node
+tools/plugin-version/cli.js --base-ref origin/master`.
+
+_Why:_ forge#183 and forge#184 were open together and both bumped 0.21.9 →
+0.21.10. #183 merged first; #184's squash then carried no version change, so
+its rules were unreachable until forge#186 bumped by hand (2026-11-17). The
+rule had been prose, and each PR's CI was green against a master that no
+longer existed.
+
+**What this does not catch:** a merge that skips checks-gate — the
+`gh pr checks --watch && gh pr merge` form the hook still accepts, or the
+GitHub UI — in the window before the sweep posts. Use checks-gate.
+
 ## Local gates stay light — the runner is the authoritative gate
 
 The laptop is not CI. Full test suites, full-repo typechecks and full-repo
@@ -695,6 +734,29 @@ content any more, because each is its own issue: claim it (`wip claim`)
 instead of checking a file. Full rule:
 [`anti-patterns.md` → "Concurrent branches collide in content"](./anti-patterns.md).
 
+## Root-cause fixes, not band-aids
+
+Owner decision 2026-11-16; binds every session, agent and scheduled task.
+Fix the mechanism that let the bug happen, not only the case that showed it.
+Before proposing or building a fix, answer: **why could this happen at all,
+and has this shape of bug happened before?** If it has, the fix removes the
+shape (one shared source, a rule the code enforces, a test that compares whole
+outputs), not one more instance. The pre-flight below is how you find out
+whether it has happened before.
+
+When a contained fix is the right first step (to stop harm now), label it as
+**contained, not the root fix** in the report and the PR body, and name the
+root fix alongside it, with what it would take. Never present a contained fix
+as the solution, and never offer a band-aid as the recommendation without
+saying so.
+
+This sets the *kind* of fix, not its size: a rare defect still gets the
+smallest fix that removes its cause ([`anti-patterns.md`](./anti-patterns.md)
+→ "Size the fix to how often it really happens"), and a cause must be proven
+before it is named ([`anti-patterns.md`](./anti-patterns.md) → "A cause is a
+controlled comparison"). A rule the owner states covers every state: see
+"Every reported rule covers every state" below.
+
 ## Bug-fix pre-flight — read the regression log FIRST
 
 Before writing any code for a reported bug, read the app's
@@ -822,8 +884,14 @@ marker from this fixed set:
 | 🟡 | Watch: left open on purpose, waiting, no action yet |
 | 💤 | Nothing to do, skipped, none |
 | 🚨 | Urgent or failed: real exposure, failures, no-patch cases. Rare |
+| 🐛 | Bug: the work is a bug fix, or a line names a bug (found, fixed, still open) |
 
 - **One marker per line, most urgent first** (🚨 → 👀 → ⚠️ → 🟡 → the rest).
+- **Say it is a bug, up front** (owner, 2026-11-16). When the task is a bug
+  fix, the first line of every report and status update starts with 🐛 and
+  says, in plain words, what was broken for the person using the product. A
+  bug fix must never read like a feature or a chore. *Precedent: a chat about
+  the alate#1898 fix (PR #1903) gave no sign it was a bug.*
 - **No new markers.** A meaning the set cannot express goes in words, or is
   proposed to the owner as a change to this table.
 - **Summary only.** Code, logs, quoted output and tool narration stay

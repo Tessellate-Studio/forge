@@ -28,8 +28,14 @@ headline IS the summary.
 
 **Mark each summary line** with one of: 👀 needs you · ⚠️ against a
 recommendation · ✅ done · 💡 idea · ℹ️ info · 🟣 decision recorded · 🟡 watching ·
-💤 nothing to do · 🚨 urgent/failed. One per line, most urgent first, no other
-markers (`forge/standards/workflows.md` → "Summary markers").
+💤 nothing to do · 🚨 urgent/failed · 🐛 bug. One per line, most urgent first,
+no other markers (`forge/standards/workflows.md` → "Summary markers"). **Bug
+fix → the first line starts with 🐛** and says what was broken for the user.
+
+**Root-cause fixes, not band-aids.** Fix the mechanism that let the bug
+happen; a contained fix is labelled "contained, not the root fix", with the
+root fix named beside it (`forge/standards/workflows.md` → "Root-cause fixes,
+not band-aids").
 
 ## The two always-on rules
 
