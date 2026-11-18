@@ -18,7 +18,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const CLI_DEPS = ['commander', 'chalk'];
+const { CLI_DEPS } = require('../../tools/work-claim/lib/ensure-deps');
 
 function onPath(env, platform, exists) {
   // Windows spells it `Path`; env lookups there are case-insensitive but a
@@ -83,9 +83,9 @@ function wipNotice({ onPath: found, command, depsMissing }, pluginRoot) {
   if (depsMissing) {
     return (
       `\`wip\` is not on PATH and the plugin copy is missing its dependencies, ` +
-      `so work claims cannot be taken. Run \`npm ci --omit=dev\` in "${pluginRoot}", ` +
-      `then use \`${command}\` wherever a skill says \`wip\` — and tell the ` +
-      `user a claim was not taken; never skip it silently.`
+      `so the first run installs them itself (\`npm ci --omit=dev\` in "${pluginRoot}"). ` +
+      `Use \`${command}\` wherever a skill says \`wip\`; if that install fails, ` +
+      `tell the user a claim was not taken — never skip it silently.`
     );
   }
   return (
