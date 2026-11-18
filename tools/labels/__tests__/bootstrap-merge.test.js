@@ -123,3 +123,48 @@ describe('liveMap', () => {
     expect(Object.keys(map)).toHaveLength(canonical.length);
   });
 });
+
+describe('previously: an older name folds into the canonical label', () => {
+  const decision = () =>
+    L.canonicalFor('alate').find(l => l.key === 'decision');
+  it('both exist: the old one merges into the canonical one', () => {
+    const d = decision();
+    const plan = L.planLabels(
+      [
+        { name: 'decision', color: d.color, description: d.description },
+        { name: 'needs-decision' },
+      ],
+      [d]
+    );
+    expect(plan.merge).toEqual([{ from: 'needs-decision', into: d.name }]);
+  });
+  it('only the old one exists: it is renamed in place, items kept', () => {
+    const d = decision();
+    const plan = L.planLabels(
+      [{ name: 'needs-decision', color: d.color, description: d.description }],
+      [d]
+    );
+    expect(plan.create).toEqual([]);
+    expect(plan.edit.map(e => [e.from.name, e.name])).toEqual([
+      ['needs-decision', d.name],
+    ]);
+  });
+});
+
+describe('--no-create', () => {
+  it('renames and prunes but adds no label', async () => {
+    const gh = fake([{ name: 'bug', color: 'ededed', description: '' }], []);
+    const logs = [];
+    await bootstrap({
+      repo: 'alate',
+      gh,
+      pacer: instantPacer(),
+      create: false,
+      log: s => logs.push(s),
+    });
+    expect(gh.listLabels('alate').map(l => l.name)).toEqual([
+      L.displayName('bug'),
+    ]);
+    expect(logs.join('\n')).toMatch(/not creating \(--no-create\)/);
+  });
+});

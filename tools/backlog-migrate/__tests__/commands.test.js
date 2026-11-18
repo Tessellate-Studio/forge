@@ -4,6 +4,9 @@
 // apply that creates 0.
 
 const fs = require('fs');
+
+// RFD 005: written label names carry the emoji; assertions compare KEYS.
+const { labelKey } = require('../../labels/lib/labels');
 const os = require('os');
 const path = require('path');
 const {
@@ -114,7 +117,7 @@ describe('apply', () => {
     expect(loomIssues).toHaveLength(8);
     expect(alateIssues).toHaveLength(1); // the "(alate repo)" health-endpoint entry
     for (const i of [...loomIssues, ...alateIssues]) {
-      const names = i.labels.map(l => l.name);
+      const names = i.labels.map(l => labelKey(l.name));
       expect(names.filter(n => /^P[0-3]$/.test(n))).toHaveLength(1);
       expect(names).toContain('migrated-from-backlog');
     }
@@ -283,7 +286,7 @@ describe('apply', () => {
       date: 'd',
     });
     const issue = gh.issues.loom.find(i => i.number === 55);
-    expect(issue.labels.map(l => l.name).sort()).toEqual([
+    expect(issue.labels.map(l => labelKey(l.name)).sort()).toEqual([
       'P2',
       'migrated-from-backlog',
     ]);

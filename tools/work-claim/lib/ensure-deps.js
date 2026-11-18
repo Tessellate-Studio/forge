@@ -54,6 +54,7 @@ function ensureDeps({
   if (resolvable(root)) {
     return { ok: true, installed: false };
   }
+
   // `npm ci` needs a lockfile; a plugin copy without one gets `npm install`.
   const lock = exists(path.join(root, 'package-lock.json'));
   const args = [

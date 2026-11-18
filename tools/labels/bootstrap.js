@@ -35,12 +35,31 @@ async function bootstrap({
   gh,
   pacer,
   dryRun = false,
+  create = true,
   prune = false,
   log = () => {},
   canonical = canonicalFor(repo),
 }) {
   const existing = gh.listLabels(repo);
   const plan = planLabels(existing, canonical);
+
+  // --no-create: a repo outside the label set (tessellate-pages) gets its
+  // existing labels renamed and its retired ones pruned, and nothing added.
+  if (!create) {
+    if (plan.create.length) {
+      log(
+        `not creating (--no-create): ${plan.create.map(l => l.name).join(', ')}`
+      );
+    }
+    plan.create = [];
+    plan.edit = plan.edit
+      .filter(e => e.from.name !== e.name)
+      .map(e => ({
+        ...e,
+        color: e.from.color,
+        description: e.from.description,
+      }));
+  }
   const retire = prune ? planRetire(existing, canonical, retiredFor(repo)) : [];
   const would = dryRun ? 'would ' : '';
   const fmt = l => `${l.name} #${l.color} "${l.description}"`;
@@ -146,7 +165,7 @@ async function main(argv) {
   const repo = arg(argv, '--repo');
   if (!repo) {
     console.error(
-      'usage: node tools/labels/bootstrap.js --repo <name|owner/name> [--dry-run] [--prune] [--write-json <path>]'
+      'usage: node tools/labels/bootstrap.js --repo <name|owner/name> [--dry-run] [--prune] [--no-create] [--write-json <path>]'
     );
     return 2;
   }
@@ -157,6 +176,7 @@ async function main(argv) {
     pacer: new Pacer({ minIntervalMs: 1000 }),
     dryRun: argv.includes('--dry-run'),
     prune: argv.includes('--prune'),
+    create: !argv.includes('--no-create'),
     log: s => console.log(s),
   });
   const jsonPath = arg(argv, '--write-json');

@@ -63,9 +63,9 @@ describe('canonical set', () => {
 
   test('every needs-* label is one of the muted needs shades', () => {
     const needs = L.canonicalFor('alate').filter(l =>
-      l.name.startsWith('needs-')
+      l.key.startsWith('needs-')
     );
-    expect(needs.map(l => l.name).sort()).toEqual([
+    expect(needs.map(l => l.key).sort()).toEqual([
       'needs-build',
       'needs-human',
       'needs-input',
@@ -99,7 +99,7 @@ describe('canonical set', () => {
   });
 
   test('every repo gets P, type, lifecycle, provenance and device-test labels', () => {
-    const names = L.canonicalFor('badige').map(l => l.name);
+    const names = L.canonicalFor('badige').map(l => l.key);
     for (const n of [
       'P0',
       'P3',
@@ -142,13 +142,13 @@ describe('canonical set', () => {
       'fit-engine',
       'infra',
     ]);
-    expect(L.canonicalFor('mood-layer').map(l => l.name)).not.toContain('data');
+    expect(L.canonicalFor('mood-layer').map(l => l.key)).not.toContain('data');
     expect(
-      L.canonicalFor('Tessellate-Studio/badige').map(l => l.name)
+      L.canonicalFor('Tessellate-Studio/badige').map(l => l.key)
     ).not.toContain('infra');
-    expect(
-      L.canonicalFor('Tessellate-Studio/alate').map(l => l.name)
-    ).toContain('fit-engine');
+    expect(L.canonicalFor('Tessellate-Studio/alate').map(l => l.key)).toContain(
+      'fit-engine'
+    );
   });
 
   test('the migration infers exactly the areas bootstrap creates', () => {
@@ -175,10 +175,10 @@ describe('bootstrap', () => {
     expect(gh.writes).toBe(0);
 
     // P0's description drifted; bug and feature wear the pre-2026-09-25 colours.
-    expect(plan.edit.map(l => l.name)).toEqual(['P0', 'bug', 'feature']);
-    expect(plan.create.map(l => l.name)).toContain('P1');
+    expect(plan.edit.map(l => l.key)).toEqual(['P0', 'bug', 'feature']);
+    expect(plan.create.map(l => l.key)).toContain('P1');
     expect(lines.join('\n')).toMatch(
-      /would create P1 #C0612B "Priority 1 — do next"/
+      /would create 🔴 P1 #C0612B "Priority 1 — do next"/
     );
     expect(lines.join('\n')).toMatch(
       /legacy priority labels present .*critical, high/
@@ -228,7 +228,7 @@ describe('bootstrap', () => {
       pacer: instantPacer(),
       dryRun: true,
     });
-    expect(plan.create.map(l => l.name)).toEqual(
+    expect(plan.create.map(l => l.key)).toEqual(
       expect.arrayContaining([
         'mobile',
         'backend',
