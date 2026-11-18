@@ -14,6 +14,19 @@
 // The claim format and its lifecycle live in standards/workflows.md →
 // "Work claims"; the parser is tools/work-claim/lib/claim.js.
 
+// First: make sure commander and chalk can be loaded. A bare clone has no
+// node_modules, and this CLI is what takes the work claim, so it installs its
+// own deps rather than failing with MODULE_NOT_FOUND (forge#199).
+{
+  const result = require('./lib/ensure-deps').ensureDeps({
+    root: require('path').join(__dirname, '..', '..'),
+  });
+  if (!result.ok) {
+    console.error(result.message);
+    process.exit(1);
+  }
+}
+
 const { Command } = require('commander');
 const chalk = require('chalk');
 const { execFile } = require('child_process');
