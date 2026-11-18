@@ -610,12 +610,17 @@ wip scan                             # moved recently, but nobody claimed it
 ```
 
 **`wip` not on PATH → run the plugin's own copy with the same arguments:**
-`node "${CLAUDE_PLUGIN_ROOT}/tools/work-claim/cli.js" claim …`. The global
-shim is not reliable: on 2026-09-13 an `npm link` made before the `wip` bin
-existed left `dtq` installed and `wip` missing, every `wip claim` failed with
-"command not found", and alate went its entire history without one claim. The
-SessionStart hook now says so when `wip` cannot be found (and says to run
-`npm ci --omit=dev` in the plugin root if the CLI's deps are missing too). **A
+`node "${CLAUDE_PLUGIN_ROOT}/tools/work-claim/cli.js" claim …`. No
+`CLAUDE_PLUGIN_ROOT` (a cloud session where forge is a hand-attached clone, for
+example `/home/user/forge`) → use the clone's path. The CLI installs its own two
+runtime deps (`commander`, `chalk`) on its first run, so no manual `npm ci` is
+needed (`tools/work-claim/lib/ensure-deps.js`, forge#199). On 2026-11-17 a
+cloud session hit `MODULE_NOT_FOUND` here and worked ~20 minutes with no claim,
+because no SessionStart hook ran to warn it. The global shim is also not
+reliable: on 2026-09-13 an `npm link` made before the `wip` bin existed left
+`dtq` installed and `wip` missing, every `wip claim` failed with "command not
+found", and alate went its entire history without one claim. The SessionStart
+hook says so when `wip` cannot be found. **A
 claim, touch or release that fails is reported to the user — never skipped
 silently.**
 
