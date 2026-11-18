@@ -63,7 +63,9 @@ function ensureDeps({
     '--no-fund',
   ];
   log(
-    `wip: dependencies missing in "${root}", running npm ${args.join(' ')} (first run only)…`
+    `wip: dependencies missing in "${root}", running npm ${args.join(
+      ' '
+    )} (first run only)…`
   );
   const r = run(root, args);
   if (r.status === 0 && resolvable(root)) {

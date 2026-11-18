@@ -514,10 +514,10 @@ async function sweep(opts) {
           item.isPr ? 'PR merged/closed' : 'issue closed'
         } with the claim still held`
       : last
-        ? `last holder ${last.heldBy} went silent ${
-            last.idleMinutes ?? '?'
-          } min ago`
-        : 'claim released, label left behind';
+      ? `last holder ${last.heldBy} went silent ${
+          last.idleMinutes ?? '?'
+        } min ago`
+      : 'claim released, label left behind';
 
     if (opts.dryRun) {
       console.log(
