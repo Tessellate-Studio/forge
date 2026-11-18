@@ -52,6 +52,13 @@ async function bootstrap({
       );
     }
     plan.create = [];
+    plan.edit = plan.edit
+      .filter(e => e.from.name !== e.name)
+      .map(e => ({
+        ...e,
+        color: e.from.color,
+        description: e.from.description,
+      }));
   }
   const retire = prune ? planRetire(existing, canonical, retiredFor(repo)) : [];
   const would = dryRun ? 'would ' : '';

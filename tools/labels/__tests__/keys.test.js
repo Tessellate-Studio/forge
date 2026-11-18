@@ -140,9 +140,30 @@ describe('no literal emoji-able key after a label flag', () => {
         .split('\n')
         .forEach(
           (line, i) =>
-            FLAG.test(line) && bad.push(`${f}:${i + 1}: ${line.trim()}`)
+            (FLAG.test(line) ||
+              (f.startsWith('.github/') && literalInList(line))) &&
+            bad.push(`${f}:${i + 1}: ${line.trim()}`)
         );
     }
     expect(bad).toEqual([]);
+  });
+
+  // A workflow's `labels: [...]` sends names too (review finding: forge's own
+  // ci.yml sent a bare 'bug'). A quoted emoji-able key there must go through
+  // the label() lookup, like every app workflow.
+  const QUOTED = new RegExp(String.raw`(label\()?['"](?:${keys})['"]`, 'g');
+  function literalInList(line) {
+    if (/^\s*#/.test(line)) {
+      return false;
+    }
+    const m = /labels:\s*\[([^\]]*)\]/.exec(line);
+    return !!m && [...m[1].matchAll(QUOTED)].some(q => !q[1]);
+  }
+  it('the list check catches a bare key and passes label()', () => {
+    expect(literalInList("  labels: ['ci-failure', 'bug'],")).toBe(true);
+    expect(literalInList("  labels: ['ci-failure', label('bug')],")).toBe(
+      false
+    );
+    expect(literalInList("  labels: ['device-test'],")).toBe(false);
   });
 });
