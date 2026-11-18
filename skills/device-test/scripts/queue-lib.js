@@ -409,10 +409,27 @@ function daysSince(iso) {
   return minutes === null ? null : Math.floor(minutes / (60 * 24));
 }
 
+/** A needs-build item older than this must be resolved (forge#196). */
+const STALE_BUILD_DAYS = 14;
+
+/** True for a needs-build item past the limit; false for anything unreadable. */
+function isStaleBuild(item, now = Date.now()) {
+  if (!item || item.state !== STATUS.NEEDS_BUILD) {
+    return false;
+  }
+  const created = Date.parse(item.createdAt);
+  if (Number.isNaN(created)) {
+    return false;
+  }
+  return (now - created) / 86400000 > STALE_BUILD_DAYS;
+}
+
 module.exports = {
   labelKey,
   resolveLabels,
   REPOS,
+  STALE_BUILD_DAYS,
+  isStaleBuild,
   STATUS,
   LABELS,
   PRIORITY,

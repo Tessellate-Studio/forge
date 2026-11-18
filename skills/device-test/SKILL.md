@@ -363,8 +363,14 @@ Classify every open test by its labels first, then (for the rest) by Steps:
   across several drains is worth saying out loud, not quietly re-listing.
 - **Labelled `needs-build`** — a previous drain already determined this test
   can't be reached by any OTA and the installed build predates it. On a
-  **daily** run, skip these entirely (see "Self-scheduled automation" above —
-  that's the whole point of the label). On an **ad hoc** run (the user
+  **daily** run, skip its TEST STEPS (see "Self-scheduled automation" above),
+  but never its comments or bookkeeping: read any `owner-replied` first and
+  act on it (a change request gets a fix chip, `task_id` recorded); check the
+  item has `Blocker:` and `Next:` lines and add them if missing. The item is
+  an AGENT work item (`workflows.md` → "needs-build is an AGENT work item"):
+  if `dtq` shows it `STALE` (over 14 days), list it in the wrap-up as a
+  failure of the agents and spawn a chip for its `Next:` action. The drain
+  itself never dispatches the build (the build task or a chip does). On an **ad hoc** run (the user
   explicitly asked right now), it's fine to give Step 2's version check one
   more cheap look in case a human already installed a newer build since the
   label was added — if it's now satisfiable, remove `needs-build` and treat it
