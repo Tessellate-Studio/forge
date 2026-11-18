@@ -122,6 +122,9 @@ describe('which priority a new test gets', () => {
 
   it('takes the most urgent when a PR closes several issues', () => {
     expect(priorityFrom([['P2'], ['P0', 'bug'], []])).toBe('P0');
+
+    // RFD 005: emoji names inherit the same priority (the key).
+    expect(priorityFrom([['🐛 bug', '🔴 P1'], ['🟡 P2']])).toBe('P1');
   });
 
   it('falls back to P2 when nothing it verifies carries one', () => {

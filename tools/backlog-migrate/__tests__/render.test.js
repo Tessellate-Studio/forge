@@ -162,7 +162,7 @@ describe('table and pointer', () => {
     expect(p.trim().split('\n')).toHaveLength(1);
     expect(p).toContain('<!-- backlog-retired -->');
     expect(p).toContain(
-      'https://github.com/Tessellate-Studio/loom/issues?q=is%3Aissue+is%3Aopen+label%3AP0%2CP1%2CP2%2CP3+sort%3Acreated-asc'
+      'https://github.com/Tessellate-Studio/loom/issues?q=is%3Aissue+is%3Aopen+label%3A%22%F0%9F%9A%A8+P0%22%2C%22%F0%9F%94%B4+P1%22%2C%22%F0%9F%9F%A1+P2%22%2C%22%F0%9F%9F%A2+P3%22+sort%3Acreated-asc' // RFD 005: the P labels by display name
     );
     expect(p).toContain('`abc1234`');
   });

@@ -55,6 +55,11 @@ const LIFECYCLE = [
     color: '4F6B3A',
     description:
       'A plan awaiting owner decision (draft PR): merge = approve, close = reject',
+
+    // alate and loom grew a duplicate with the same description; the owner
+    // folded it into `decision` (RFD 005 Q1, 2026-11-17). Bootstrap moves its
+    // items here and deletes it (or renames it, where `decision` is missing).
+    previously: ['needs-decision'],
   },
   {
     // A step only a human can do (console, re-consent, CLI login) is ONE PR
@@ -149,8 +154,81 @@ const DEVICE_TEST = [
   },
 ];
 
-/** The registry entry for one label, by name — for code that has to tell
- *  someone to create or apply it, so the hint cannot drift from the set. */
+// RFD 005: a label has a stable KEY that programs match on (the `name` each
+// entry above is written with) and a display NAME that people read, which
+// may carry an emoji. Owner, 2026-11-17: the report-marker emoji where they
+// overlap; every emoji here is ONE code point with no U+FE0F, so the name a
+// person types in search is the name GitHub stores (a test pins this).
+const EMOJI = {
+  bug: '🐛',
+  feature: '✨',
+  chore: '🧹',
+  refactor: '🔁',
+  P0: '🚨',
+  P1: '🔴',
+  P2: '🟡',
+  P3: '🟢',
+  'needs-triage': '🔎',
+  'needs-human': '👀',
+  decision: '🟣',
+  'needs-build': '🔧',
+  parked: '💤',
+  failed: '❌',
+  mobile: '📱',
+  backend: '💻',
+  scraper: '🧲',
+  'fit-engine': '📏',
+  infra: '🧰',
+};
+
+// The one switch (RFD 005 step 4). Off until every consumer in every repo
+// resolves names by key; flipping it and running bootstrap renames in place.
+const EMOJI_NAMES = true;
+
+const keyOf = k => k.toLowerCase();
+const EMOJI_BY_KEY = new Map(
+  Object.entries(EMOJI).map(([k, e]) => [keyOf(k), e])
+);
+
+/** The name GitHub shows for a key: `bug` → `🐛 bug` once the switch is on. */
+function displayName(key, { emoji = EMOJI_NAMES } = {}) {
+  const e = emoji && EMOJI_BY_KEY.get(keyOf(key));
+  return e ? `${e} ${key}` : key;
+}
+
+/** The key behind a live name, with or without its emoji: `labelKey('🐛 bug')`
+ *  and `labelKey('bug')` are both `bug`. Matching on keys is what lets code
+ *  work before, during and after the rename. Unknown names come back as-is. */
+function labelKey(name) {
+  // The SAME rule every app workflow inlines (one rule, not two): a leading
+  // non-ASCII word is the label's emoji. `manual run list` keeps its words.
+  return String(name || '').replace(EMOJI_PREFIX, '');
+}
+const EMOJI_PREFIX = /^\P{ASCII}+ /u;
+
+/** Does live name `name` stand for `key`? (case-insensitive, like GitHub) */
+function isLabel(name, key) {
+  return keyOf(labelKey(name)) === keyOf(key);
+}
+
+/** The repo's live name for `key`, from its label list (names or {name}
+ *  objects), or undefined. Writers send THIS, never a key: GitHub silently
+ *  creates a label for an unknown name (github/docs#35718). */
+function resolveLabel(key, liveLabels) {
+  return (liveLabels || [])
+    .map(l => (typeof l === 'string' ? l : l.name))
+    .find(n => isLabel(n, key));
+}
+
+/** Keys → the names to SEND: each key's live name, or the key itself when the
+ *  repo has none (the old behaviour). The one place writers do this. */
+function resolveLabels(keys, liveLabels) {
+  return keys.map(k => resolveLabel(k, liveLabels) || k);
+}
+
+/** The registry entry for one label, by key or display name — for code that
+ *  has to tell someone to create or apply it, so the hint cannot drift from
+ *  the set. `name` is the display name; `key` is what code matches. */
 function labelSpec(name) {
   const all = [
     ...PRIORITY,
@@ -159,13 +237,17 @@ function labelSpec(name) {
     ...PROVENANCE,
     ...DEVICE_TEST,
   ];
-  const found = all.find(l => l.name.toLowerCase() === name.toLowerCase());
+  const found = all.find(l => isLabel(name, l.name));
   if (!found) {
     throw new Error(
       `"${name}" is not in the label registry (tools/labels/lib/labels.js)`
     );
   }
-  return found;
+  return withKey(found);
+}
+
+function withKey(l) {
+  return { ...l, key: l.name, name: displayName(l.name) };
 }
 
 // Owner amendment to RFD 004 Q6 (2026-09-19): area labels in loom and alate
@@ -231,6 +313,83 @@ const AREA = {
 // it from every issue that wears it.
 const LEGACY_PRIORITY = ['critical', 'high', 'medium', 'low'];
 
+// Labels the owner retired, by repo and BY NAME (`bootstrap --prune` deletes
+// them). Owner, 2026-11-17: "remove any unused label too", then, shown the
+// inventory, "Group 1 only": labels on NO issue or PR and used by no code
+// (GraphQL issue/PR counts + `git grep` of every checkout, 2026-11-17). So a
+// retired label is deleted only while it is still on nothing (bootstrap
+// re-checks); a name the registry still wants is never deleted. Kept on
+// purpose: Dependabot's labels, every label a workflow applies, and
+// mood-layer's own set (its .github/labels.yml).
+const RETIRED = {
+  alate: ['stale'],
+  loom: [
+    'documentation',
+    'duplicate',
+    'enhancement',
+    'good first issue',
+    'help wanted',
+    'invalid',
+    'question',
+    'wontfix',
+    'in-progress',
+    'blocked',
+    'needs-review',
+    'repeat-issue',
+    'pending-change',
+  ],
+  forge: [
+    'documentation',
+    'duplicate',
+    'good first issue',
+    'help wanted',
+    'invalid',
+    'question',
+    'wontfix',
+  ],
+  'mood-layer': [
+    'duplicate',
+    'good first issue',
+    'help wanted',
+    'invalid',
+    'question',
+    'wontfix',
+  ],
+  badige: [
+    'duplicate',
+    'good first issue',
+    'help wanted',
+    'invalid',
+    'question',
+    'wontfix',
+    'pending-change',
+  ],
+  'tessellate-pages': [
+    'documentation',
+    'duplicate',
+    'enhancement',
+    'good first issue',
+    'invalid',
+    'question',
+    'wontfix',
+  ],
+  litmus: [
+    'documentation',
+    'duplicate',
+    'enhancement',
+    'good first issue',
+    'help wanted',
+    'invalid',
+    'question',
+    'wontfix',
+  ],
+};
+
+function retiredFor(repo) {
+  const short = repo.includes('/') ? repo.split('/')[1] : repo;
+  return RETIRED[short] || [];
+}
+
 function canonicalFor(repo) {
   const short = repo.includes('/') ? repo.split('/')[1] : repo;
   return [
@@ -240,19 +399,42 @@ function canonicalFor(repo) {
     ...PROVENANCE,
     ...DEVICE_TEST,
     ...(AREA[short] || []),
-  ];
+  ].map(withKey);
 }
 
 /**
- * Diff existing labels against the canonical set. Names match
- * case-insensitively (GitHub treats them that way); colours too.
- * Returns { create, edit, ok, legacy } — never a delete.
+ * Diff existing labels against the canonical set. Labels match by KEY
+ * (`bug` and `🐛 bug` are the same label), case-insensitively as GitHub does;
+ * colours too. Returns { create, edit, ok, merge, legacy }:
+ * - `edit` renames in place (`gh label edit --name`), which keeps the label on
+ *   every issue and PR;
+ * - `merge` lists a second label with the same key (a bare `bug` beside
+ *   `🐛 bug`, revived by a writer that sent the old name): bootstrap moves its
+ *   items onto the canonical one and deletes it (RFD 005 §4, Kubernetes
+ *   label_sync `previously:`).
  */
 function planLabels(existing, canonical) {
-  const byName = new Map(existing.map(l => [l.name.toLowerCase(), l]));
-  const out = { create: [], edit: [], ok: [], legacy: [] };
+  const byKey = new Map();
+  for (const l of existing) {
+    const k = keyOf(labelKey(l.name));
+    if (!byKey.has(k)) {
+      byKey.set(k, []);
+    }
+    byKey.get(k).push(l);
+  }
+  const out = { create: [], edit: [], ok: [], merge: [], legacy: [] };
   for (const want of canonical) {
-    const have = byName.get(want.name.toLowerCase());
+    // Same key first (`bug`, `🐛 bug`), then any older name it replaces.
+    const haves = [
+      ...(byKey.get(keyOf(want.key)) || []),
+      ...(want.previously || []).flatMap(p => byKey.get(keyOf(p)) || []),
+    ];
+    const have =
+      haves.find(h => h.name.toLowerCase() === want.name.toLowerCase()) ||
+      haves[0];
+    haves
+      .filter(h => h !== have)
+      .forEach(h => out.merge.push({ from: h.name, into: want.name }));
     if (!have) {
       out.create.push(want);
     } else if (
@@ -287,7 +469,16 @@ module.exports = {
   DEVICE_TEST,
   AREA,
   LEGACY_PRIORITY,
+  RETIRED,
+  retiredFor,
+  EMOJI,
+  EMOJI_NAMES,
   canonicalFor,
   planLabels,
   labelSpec,
+  displayName,
+  labelKey,
+  isLabel,
+  resolveLabel,
+  resolveLabels,
 };

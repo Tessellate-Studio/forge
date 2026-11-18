@@ -130,6 +130,21 @@ describe('list-before-create', () => {
     ]);
   });
 
+  test('sends the live label names: emoji labels get the emoji, never a bare duplicate (RFD 005)', () => {
+    const gh = new FakeGitHub({
+      labels: { loom: [{ name: '🟡 P2' }, { name: 'admin-ui' }] },
+      issues: { loom: [] },
+    });
+    const r = wiNew({ ...base, label: ['🐛 bug'] }, { gh });
+    expect(r.status).toBe('created');
+    expect(r.issue.labels).toEqual(['P2', 'admin-ui', 'bug']);
+    expect(gh.issues.loom.at(-1).labels.map(l => l.name)).toEqual([
+      '🟡 P2',
+      'admin-ui',
+      'bug',
+    ]);
+  });
+
   test('dry run lists nothing and writes nothing', () => {
     const gh = new FakeGitHub();
     expect(wiNew(base, { gh, dryRun: true }).status).toBe('dry-run');

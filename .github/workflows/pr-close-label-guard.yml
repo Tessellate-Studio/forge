@@ -58,12 +58,16 @@ jobs:
           script: |
             const { owner, repo } = context.repo;
             const pr = context.payload.pull_request;
-            const labels = pr.labels.map((l) => l.name);
+            // Match by KEY (RFD 005): `🟣 decision` is `decision`. A leading
+            // non-ASCII word is a label's emoji; strip it before comparing.
+            const key = (n) => n.replace(/^[^\x00-\x7F]+ /, '');
+            const labels = pr.labels.map((l) => key(l.name));
+            const nameOf = (k) => (pr.labels.find((l) => key(l.name) === k) || { name: k }).name;
             const outcome = pr.merged ? 'merged' : 'closed without merging';
 
-            const drop = (name) =>
-              github.rest.issues.removeLabel({ owner, repo, issue_number: pr.number, name })
-                .catch((e) => core.info(`#${pr.number}: '${name}' already gone (${e.status}).`));
+            const drop = (k) =>
+              github.rest.issues.removeLabel({ owner, repo, issue_number: pr.number, name: nameOf(k) })
+                .catch((e) => core.info(`#${pr.number}: '${nameOf(k)}' already gone (${e.status}).`));
 
             if (labels.includes('gate-blocked')) {
               await drop('gate-blocked');

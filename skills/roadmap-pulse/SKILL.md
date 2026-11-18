@@ -95,7 +95,7 @@ gh issue list -R <repo> --state open -L 1000 \
   --json number,title,body,labels,createdAt,updatedAt,url,issueType,parent,subIssuesSummary,blockedBy,blocking,closedByPullRequestsReferences
 gh issue list -R <repo> --state closed -L 300 --search "closed:>=<lastRunDate>" \
   --json number,title,stateReason,closedAt,closedByPullRequestsReferences,labels
-gh pr list    -R <repo> --state open -L 200 --label decision --json number,title,createdAt,isDraft,url
+gh pr list    -R <repo> --state open -L 200 --label "$(forge-label decision --repo <repo> 2>/dev/null || echo decision)" --json number,title,createdAt,isDraft,url
 ```
 
 - **Cross-check the count, and fail the run on a mismatch.** A partial list is
@@ -215,7 +215,7 @@ Block shape and field meanings: [`references/digest-format.md`](references/diges
 
 ### Step 1 — Honesty pass
 
-For each open item, scan for state claims and verify each against the source of truth. Full detection logic in [`references/staleness-detection.md`](references/staleness-detection.md) — read it before running.
+For each open item, scan for state claims and verify each against the source of truth. Also list every `device-test` + `needs-build` item open over 14 days (`dtq` marks them `STALE`) as agent failures: each needs a chip for its `Next:` action (`standards/workflows.md` → "needs-build is an AGENT work item"). Report only; never dispatch a build. Full detection logic in [`references/staleness-detection.md`](references/staleness-detection.md) — read it before running.
 
 | Failure mode | Check | Cron action | Manual-run action |
 |---|---|---|---|

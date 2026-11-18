@@ -31,7 +31,7 @@ function loadScript() {
   return new AsyncFunction('github', 'context', 'core', step.with.script);
 }
 
-function makeGithub() {
+function makeGithub({ goneLabels = [] } = {}) {
   const calls = { create: [], removeLabel: [], createComment: [] };
   const github = {
     rest: {
@@ -42,6 +42,11 @@ function makeGithub() {
         },
         removeLabel: async args => {
           calls.removeLabel.push(args);
+          if (goneLabels.includes(args.name)) {
+            throw Object.assign(new Error('Label does not exist'), {
+              status: 404,
+            });
+          }
           return {};
         },
         createComment: async args => {
@@ -62,9 +67,14 @@ function makeCore() {
   };
 }
 
-async function runGuard({ labels, merged = false, title = 'Some PR' }) {
+async function runGuard({
+  labels,
+  merged = false,
+  title = 'Some PR',
+  goneLabels,
+}) {
   const script = loadScript();
-  const { github, calls } = makeGithub();
+  const { github, calls } = makeGithub({ goneLabels });
   const { core, logs } = makeCore();
   const context = {
     repo: { owner: 'Tessellate-Studio', repo: 'forge' },
@@ -125,5 +135,33 @@ describe('pr-close-label-guard', () => {
     const { calls } = await runGuard({ labels: ['decision', 'gate-blocked'] });
     expect(calls.removeLabel.map(c => c.name)).toEqual(['gate-blocked']);
     expect(calls.create).toHaveLength(0);
+  });
+
+  // RFD 005: labels may carry an emoji; the guard matches by key.
+  test('reads 🟣 decision as decision', async () => {
+    const { calls, logs } = await runGuard({
+      labels: ['🟣 decision'],
+      merged: true,
+    });
+    expect(calls.create).toHaveLength(0);
+    expect(logs.join('\n')).toMatch(/'decision' PR merged/);
+  });
+
+  test('a multi-word ASCII label keeps its first word', async () => {
+    const { calls } = await runGuard({
+      labels: ['manual run list', 'needs-input'],
+    });
+    expect(calls.create).toHaveLength(1);
+  });
+
+  // Review finding: the catch logged an undefined `name` (ReferenceError).
+  test('a label already gone (404) is logged, the run carries on', async () => {
+    const { calls, logs } = await runGuard({
+      labels: ['gate-blocked', 'needs-input'],
+      goneLabels: ['gate-blocked', 'needs-input'],
+    });
+    expect(logs.join('\n')).toMatch(/'gate-blocked' already gone \(404\)/);
+    expect(calls.create).toHaveLength(1);
+    expect(calls.createComment).toHaveLength(1);
   });
 });

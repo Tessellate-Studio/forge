@@ -17,6 +17,7 @@ const {
   checkGhReady,
   collect,
   daysSince,
+  isStaleBuild,
   describeDeviceClaim,
   fetchDeviceClaims,
   REPOS,
@@ -178,11 +179,14 @@ function renderRepo(result, opts) {
         ? chalk.bold(item.priority)
         : chalk.dim('P?');
       const claimed = item.claimed ? chalk.yellow(' 🚧') : '';
+      const stale = isStaleBuild(item) ? chalk.red(' STALE') : '';
 
       // `🧪N` = N steps a worktree check can still run, no phone needed.
       const code = item.codeSteps ? chalk.cyan(` 🧪${item.codeSteps}`) : '';
       lines.push(
-        `  ${statusIcon(item)}  ${priority}  ${id}${claimed}${code}  ${clip(
+        `  ${statusIcon(
+          item
+        )}  ${priority}  ${id}${claimed}${code}${stale}  ${clip(
           item.title,
           72
         )}${ageStr}${notes}  ${pr}  ${chalk.dim(extra)}`

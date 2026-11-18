@@ -6,6 +6,7 @@
 const nodeFs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { displayName, labelKey } = require('../../labels/lib/labels');
 
 const CANONICAL_DIR = path.join(
   __dirname,
@@ -22,6 +23,24 @@ const TARGET = path.join('.github', 'ISSUE_TEMPLATE');
 const hash = text =>
   crypto.createHash('sha256').update(text.replace(/\r\n/g, '\n')).digest('hex');
 
+// The templates name labels by KEY. A form cannot look a name up when someone
+// files it, and GitHub silently DROPS a form label the repo does not have
+// (RFD 005). So every key is listed in BOTH forms, bare and with its emoji:
+// whichever the repo has is applied, the other is dropped, and a form works
+// before, during and after the rename without being synced again.
+function renderLabels(text) {
+  return text.replace(/^labels:[ \t]*\[(.*)\][ \t]*$/m, (line, list) => {
+    const keys = list
+      .split(',')
+      .map(s => labelKey(s.trim().replace(/^"|"$/g, '')))
+      .filter(Boolean);
+    const names = [
+      ...new Set(keys.flatMap(k => [k, displayName(k, { emoji: true })])),
+    ];
+    return `labels: [${names.map(n => JSON.stringify(n)).join(', ')}]`;
+  });
+}
+
 function canonical({ fs = nodeFs, dir = CANONICAL_DIR } = {}) {
   return fs
     .readdirSync(dir)
@@ -29,7 +48,7 @@ function canonical({ fs = nodeFs, dir = CANONICAL_DIR } = {}) {
     .sort()
     .map(name => ({
       name,
-      text: fs.readFileSync(path.join(dir, name), 'utf8'),
+      text: renderLabels(fs.readFileSync(path.join(dir, name), 'utf8')),
     }));
 }
 
@@ -76,4 +95,12 @@ function sync(dest, { fs = nodeFs, dir = CANONICAL_DIR } = {}) {
   return written;
 }
 
-module.exports = { check, sync, canonical, hash, CANONICAL_DIR, TARGET };
+module.exports = {
+  check,
+  sync,
+  canonical,
+  hash,
+  renderLabels,
+  CANONICAL_DIR,
+  TARGET,
+};

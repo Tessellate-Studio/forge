@@ -514,8 +514,11 @@ starts on it claims it straight away rather than leaving it looking free.
   Any session or scheduled task that meets an open `owner-replied` item reads
   the newest owner comment and acts on it **before** its other work, then
   removes `owner-replied` in the same step as its reply. `needs-build` is never
-  an owner answer: it means only "no installable build can reach this test",
-  and drains skip it (it hid alate #650 and #925 for a month).
+  an owner answer: it means only "no installable build can reach this test".
+  A drain skips the TEST STEPS of a `needs-build` item, never its comments:
+  an `owner-replied` on one is read and acted on first (it hid alate #650 and
+  #925 for a month, and #1589-#1638 for four weeks). See "needs-build is a
+  queue with an owner" below.
 - **Never put `needs-input` on a `decision` PR.** Closing a decision PR is a
   valid answer (reject). `pr-close-label-guard.yml` skips `decision`-labelled
   PRs so that answer isn't turned into a follow-up issue.
@@ -540,7 +543,7 @@ forge predates the tool, do the same by hand: list the open issues
 for a duplicate, then `gh issue create -R <repo> --label <P> --label <type> …`
 with every label in the create call (one write, one notification).
 
-**A missing label fails the whole create.** `gh issue create --label P1`
+**A missing label fails the whole create.** `gh issue create --label "$(forge-label P1 --repo <repo> 2>/dev/null || echo P1)"`
 refuses outright in a repo that has no `P1` label, and not every repo has the
 set yet (litmus had none on 2026-09-19). Before filing into a repo for the
 first time, check `gh label list -R <repo> -L 200`. Missing → run
@@ -607,12 +610,17 @@ wip scan                             # moved recently, but nobody claimed it
 ```
 
 **`wip` not on PATH → run the plugin's own copy with the same arguments:**
-`node "${CLAUDE_PLUGIN_ROOT}/tools/work-claim/cli.js" claim …`. The global
-shim is not reliable: on 2026-09-13 an `npm link` made before the `wip` bin
-existed left `dtq` installed and `wip` missing, every `wip claim` failed with
-"command not found", and alate went its entire history without one claim. The
-SessionStart hook now says so when `wip` cannot be found (and says to run
-`npm ci --omit=dev` in the plugin root if the CLI's deps are missing too). **A
+`node "${CLAUDE_PLUGIN_ROOT}/tools/work-claim/cli.js" claim …`. No
+`CLAUDE_PLUGIN_ROOT` (a cloud session where forge is a hand-attached clone, for
+example `/home/user/forge`) → use the clone's path. The CLI installs its own two
+runtime deps (`commander`, `chalk`) on its first run, so no manual `npm ci` is
+needed (`tools/work-claim/lib/ensure-deps.js`, forge#199). On 2026-11-17 a
+cloud session hit `MODULE_NOT_FOUND` here and worked ~20 minutes with no claim,
+because no SessionStart hook ran to warn it. The global shim is also not
+reliable: on 2026-09-13 an `npm link` made before the `wip` bin existed left
+`dtq` installed and `wip` missing, every `wip claim` failed with "command not
+found", and alate went its entire history without one claim. The SessionStart
+hook says so when `wip` cannot be found. **A
 claim, touch or release that fails is reported to the user — never skipped
 silently.**
 
@@ -946,6 +954,39 @@ nothing is parsed out of prose.
 | Failed, bug filed | **open** | `device-test` `failed` |
 | Passed | closed, reason `completed` | `device-test` |
 | Withdrawn / superseded | closed, reason `not_planned` | `device-test` |
+
+### needs-build is an AGENT work item, never an owner wait
+
+Owner decision 2026-11-18 (forge#196). `needs-build` tells an agent "pick this
+up": get a build that can carry this test, apply the owner's feedback if any,
+and drain it. It is never a note that the owner must act. The old reading
+("wait") left alate #1589, #1590, #1591 and #1638 for 28-31 days behind the V2
+gate and #1756 for 14 days, and the owner's feedback on them reached no agent.
+
+1. **Every `needs-build` item has an agent owner and a next action.** The
+   comment that adds the label starts with `Blocker: binary` (a build must be
+   installed) or `Blocker: gate` (a feature gate keeps it out of every build)
+   and `Next:` the exact action an agent takes. No `Owner:` line is needed:
+   the owner is always an agent. If only the owner can unblock it (a store
+   console step, a taste decision), that is `needs-input`, not `needs-build`.
+2. **Owner feedback is read and applied.** `owner-replied` on a `needs-build`
+   item is acted on before anything else (see "Owner answers"). If the answer
+   asks for a change, spawn a fix chip via `forge:build-feature` and record
+   its `task_id` on the item, exactly as for a `failed` test.
+3. **Agents work the queue, and 14 days is the alarm.** Any session or
+   scheduled task that finds a `needs-build` item takes it: claim it, do the
+   `Next:` action, then re-drain. `dtq` marks one older than 14 days `STALE`
+   and roadmap-pulse lists it. A stale item is a failure of the agents, not a
+   question for the owner: the next session takes it, or withdraws it
+   (`not_planned`) with a reason.
+4. **Builds stay cloud-only and on demand.** An agent dispatches the one
+   gate-open dev build with `workflow_dispatch` (never a schedule), per "CI
+   spend". The owner pre-approved this (2026-11-18, "yes, on demand"): no ask
+   each time. One build per batch of waiting items, never `on: push`, never
+   `schedule:`, and only when an open `needs-build` item needs it.
+5. **A gate is a work item.** Many items blocked by one `Blocker: gate` are
+   one problem: file one issue for the gate, assigned to an agent, and link
+   every blocked test to it.
 
 **A failed test stays OPEN**, labelled `failed`, linking the bug it produced.
 It is retired only when a later drain re-runs it after the fix lands and it

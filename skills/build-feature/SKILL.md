@@ -128,6 +128,12 @@ and write one criterion per cell. The criteria below come from that matrix,
 not from the one screenshot. A fix covering only the reported state is the
 most common way a "fixed" complaint comes back.
 
+**Building a test bed or a model on a domain word? Define the word first.** ("persona",
+"fully on numbers", "a wardrobe", "in range".) Write one line saying what it means plus two
+example entries, and get the owner's yes BEFORE generating anything from it. alate, 2026-11-17: 49
+personas were built from "numbers or not" as one yes/no axis, and the owner's first look was "none of
+them is fully based on numbers" (nine had five of eight tape numbers, twenty had none).
+
 Before building, write down 2–5 **objective, checkable** criteria — the things
 you'll measure on the screenshot to decide pass/fail. Vague goals ("looks
 balanced") cause the endless-iteration trap; concrete ones end it. Express them

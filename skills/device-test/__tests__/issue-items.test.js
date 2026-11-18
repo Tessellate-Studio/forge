@@ -226,3 +226,31 @@ describe('code tier — CODE: steps are counted off the unticked boxes', () => {
     ]);
   });
 });
+
+// RFD 005: labels are read by key, so the emoji names change nothing.
+describe('emoji label names', () => {
+  it('reads 👀 needs-human, ❌ failed and 🔴 P1 exactly like the bare names', () => {
+    const item = itemFromIssue(
+      withLabels(LABELS.ITEM, '👀 needs-human', '❌ failed', '🔴 P1'),
+      'alate'
+    );
+    expect(item.needsHuman).toBe(true);
+    expect(item.state).toBe(
+      itemFromIssue(withLabels(LABELS.ITEM, LABELS.FAILED), 'alate').state
+    );
+    expect(item.priority).toBe('P1');
+  });
+  it('reads 💤 parked and 🔧 needs-build', () => {
+    const parked = itemFromIssue(withLabels(LABELS.ITEM, '💤 parked'), 'alate');
+    const build = itemFromIssue(
+      withLabels(LABELS.ITEM, '🔧 needs-build'),
+      'alate'
+    );
+    expect(parked.state).toBe(
+      itemFromIssue(withLabels(LABELS.ITEM, LABELS.PARKED), 'alate').state
+    );
+    expect(build.state).toBe(
+      itemFromIssue(withLabels(LABELS.ITEM, LABELS.NEEDS_BUILD), 'alate').state
+    );
+  });
+});

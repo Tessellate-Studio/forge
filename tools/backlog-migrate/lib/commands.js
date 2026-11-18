@@ -10,7 +10,17 @@ const { parseBacklog } = require('./parse');
 const { classifyEntries } = require('./classify');
 const R = require('./render');
 const { versionAtLeast, MIN_GH } = require('./github');
-const { canonicalFor, AREA } = require('../../labels/lib/labels');
+const {
+  canonicalFor,
+  AREA,
+  labelKey,
+  displayName,
+} = require('../../labels/lib/labels');
+
+// RFD 005: compare labels by KEY (`🐛 bug` is `bug`) and send the registry's
+// display name, which bootstrap guarantees the repo has.
+const keyOf = name => labelKey(name).toLowerCase();
+const toNames = keys => keys.map(k => displayName(k));
 
 const MIGRATED_LABEL = 'migrated-from-backlog';
 const ACTIONABLE = new Set(['create', 'link']);
@@ -177,11 +187,11 @@ async function apply({
   const markerIndex = {};
   const labelFixes = [];
   for (const t of targets) {
-    const have = new Set(gh.listLabels(t).map(l => l.name));
+    const have = new Set(gh.listLabels(t).map(l => keyOf(l.name)));
     const need = new Set(
       rows.filter(r => r.targetRepo === t).flatMap(labelsFor)
     );
-    let missing = [...need].filter(n => !have.has(n));
+    let missing = [...need].filter(n => !have.has(keyOf(n)));
 
     // A cross-repo target (loom's alate entry) was never bootstrapped for
     // this run, and the pilot created its provenance + type labels by hand.
@@ -190,7 +200,7 @@ async function apply({
     if (t !== doc.repo) {
       const short = t.includes('/') ? t.split('/')[1] : t;
       const areas = new Set((AREA[short] || []).map(l => l.name));
-      const canon = new Map(canonicalFor(t).map(l => [l.name, l]));
+      const canon = new Map(canonicalFor(t).map(l => [l.key, l]));
       const fixable = missing.filter(n => canon.has(n) && !areas.has(n));
       labelFixes.push(...fixable.map(n => [t, canon.get(n)]));
       missing = missing.filter(n => !fixable.includes(n));
@@ -247,7 +257,7 @@ async function apply({
   async function linkRow(row) {
     const n = row.linkTo;
     const current = gh.viewIssue(row.targetRepo, n);
-    const have = new Set((current.labels || []).map(l => l.name));
+    const have = new Set((current.labels || []).map(l => labelKey(l.name)));
 
     // Never give an issue a second P label: one it already carries is the
     // owner's call and wins over the BACKLOG section's priority.
@@ -269,7 +279,7 @@ async function apply({
       return;
     }
     if (add.length) {
-      await pacer.write(() => gh.addLabels(row.targetRepo, n, add));
+      await pacer.write(() => gh.addLabels(row.targetRepo, n, toNames(add)));
     }
     if (!seen) {
       await pacer.write(() =>
@@ -315,7 +325,11 @@ async function apply({
     }
     const body = R.renderBody(row, { date });
     const made = await pacer.write(() =>
-      gh.createIssue(row.targetRepo, { title: row.title, body, labels })
+      gh.createIssue(row.targetRepo, {
+        title: row.title,
+        body,
+        labels: toNames(labels),
+      })
     );
     ledger.upsert({
       ...base(row),
@@ -379,7 +393,7 @@ async function apply({
         gh.createIssue(row.targetRepo, {
           title: subTitle,
           body: R.renderBody(sub, { date }),
-          labels,
+          labels: toNames(labels),
           parent,
         })
       );

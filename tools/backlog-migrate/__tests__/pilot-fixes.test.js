@@ -24,7 +24,7 @@ const {
   FREEZE_GUARD,
 } = require('../lib/commands');
 const { Ledger } = require('../lib/ledger');
-const { AREA, canonicalFor } = require('../../labels/lib/labels');
+const { AREA, canonicalFor, displayName } = require('../../labels/lib/labels');
 const { FakeGitHub, instantPacer } = require('../test-support/fake-github');
 
 const LOOM = fs.readFileSync(
@@ -132,7 +132,10 @@ describe('+ apply creates canonical labels on a cross-repo target', () => {
       date: 'd',
     });
     expect(s.labelsCreated).toEqual(
-      expect.arrayContaining(['alate:migrated-from-backlog', 'alate:P2'])
+      expect.arrayContaining([
+        'alate:migrated-from-backlog',
+        `alate:${displayName('P2')}`,
+      ])
     );
     const made = gh.labels.alate.find(l => l.name === 'migrated-from-backlog');
     expect(made.color).toBe('DAD4C8'); // canonical colour, not a guess

@@ -1,3 +1,5 @@
+const { displayName } = require('../../labels/lib/labels');
+
 // Rendering for backlog-migrate (RFD 004 §5.3–§5.5, §5.7): titles, the
 // idempotency marker, issue bodies, the dry-run table and the pointer file.
 // Pure — no I/O — so every string that reaches GitHub is unit-testable.
@@ -268,8 +270,11 @@ function digestPointer(date, url) {
 }
 
 function pointerFile(repo, lastSha) {
+  // GitHub search matches a label name exactly, so the P labels go in by
+  // their display names (`"🚨 P0"`), quoted for the space (RFD 005).
+  const ps = ['P0', 'P1', 'P2', 'P3'].map(k => `"${displayName(k)}"`).join(',');
   const q = encodeURIComponent(
-    'is:issue is:open label:P0,P1,P2,P3 sort:created-asc'
+    `is:issue is:open label:${ps} sort:created-asc`
   ).replace(/%20/g, '+');
   return (
     `Work items are GitHub issues: [open, by priority](https://github.com/${OWNER}/${repo}/issues?q=${q}) · ` +
