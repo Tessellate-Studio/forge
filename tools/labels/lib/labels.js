@@ -55,6 +55,11 @@ const LIFECYCLE = [
     color: '4F6B3A',
     description:
       'A plan awaiting owner decision (draft PR): merge = approve, close = reject',
+
+    // alate and loom grew a duplicate with the same description; the owner
+    // folded it into `decision` (RFD 005 Q1, 2026-11-17). Bootstrap moves its
+    // items here and deletes it (or renames it, where `decision` is missing).
+    previously: ['needs-decision'],
   },
   {
     // A step only a human can do (console, re-consent, CLI login) is ONE PR
@@ -178,7 +183,7 @@ const EMOJI = {
 
 // The one switch (RFD 005 step 4). Off until every consumer in every repo
 // resolves names by key; flipping it and running bootstrap renames in place.
-const EMOJI_NAMES = false;
+const EMOJI_NAMES = true;
 
 const keyOf = k => k.toLowerCase();
 const EMOJI_BY_KEY = new Map(
@@ -419,7 +424,11 @@ function planLabels(existing, canonical) {
   }
   const out = { create: [], edit: [], ok: [], merge: [], legacy: [] };
   for (const want of canonical) {
-    const haves = byKey.get(keyOf(want.key)) || [];
+    // Same key first (`bug`, `🐛 bug`), then any older name it replaces.
+    const haves = [
+      ...(byKey.get(keyOf(want.key)) || []),
+      ...(want.previously || []).flatMap(p => byKey.get(keyOf(p)) || []),
+    ];
     const have =
       haves.find(h => h.name.toLowerCase() === want.name.toLowerCase()) ||
       haves[0];

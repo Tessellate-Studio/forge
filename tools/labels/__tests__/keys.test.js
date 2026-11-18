@@ -3,9 +3,10 @@
 const L = require('../lib/labels');
 
 describe('display name and key', () => {
-  it('the emoji switch is off until every consumer resolves by key', () => {
-    expect(L.EMOJI_NAMES).toBe(false);
-    expect(L.displayName('bug')).toBe('bug');
+  it('the emoji switch is on (RFD 005 step 4, owner 2026-11-18): names carry the emoji', () => {
+    expect(L.EMOJI_NAMES).toBe(true);
+    expect(L.displayName('bug')).toBe('🐛 bug');
+    expect(L.displayName('device-test')).toBe('device-test');
   });
 
   it('with the switch on, a mapped key gains its emoji and others do not', () => {
