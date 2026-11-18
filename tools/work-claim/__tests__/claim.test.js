@@ -821,3 +821,34 @@ describe('device claims (ADR-004)', () => {
     expect(parseClaim({ id: 1, body: out }).device).toBe('pixel');
   });
 });
+
+describe('checkGhReady', () => {
+  const { checkGhReady } = require('../lib/claim');
+
+  // forge#202: under the cloud proxy `gh auth status` exits 1 while API calls
+  // work, so the probe must be an API call.
+  it('is ready when an API call succeeds, and asks via `gh api`, not `auth status`', async () => {
+    const run = jest.fn().mockResolvedValue({ stdout: '{}' });
+    await expect(checkGhReady(run)).resolves.toEqual({ ok: true });
+    expect(run.mock.calls[0][0]).toBe('gh');
+    expect(run.mock.calls[0][1]).toEqual(['api', 'rate_limit']);
+  });
+
+  it('says gh is missing on ENOENT', async () => {
+    const run = jest
+      .fn()
+      .mockRejectedValue(
+        Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' })
+      );
+    const r = await checkGhReady(run);
+    expect(r.ok).toBe(false);
+    expect(r.message).toMatch(/not found/);
+  });
+
+  it('is not ready when the API call fails', async () => {
+    const run = jest.fn().mockRejectedValue(new Error('HTTP 401'));
+    const r = await checkGhReady(run);
+    expect(r.ok).toBe(false);
+    expect(r.message).toMatch(/cannot reach the GitHub API/);
+  });
+});
