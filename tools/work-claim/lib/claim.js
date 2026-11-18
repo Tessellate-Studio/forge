@@ -346,9 +346,17 @@ async function gh(args) {
   return stdout;
 }
 
-async function checkGhReady() {
+/**
+ * Can `gh` reach the API? Asked by making a call, not by `gh auth status`.
+ *
+ * `gh auth status` checks the token against gh's own store. Cloud sessions
+ * hand gh a placeholder `GH_TOKEN` that the proxy swaps on the wire: API calls
+ * work, `auth status` exits 1, and every board, scan and sweep refused to run
+ * (forge#202). `rate_limit` needs no scope and counts against no quota.
+ */
+async function checkGhReady(run = execFileAsync) {
   try {
-    await execFileAsync('gh', ['auth', 'status'], { encoding: 'utf8' });
+    await run('gh', ['api', 'rate_limit'], { encoding: 'utf8' });
     return { ok: true };
   } catch (error) {
     if (error.code === 'ENOENT') {
@@ -360,7 +368,8 @@ async function checkGhReady() {
     }
     return {
       ok: false,
-      message: 'gh CLI is not authenticated. Run `gh auth login` first.',
+      message:
+        'gh cannot reach the GitHub API (not logged in, or no network). Run `gh auth login`.',
     };
   }
 }
