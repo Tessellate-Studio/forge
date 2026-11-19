@@ -119,6 +119,30 @@ out of your main window and returns structured, cited findings ready to drop
 into the Prior Art section. Same rounds, same source-quality tiers. Fall back to
 running the rounds inline if the Agent tool or the prompt file isn't available.
 
+**Skeptic check before drafting (Pitch and RFD).** A finding the decision rests
+on is a claim nobody has challenged yet, and the doc becomes the context every
+later session builds on. So before Step 3, list the findings the decision rests
+on (the ones that would change the decision if they were false) and give each
+one a **skeptic**: a read-only subagent, one per finding, run in parallel, using
+the "Skeptic variant" section of
+`${CLAUDE_PLUGIN_ROOT}/references/agents/researcher-prompt.md` as its
+instructions. It opens the cited source itself and tries to refute the claim:
+wrong source, misquoted, out of date, does not apply here, or contrary evidence.
+Then:
+
+- **Refuted** → drop it from the findings the doc argues from, and list it under
+  **Prior Art → Checked and refuted** with the reason, so nobody re-introduces
+  it.
+- **Weakened** (holds, but narrower; or the source could not be opened) → keep
+  it, and say how it is narrower where you cite it.
+- **Skeptic failed to return** → keep it, marked "unverified". A check that
+  never ran is not a refutation.
+
+If the Agent tool isn't available, do the same check inline: open each source
+yourself and try to refute the claim before you cite it. This is the same pass
+the `researched-build` workflow runs on its researcher's findings, with the same
+charter.
+
 ## Step 3 — Draft the planning doc
 
 1. **Determine the next number.** Scan `memory/decisions/` for files matching
@@ -140,8 +164,10 @@ running the rounds inline if the Agent tool or the prompt file isn't available.
    - RFD: `${CLAUDE_PLUGIN_ROOT}/skills/plan/references/rfd-template.md`
 
 5. **Fill in all sections.** If research was conducted (Step 2), populate the
-   "Prior Art" section with sourced findings. If no research, state "No research
-   conducted — tactical decision."
+   "Prior Art" section with the sourced findings that survived the skeptic
+   check, and its "Checked and refuted" subsection with the ones that did not
+   (or "None"). If no research, state "No research conducted — tactical
+   decision."
 
 ## Step 4 — Review with the user and commit
 

@@ -60,6 +60,13 @@ Each finding cites its source URL.
 ### Known pitfalls
 - **<Pitfall>** (source: <URL>): <what went wrong, how to avoid>
 
+### Checked and refuted
+(Findings a skeptic refuted before this doc was written — Step 2 of the plan
+skill. Listed so nobody re-introduces them. Write "None" if every checked
+finding held.)
+- **<Claim>** (<URL>): refuted — <wrong source / misquoted / out of date /
+  does not apply here / contrary evidence: the passage or link that shows it>
+
 ## Rabbit Holes
 
 What looks simple but isn't? What areas could consume the entire appetite if
