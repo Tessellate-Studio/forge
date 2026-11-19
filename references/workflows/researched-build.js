@@ -1,9 +1,10 @@
 export const meta = {
   name: 'researched-build',
   description:
-    'Research-backed, test-first, adversarially-reviewed build pipeline for Pitch/RFD-tier changes. Researcher → Tester → Implementer → Reviewer (fix loop) → Verifier (fix loop, UI only).',
+    'Research-backed, test-first, adversarially-reviewed build pipeline for Pitch/RFD-tier changes. Researcher → Research skeptics → Tester → Implementer → Reviewer (fix loop) → Verifier (fix loop, UI only).',
   phases: [
     { title: 'Research', detail: 'prior art, cited (2 rounds pitch / 3 rounds rfd)' },
+    { title: 'Research check', detail: 'a skeptic tries to refute each finding the design rests on (top 3 pitch / all rfd)' },
     { title: 'Cross-repo', detail: 'blast-radius map (rfd only)' },
     { title: 'Test', detail: 'failing tests from acceptance criteria' },
     { title: 'Implement', detail: 'make tests pass in an isolated worktree' },
@@ -30,7 +31,14 @@ export const meta = {
 //                    when set, the RFD review phase runs it as a nested
 //                    sub-workflow (single source of review logic). Falls back
 //                    to the inline panel when absent or unresolvable.
-// Returns: { tier, findings, crossRepo, tests, impl, review, verify }
+// Returns: { tier, findings, refutedFindings, crossRepo, tests, impl, review, verify }
+//   findings         the research AFTER the skeptic check: only surviving
+//                    findings, each tagged check: confirmed | weakened |
+//                    unverified | unchecked. Only these reach the tester,
+//                    implementer and cross-repo mapper.
+//   refutedFindings  findings a skeptic refuted, each with its reason. Dropped
+//                    from everything downstream; returned so a human can see
+//                    what the design was NOT built on, and why.
 // ---------------------------------------------------------------------------
 
 // Normalize args defensively (stringified-JSON args severed the first live
@@ -51,6 +59,12 @@ const context = input.context || {}
 const reviewScriptPath = input.reviewScriptPath || ''
 const MAX_REVIEW_ROUNDS = 2
 const MAX_VERIFY_ROUNDS = 3
+// Research findings drive the design (alate pitch-028: the researcher surfaced
+// a real sync-wipe hazard and the build was shaped around it), so a wrong one
+// costs as much as a wrong review finding. Pitch checks the few findings the
+// design rests on most, to keep cost bounded; RFD checks every finding.
+const MAX_PITCH_RESEARCH_SKEPTICS = 3
+const DESIGN_WEIGHT_RANK = { high: 0, medium: 1, low: 2 }
 
 // A verify step may be given as one command or several. Anything that is
 // neither a string nor an array of them counts as absent — the only thing
@@ -120,8 +134,12 @@ const FINDINGS_SCHEMA = {
           url: { type: 'string' },
           tier: { type: 'string' },
           relevance: { type: 'string' },
+          // How much the design rests on this finding: 'high' = the design
+          // would change if it were false. Picks which findings a Pitch-tier
+          // run spends its skeptics on.
+          designWeight: { type: 'string', enum: ['high', 'medium', 'low'] },
         },
-        required: ['claim', 'evidence', 'url', 'tier', 'relevance'],
+        required: ['claim', 'evidence', 'url', 'tier', 'relevance', 'designWeight'],
       },
     },
     againstSignals: { type: 'array', items: { type: 'string' } },
@@ -233,6 +251,16 @@ const VERDICT_SCHEMA = {
   required: ['refuted', 'reasoning'],
 }
 
+// A research claim can hold but narrower than stated (a caveat, a version
+// range, a source the skeptic could not open). That is not a refutation, so
+// the research verdict adds `weakened` instead of forcing keep-or-drop.
+const RESEARCH_VERDICT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { ...VERDICT_SCHEMA.properties, weakened: { type: 'boolean' } },
+  required: ['refuted', 'weakened', 'reasoning'],
+}
+
 const VERIFY_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -321,7 +349,27 @@ function researcherPrompt() {
     `Task: ${task}`,
     `Run ${rounds}`,
     'Label every finding by source tier (authoritative > practitioner > community > marketing) and include a URL — unsourced is a hypothesis, not prior art. Surface evidence AGAINST the likely approach too. "No prior art found" is valid; never fabricate a citation. If WebSearch is unavailable, return one finding noting that and stop.',
+    'Give every finding a designWeight: "high" if the design would change were the finding false, "medium" if it shapes a detail, "low" if it is background. A skeptic will open your source and try to refute each finding the design rests on, and refuted findings are dropped before anyone builds on them.',
   ].join('\n\n')
+}
+
+// What the tester, implementer and cross-repo mapper see of the research: the
+// SURVIVING findings only, each with its check result. The researcher's prose
+// summary goes along only when nothing was refuted — it was written before the
+// check, so once a finding is refuted the summary may still lean on it.
+function priorArtBlock(vetted, heading) {
+  const kept = vetted?.findings || []
+  const refutedCount = (vetted?.refuted || []).length
+  const notes = {
+    weakened: (f) => ` — WEAKENED by the skeptic check: ${f.checkNote}`,
+    unverified: () => ' — the skeptic check failed to run; treat as unconfirmed',
+  }
+  const lines = kept.map((f) => `- ${f.claim} (${f.url})${notes[f.check] ? notes[f.check](f) : ''}`)
+  const summary = refutedCount === 0 && vetted?.summary ? vetted.summary : ''
+  if (!lines.length && !summary) {
+    return ''
+  }
+  return [`${heading}:`, summary, lines.join('\n')].filter(Boolean).join('\n')
 }
 
 function crossRepoPrompt(findings) {
@@ -329,8 +377,10 @@ function crossRepoPrompt(findings) {
     'You are mapping CROSS-REPO blast radius for an architecture change (RFD tier). Tools: Read, Glob, Grep only.',
     `Task: ${task}`,
     'Map which shared contracts, data models, endpoints, and consumers this touches across the Tessellate repos (alate ↔ loom ↔ shared). Read DATA_CONTRACT.md, shared/ types, and composed-endpoint definitions. Flag anything an existing consumer reads as a breaking change. Never shadow Shopify-owned fields.',
-    `Research context:\n${JSON.stringify(findings?.summary || '', null, 2)}`,
-  ].join('\n\n')
+    priorArtBlock(findings, 'Research context'),
+  ]
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 function testerPrompt(findings) {
@@ -340,7 +390,7 @@ function testerPrompt(findings) {
     criteriaBlock,
     contextBlock,
     'Read the repo\'s existing test conventions FIRST and match them exactly — test runner, file locations, naming, and selector style. Never invent a new harness, and never assume another repo\'s stack. Assert observable behaviour via testID selectors where the repo uses them — reuse existing testIDs; report any new one you introduce (it becomes the litmus contract). Run the tests and confirm they FAIL for the right reason (feature absent). Return full file contents so the implementer can materialize them in its own worktree.',
-    findings?.summary ? `Prior art (edge cases worth testing):\n${findings.summary}` : '',
+    priorArtBlock(findings, 'Prior art (edge cases worth testing)'),
   ]
     .filter(Boolean)
     .join('\n\n')
@@ -353,7 +403,7 @@ function implementerPrompt(findings, tests, crossRepo) {
     criteriaBlock,
     contextBlock,
     `Failing tests to satisfy (materialize these):\n${JSON.stringify(tests?.testFiles || [], null, 2)}`,
-    findings?.summary ? `Prior art informing the approach:\n${findings.summary}` : '',
+    priorArtBlock(findings, 'Prior art informing the approach'),
     crossRepo ? `Cross-repo constraints (do not break these):\n${JSON.stringify(crossRepo, null, 2)}` : '',
     'Theme tokens not literals; proportional flex; reuse-first. Run the repo\'s own typecheck + test commands green (new tests AND the full suite) before committing. Do not weaken the tester\'s tests to get green. Return the diff AND the branch ref — the main loop integrates that branch after this workflow returns, so a missing branchRef strands the work.',
   ]
@@ -405,13 +455,33 @@ function reviewerPrompt(lens, diff, crossRepo) {
     .join('\n\n')
 }
 
-function skepticPrompt(finding, index, diff) {
+// ONE skeptic charter for everything this pipeline acts on: review findings
+// (does this bug exist in the diff?) and research findings (does the cited
+// source say this, and does it hold here?). Same stance and verdict shape; only
+// the target, framings and default differ. Add a new kind here rather than
+// writing a second skeptic.
+const SKEPTIC_STANCE =
+  'You are REVIEW-SIDE: you CANNOT edit, write, or commit anything — read and reason only. Never change the code or the source to make a finding moot; report your verdict instead.'
+
+function skepticPrompt(finding, index, diff, kind = 'review') {
+  if (kind === 'research') {
+    return [
+      `You are a SKEPTIC verifying one RESEARCH finding before a design is built on it. ${SKEPTIC_STANCE}`,
+      'Open the cited source yourself (WebFetch the URL; Read the file at file:line if it cites code) and try to REFUTE the claim. It is refuted when any of these holds: the source does not exist or is not what is cited; it does not say what the claim says (misquoted, or a caveat dropped); it is out of date (a newer version, a deprecation, or the author\'s own later word reverses it); it does not apply here (a different scale, platform, version or constraint than this task); or stronger evidence contradicts it. Name which, with the passage or link that shows it.',
+      // Not "default to refuted" as for review findings: dropping a sound
+      // finding removes a hazard the tester would otherwise cover. Doubt is
+      // recorded as weakened, which keeps the finding visible but flagged.
+      'Set refuted=true only with a concrete reason from that list. If the claim holds but narrower than stated (a caveat, a version range, a weaker source than labelled), or you could not open the source, set refuted=false, weakened=true and say what is narrower or unverified. A claim that survives intact is refuted=false, weakened=false.',
+      `Task this finding informs: ${task}`,
+      `Finding: ${finding.claim}\nSource (${finding.tier}): ${finding.url}\nWhat the researcher says the source says: ${finding.evidence}\nWhy it matters here: ${finding.relevance}`,
+    ].join('\n\n')
+  }
   const framings = [
     'Assume the reviewer was WRONG — find the strongest reason this is a false positive.',
     'Check whether the code already handles this case elsewhere, making the finding moot.',
   ]
   return [
-    'You are a SKEPTIC verifying one review finding. You are REVIEW-SIDE: you CANNOT edit, write, or commit anything — read and reason only. Never "fix" the code to make a finding moot; report your verdict instead.',
+    `You are a SKEPTIC verifying one review finding. ${SKEPTIC_STANCE}`,
     'REFUTE the finding if you honestly can. Default to refuted=true if uncertain.',
     framings[index % framings.length],
     `Finding: ${finding.summary} (${finding.file}:${finding.line}, ${finding.category}) — claimed failure: ${finding.failureScenario}`,
@@ -547,15 +617,73 @@ async function runReview(diff, crossRepo) {
   return { findings, testIdDrift: drift, verdict: verdictFor(findings, drift), unverified }
 }
 
+// --- Research check --------------------------------------------------------------
+// The researcher's findings used to go straight to the tester and implementer
+// with nobody challenging them. One skeptic per finding the design rests on now
+// tries to refute it first. Pitch: the MAX_PITCH_RESEARCH_SKEPTICS findings with
+// the highest designWeight (low-weight background is never checked). RFD: all.
+// FAIL CLOSED, as in the review panel: a skeptic that returns nothing is not a
+// refutation — the finding is kept and tagged unverified.
+async function vetResearch(raw) {
+  const all = (raw.findings || []).map((finding, index) => ({ finding, index }))
+  const rank = (f) => DESIGN_WEIGHT_RANK[f.designWeight] ?? DESIGN_WEIGHT_RANK.medium
+  const toCheck =
+    tier === 'rfd'
+      ? all
+      : all
+          .filter(({ finding }) => finding.designWeight !== 'low')
+          .sort((a, b) => rank(a.finding) - rank(b.finding) || a.index - b.index)
+          .slice(0, MAX_PITCH_RESEARCH_SKEPTICS)
+
+  const verdicts = await parallel(
+    toCheck.map(({ finding, index }) => () =>
+      agent(skepticPrompt(finding, index, null, 'research'), {
+        label: `skeptic:research:${index}`,
+        phase: 'Research check',
+        schema: RESEARCH_VERDICT_SCHEMA,
+      })
+    )
+  )
+  const verdictByIndex = new Map(toCheck.map(({ index }, k) => [index, verdicts[k]]))
+
+  const kept = []
+  const refuted = []
+  for (const { finding, index } of all) {
+    if (!verdictByIndex.has(index)) {
+      kept.push({ ...finding, check: 'unchecked' })
+      continue
+    }
+    const v = verdictByIndex.get(index)
+    if (!v) {
+      kept.push({ ...finding, check: 'unverified' })
+    } else if (v.refuted) {
+      refuted.push({ ...finding, check: 'refuted', reason: v.reasoning })
+    } else {
+      kept.push({ ...finding, check: v.weakened ? 'weakened' : 'confirmed', checkNote: v.reasoning })
+    }
+  }
+
+  const unverified = kept.filter((f) => f.check === 'unverified').length
+  if (unverified) {
+    log(`WARNING: ${unverified} research finding(s) kept WITHOUT a skeptic check (the skeptic failed) — treat as unconfirmed`)
+  }
+  log(`Research check: ${toCheck.length} of ${all.length} finding(s) checked, ${refuted.length} refuted and dropped`)
+  return { ...raw, findings: kept, refuted }
+}
+
 // === Pipeline =================================================================
 log(`researched-build starting — tier=${tier}, rendersUI=${rendersUI}`)
 
 // Phase 1 — Research
 phase('Research')
-const findings = (await agent(researcherPrompt(), { label: 'research', phase: 'Research', schema: FINDINGS_SCHEMA })) || {
+const rawFindings = (await agent(researcherPrompt(), { label: 'research', phase: 'Research', schema: FINDINGS_SCHEMA })) || {
   findings: [],
   summary: 'Research produced no result.',
 }
+
+// Phase 1a — Research check: everything downstream sees only what survived.
+phase('Research check')
+const findings = await vetResearch(rawFindings)
 
 // Phase 1b — Cross-repo (rfd only)
 let crossRepo = null
@@ -646,4 +774,4 @@ if (rendersUI) {
   }
 }
 
-return { tier, findings, crossRepo, tests, impl, review, verify }
+return { tier, findings, refutedFindings: findings.refuted, crossRepo, tests, impl, review, verify }
