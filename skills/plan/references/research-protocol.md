@@ -79,6 +79,20 @@ subsections:
 - **<Pitfall>** (source: <URL>): <what went wrong and why>. <How to avoid in
   our design.>
 
+### Checked and refuted
+- **<Claim>** (<URL>): refuted — <why: wrong source, misquoted, out of date,
+  does not apply here, or contrary evidence>.
+
+## Skeptic check (Pitch and RFD)
+
+Before the doc is written, every finding the decision rests on gets a skeptic:
+a read-only subagent that opens the cited source and tries to refute the claim
+(charter: "Skeptic variant" in `references/agents/researcher-prompt.md`).
+Refuted findings are dropped from the argument and listed under "Checked and
+refuted". Weakened ones stay, with the narrowing stated where they are cited.
+A skeptic that never returned is not a refutation: keep that finding, marked
+"unverified". See SKILL.md Step 2.
+
 ## Constraints
 
 - **Time caps:** 15 minutes for Pitch, 30 minutes for RFD. If the search is not
