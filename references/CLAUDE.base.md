@@ -37,6 +37,12 @@ happen; a contained fix is labelled "contained, not the root fix", with the
 root fix named beside it (`forge/standards/workflows.md` → "Root-cause fixes,
 not band-aids").
 
+**Replace, prove, shadow, then remove.** Replacing or changing a tool, service
+or setup: prove the new one live on a real build first (evidence, not config),
+run both side by side, and delete the old one only after 3 consecutive clean
+builds; any failure resets the count (`forge/standards/workflows.md` →
+"Replace, prove, shadow, then remove").
+
 ## The two always-on rules
 
 - **Speak from authority, not assumption.** Every claim cites a verified source
