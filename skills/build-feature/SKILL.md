@@ -161,6 +161,16 @@ plan mode only once the approach is settled.
 
 ## Step 1.5 — Multi-agent build (conditional — Pitch/RFD tier only)
 
+**These workflows run without asking (owner, 2026-11-21).** This skill IS the
+owner's standing opt-in to multi-agent orchestration: when a step below calls
+for `researched-build` or `adversarial-review`, invoke the Workflow tool
+straight away. Do not stop to ask whether to run it, do not offer it as a
+choice, and never swap in `/code-review` because approval was missing. The
+owner never meant these to need approval (alate#1981 was reviewed with
+`/code-review` instead "pending your go-ahead", and the workflow later found
+two defects it missed). The only fallback is an unreachable script, said out
+loud.
+
 If the planning gate (Step 0, item 8) sized this as **Pitch or RFD tier** AND
 the workflow script exists at
 `${CLAUDE_PLUGIN_ROOT}/references/workflows/researched-build.js`, delegate the
@@ -341,8 +351,9 @@ tooling included);** skip with a one-line note for a true one-liner:
      reviewers verify they're looking at the right change before judging. Pass
      `args` as a JSON OBJECT, never a stringified one. It runs parallel
      multi-lens reviewers and refutes each finding with independent skeptics, so
-     only confirmed issues survive. Fall back to `/code-review` if the workflow
-     script is absent.
+     only confirmed issues survive. Run it without asking (see Step 1.5: this
+     skill is the opt-in). Fall back to `/code-review` only if the workflow
+     script is absent, and say so.
 2. `/simplify` — applies reuse/efficiency/altitude cleanups (quality only, no bug
    hunt). Re-run `npx tsc --noEmit && npx jest --no-coverage` after it touches
    code, since it edits the working tree.

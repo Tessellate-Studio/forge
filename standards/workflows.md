@@ -851,7 +851,11 @@ diff — backend, data-flow, tooling, not just UI**; skip with a one-line note
 for a true one-liner:
 
 1. `/code-review` — correctness bugs + reuse/simplification/efficiency findings
-   in the current diff. Triage and fix what's real.
+   in the current diff. Triage and fix what's real. A diff over ~50 lines from a
+   single-agent build gets the `adversarial-review` workflow instead
+   (build-feature Step 5.5), **run without asking**: invoking build-feature is
+   the owner's standing opt-in to multi-agent orchestration (owner, 2026-11-21).
+   Never wait for approval or substitute `/code-review` for want of it.
 2. `/simplify` — applies reuse/efficiency/altitude cleanups (quality only, no
    bug hunt). It edits the working tree — re-run typecheck + tests after.
 3. Commit cleanups separately (`chore: simplify <scope>`) — don't mix them into
