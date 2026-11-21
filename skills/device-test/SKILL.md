@@ -586,6 +586,10 @@ For each OPEN item on the current app:
    step N failed, as `⏭ NOT RUN — depends on step N`. A `HUMAN:` step with
    nobody to hand the phone to is `⏭ NOT RUN — needs human`; a step that
    cannot exist on this platform is `⛔ N/A — <why, and where it can run>`.
+   **A step blocked by another ISSUE (a feature that does not exist yet) also
+   gets GitHub's "blocked by" link on the test issue**, added in the same
+   turn (`standards/workflows.md` → "Blocked work has a GitHub dependency"),
+   so the trail is listable and the blocker shows what waits on it.
 
    Record the outcomes as a per-step table in a comment on the test, not as
    one word for the whole item. A step nobody ran must read as *not run* —
