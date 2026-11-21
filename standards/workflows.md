@@ -606,8 +606,11 @@ sentence cannot be listed, filtered or followed.
   `gh api -X POST repos/<owner>/<repo>/issues/<blocked>/dependencies/blocked_by -F issue_id=$ID`.
   List it with `gh api repos/<owner>/<repo>/issues/<blocked>/dependencies/blocked_by --jq '.[]|"#\(.number) \(.title)"'`.
   GitHub then shows "blocked" on the issue and the blocker lists what waits on
-  it. Verified in alate on 2026-11-21 (same repo); a cross-repo blocker is
-  unverified, so say so in the comment and link it in prose too.
+  it. Verified 2026-11-21: same repo (alate#1590 blocked by alate#1560) and
+  across repos (alate#2000 blocked by forge#189: the blocked issue listed it
+  and the blocker listed `blocking alate#2000`). Pass the blocker's own `id`
+  from its own repo. Remove a link with
+  `gh api -X DELETE repos/<owner>/<repo>/issues/<blocked>/dependencies/blocked_by/<blocker id>`.
 - **The prose still says why.** The `Blocker:` line (or the comment) names the
   reason and what unblocks it; the dependency is the machine-readable trail
   next to it, never a replacement for it.
