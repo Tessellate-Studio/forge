@@ -784,8 +784,18 @@ In the owner's words: "I don't want you to break something in the heat of the
 moment." When a tool, service, dependency, SDK, config or setup is being
 **replaced** by another, or an existing one is **changed** in what it covers
 (a new crash handler, a moved cron, a swapped auth provider, a new monitor in
-place of an old one), the old one stays until the new one has earned the job:
+place of an old one), the old one stays until the new one has earned the job.
 
+0. **Is the change worth making at all? Ask before proposing it.** Name the
+   concrete cost or pain the change removes: money the old part costs, a
+   failure it causes, a build it blocks, a real limit it has. Tidiness, "one
+   fewer tool" or "X already does that" is not a reason on its own. If the old
+   part works and costs nothing, **do not propose the switch**: the prove and
+   shadow cycle below is real work (a release, live tests, three builds), and
+   spending it on a change nobody needs is a fool's errand. Check the
+   replacement's actual coverage before suggesting it, too: the gap usually
+   shows up here, not in step 1. Only a change that passes this gate enters
+   steps 1 to 3, and the proposal states the reason it passed.
 1. **Prove the replacement live, first.** Fire the thing it claims to cover,
    in real time, on a real build of the app (a release-shaped build, not a dev
    server or a unit test), and record the evidence in the issue or PR: the
@@ -826,7 +836,10 @@ session proposed dropping Crashlytics because Sentry's config
 (`enableNativeCrashHandling: true`, symbols uploaded by CI) suggested it
 already covered native crashes (2026-11-21). The owner refused any removal
 until the replacement is tested live and shadowed, and made that the rule for
-every repo.
+every repo. Checking then showed the switch was never worth it: Crashlytics is
+free, works, and was the only tool decoding Android Java crashes (the R8
+mapping file went to Crashlytics only; Sentry got JavaScript source maps). The
+owner: "why are we forcing change here?" That added step 0.
 
 ## Bug-fix pre-flight — read the regression log FIRST
 

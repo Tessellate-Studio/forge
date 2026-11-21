@@ -253,7 +253,8 @@ prerendered path that returns 200 on the very deployment it was added to catch;
 and a missing secret silently disabled three checks while the run reported OK.*
 
 Replacing one tool or service with another is the same test at a larger scale:
-the replacement is proven live and shadowed for 3 clean builds before the old
+it must first be worth doing (a named cost or pain it removes), then the
+replacement is proven live and shadowed for 3 clean builds before the old
 one is removed ([`workflows.md`](./workflows.md) → "Replace, prove, shadow,
 then remove").
 
