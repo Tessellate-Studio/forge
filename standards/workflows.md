@@ -593,6 +593,32 @@ label in the sidebar in the same step.
   delete".** `gh issue close N --reason completed|not_planned --comment "<why>"`.
   Deleting an issue is irreversible and is never an agent action.
 
+### Blocked work has a GitHub dependency, so the trail is one click
+
+Owner, 2026-11-21: alate#1590 could not finish its step 5 until footwear sizing
+(alate#1560) existed, and the only record was a sentence in a comment. A
+sentence cannot be listed, filtered or followed.
+
+- **When an issue cannot proceed until another issue is done, record GitHub's
+  "blocked by" relationship**, not only prose. The blocker's `id` is not its
+  number:
+  `ID=$(gh api repos/<owner>/<repo>/issues/<blocker> --jq .id)` then
+  `gh api -X POST repos/<owner>/<repo>/issues/<blocked>/dependencies/blocked_by -F issue_id=$ID`.
+  List it with `gh api repos/<owner>/<repo>/issues/<blocked>/dependencies/blocked_by --jq '.[]|"#\(.number) \(.title)"'`.
+  GitHub then shows "blocked" on the issue and the blocker lists what waits on
+  it. Verified in alate on 2026-11-21 (same repo); a cross-repo blocker is
+  unverified, so say so in the comment and link it in prose too.
+- **The prose still says why.** The `Blocker:` line (or the comment) names the
+  reason and what unblocks it; the dependency is the machine-readable trail
+  next to it, never a replacement for it.
+- **Who adds it:** whoever writes the blocked verdict. A device-test drain that
+  marks a step blocked by another issue, a `needs-build` item whose `Blocker:`
+  is a gate work item (see "needs-build is an AGENT work item"), a failed test
+  waiting on its fix issue: each adds the dependency in the same turn.
+- **Never invent a blocker to park work.** The blocker must be a real, open
+  issue. Work blocked on a person is `needs-human` with the question, not a
+  dependency.
+
 ## Work claims — say who is on an issue/PR, before you start
 
 Every session commits under the same GitHub account, so the byline names
