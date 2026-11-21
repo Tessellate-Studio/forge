@@ -32,6 +32,7 @@ process is a defect, whatever else shipped.
 | **Critical** | New labels, claim formats and queue conventions go through the existing registry | "One registry for process artifacts", below |
 | **Critical** | Device-test enqueue for anything only a phone can verify | "Device-test queue" |
 | **Critical** | Read the regression log before a bug fix | app `memory/project_regression_log.md` |
+| **Critical** | Replace, prove, shadow, then remove: no part is swapped out before 3 clean shadow builds | "Replace, prove, shadow, then remove" |
 | Minor | `/simplify`, `/design-critique` | "Quality pass before commit" |
 | Minor | Adversarial review on a small diff (`/code-review` covers it) | same |
 | Minor | Closing-retro detail beyond the three questions | build-feature Step 7 |
@@ -775,6 +776,57 @@ smallest fix that removes its cause ([`anti-patterns.md`](./anti-patterns.md)
 before it is named ([`anti-patterns.md`](./anti-patterns.md) → "A cause is a
 controlled comparison"). A rule the owner states covers every state: see
 "Every reported rule covers every state" below.
+
+## Replace, prove, shadow, then remove — never swap a working part in one step
+
+Owner decision 2026-11-21; binds every repo, session, agent and scheduled task.
+In the owner's words: "I don't want you to break something in the heat of the
+moment." When a tool, service, dependency, SDK, config or setup is being
+**replaced** by another, or an existing one is **changed** in what it covers
+(a new crash handler, a moved cron, a swapped auth provider, a new monitor in
+place of an old one), the old one stays until the new one has earned the job:
+
+1. **Prove the replacement live, first.** Fire the thing it claims to cover,
+   in real time, on a real build of the app (a release-shaped build, not a dev
+   server or a unit test), and record the evidence in the issue or PR: the
+   event id, a screenshot, the log line, the run URL. Example: before dropping
+   Crashlytics because Sentry "should" catch native crashes, force a native
+   crash on an installed build and show it arriving in Sentry with a readable,
+   symbolicated stack. **"The config says it should work" is not proof**, and
+   nor is a docs page, a green CI run or a test that mocks the service
+   ([`anti-patterns.md`](./anti-patterns.md) → "A monitor must be proven to go
+   RED, not merely green today").
+2. **Shadow, don't delete.** Once proven, the old one is shelved, not removed:
+   both run side by side. Count **consecutive builds** in which the tests are
+   actually fired again (step 1's trigger, on that build) and the replacement
+   catches everything the old one did, with no gap and no new issue. A build in
+   which nobody fired the test does not count, either way.
+3. **Remove after 3 clean builds.** Only after **3 consecutive clean builds**
+   does the old one come out of the setup, in its own PR that links the three
+   pieces of evidence. **Any failure resets the count to zero**: a missed
+   event, an unreadable stack, a lost alert, a broken build.
+
+Track the count in the issue that owns the change (one comment per build:
+build id, what was fired, what each side showed). A removal PR with fewer than
+three linked clean builds is not ready, whoever opens it.
+
+**Scope.** A like-for-like version bump of the same dependency is not a
+replacement (Dependabot and `security-sweep` cover those). Anything that moves
+coverage from one thing to another is, including deleting something because
+"X already does that". When in doubt, it is one.
+
+**Urgent removals.** If the old part is itself the harm (a live security
+hole, a crash it causes, a cost the owner wants stopped today), turning it
+off is a **contained fix, not the root fix** (see "Root-cause fixes, not
+band-aids" above): say so, and run steps 1 to 3 on the replacement afterwards
+before the removal is called done.
+
+_Why:_ alate reports crashes to both Sentry and Firebase Crashlytics, and a
+session proposed dropping Crashlytics because Sentry's config
+(`enableNativeCrashHandling: true`, symbols uploaded by CI) suggested it
+already covered native crashes (2026-11-21). The owner refused any removal
+until the replacement is tested live and shadowed, and made that the rule for
+every repo.
 
 ## Bug-fix pre-flight — read the regression log FIRST
 

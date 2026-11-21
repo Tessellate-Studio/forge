@@ -252,6 +252,11 @@ on every run since it shipped and concealing a live data outage; one asserted a
 prerendered path that returns 200 on the very deployment it was added to catch;
 and a missing secret silently disabled three checks while the run reported OK.*
 
+Replacing one tool or service with another is the same test at a larger scale:
+the replacement is proven live and shadowed for 3 clean builds before the old
+one is removed ([`workflows.md`](./workflows.md) → "Replace, prove, shadow,
+then remove").
+
 ## A failed step is a finding, not a reason to stop probing
 
 When a verification has several steps, run every step still reachable after
