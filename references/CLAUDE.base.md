@@ -38,7 +38,8 @@ root fix named beside it (`forge/standards/workflows.md` → "Root-cause fixes,
 not band-aids").
 
 **Replace, prove, shadow, then remove.** Replacing or changing a tool, service
-or setup: prove the new one live on a real build first (evidence, not config),
+or setup: first name the concrete cost or pain it removes (tidiness is not a
+reason; if the old one works and costs nothing, don't propose it), then prove the new one live on a real build first (evidence, not config),
 run both side by side, and delete the old one only after 3 consecutive clean
 builds; any failure resets the count (`forge/standards/workflows.md` →
 "Replace, prove, shadow, then remove").
