@@ -436,6 +436,23 @@ gh pr list --state open --json number,headRefName,files \
   **regression-log row is a separate concern from the fix it describes**, so it
   belongs in its own commit — not because it is a doc, but because it is a
   different change.)*
+- **A tiny fix does not get its own PR** (owner, 2026-11-23: "you shouldn't be
+  creating a new PR for one line, it can be tracked via commit ID and that's
+  plenty too"). A tiny fix (about one line, or a few lines in one file) that you
+  find during other work goes in as a **separate commit on the PR you are
+  already working on**. Write the commit message so it explains the fix on its
+  own. The commit ID is the record: where a record is needed (the regression-log
+  row, the issue, the PR body), cite the commit ID.
+  - **A separate PR only when** the fix must land on its own and sooner than the
+    current PR (say why in that PR's body), or there is no current PR.
+  - **`master` itself is broken and blocks your PR?** Fix it as a commit on your
+    PR. When your PR merges, it is the fix for everyone. Do not open a second PR
+    and chain your PR behind it.
+  *Precedent: alate 2026-11-22. `master` failed `backend/api/regressionLogKeys.test.ts`
+  on a duplicate regression-log row. A session opened alate#2020 for the one
+  deleted line while alate#2019 was blocked on it, and the same fix then also
+  went into alate#2019 (commit `b2920b5`). Two PRs, two CI runs and a chain to
+  manage, for one line.*
 - **If your change makes a doc claim stale, fix it in the same PR** — never leave it
   to another session that "agreed to take it". Two sessions each deferring is how a
   wrong line survives both their merges.

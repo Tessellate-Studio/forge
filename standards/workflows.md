@@ -775,7 +775,10 @@ fix in a busy area — list the open PRs already in that file, and fix any claim
 own change makes stale rather than handing it to another session. Commit
 boundaries follow the logical change as usual: a doc edit that is part of the
 change goes in its commit; a separate concern (a regression-log row, a runbook
-status) gets its own commit, same PR is fine. Work items don't collide in
+status) gets its own commit, same PR is fine. A tiny fix (about one line)
+found during other work is a separate commit on the PR you are already on,
+never its own PR; cite its commit ID as the record. A broken `master` that
+blocks your PR is fixed the same way (owner, 2026-11-23). Work items don't collide in
 content any more, because each is its own issue: claim it (`wip claim`)
 instead of checking a file. Full rule:
 [`anti-patterns.md` → "Concurrent branches collide in content"](./anti-patterns.md).
