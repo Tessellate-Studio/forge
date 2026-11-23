@@ -1009,6 +1009,10 @@ marker from this fixed set:
   says, in plain words, what was broken for the person using the product. A
   bug fix must never read like a feature or a chore. *Precedent: a chat about
   the alate#1898 fix (PR #1903) gave no sign it was a bug.*
+- **Enforced on PR bodies** (forge#211). `hooks/report-markers.mjs` refuses
+  a `gh pr create` / `gh pr edit` whose body has no marker or has a top-level
+  point without one. It is a plugin hook, so it fires in every session, chip
+  and subagent where forge is enabled, not only ones that read this file.
 - **No new markers.** A meaning the set cannot express goes in words, or is
   proposed to the owner as a change to this table.
 - **Summary only.** Code, logs, quoted output and tool narration stay
