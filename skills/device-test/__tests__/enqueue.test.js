@@ -48,6 +48,22 @@ describe('the body forge generates for a new test', () => {
     expect(body).toContain('  1. Five columns');
   });
 
+  it('writes the Seed field before Steps, and omits it when empty', () => {
+    // The drain builds the app state the steps need instead of reporting the
+    // test blocked on data (forge#211).
+    const seeded = renderTestBody({
+      ...FIELDS,
+      seed: 'deck: Great fit + Likely fit + Some concerns cards',
+    });
+    expect(seeded).toContain(
+      '- **Seed:** deck: Great fit + Likely fit + Some concerns cards'
+    );
+    expect(seeded.indexOf('**Seed:**')).toBeLessThan(
+      seeded.indexOf('**Steps:**')
+    );
+    expect(renderTestBody(FIELDS)).not.toContain('**Seed:**');
+  });
+
   it('survives missing optional fields without printing "undefined"', () => {
     const body = renderTestBody({
       steps: ['do a thing'],

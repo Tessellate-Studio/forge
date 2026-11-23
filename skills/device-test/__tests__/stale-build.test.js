@@ -3,6 +3,8 @@ const {
   LABELS,
   itemFromIssue,
   isStaleBuild,
+  isStaleAgentItem,
+  STALE_AGENT_DAYS,
   STALE_BUILD_DAYS,
 } = require('../scripts/queue-lib');
 
@@ -46,5 +48,29 @@ describe('isStaleBuild (forge#196)', () => {
   it('does not flag an unreadable date', () => {
     const item = make([LABELS.ITEM, LABELS.NEEDS_BUILD], 'garbage');
     expect(isStaleBuild(item, NOW)).toBe(false);
+  });
+});
+
+describe('isStaleAgentItem (forge#211)', () => {
+  it('uses a 7 day limit', () => expect(STALE_AGENT_DAYS).toBe(7));
+
+  it('flags an open agent-runnable item older than the limit', () => {
+    expect(isStaleAgentItem(make([LABELS.ITEM], daysAgo(8)), NOW)).toBe(true);
+  });
+
+  it('does not flag a fresh one', () => {
+    expect(isStaleAgentItem(make([LABELS.ITEM], daysAgo(2)), NOW)).toBe(false);
+  });
+
+  it('never flags needs-human, needs-build or failed, however old', () => {
+    [LABELS.NEEDS_HUMAN, LABELS.NEEDS_BUILD, LABELS.FAILED].forEach(l =>
+      expect(isStaleAgentItem(make([LABELS.ITEM, l], daysAgo(90)), NOW)).toBe(
+        false
+      )
+    );
+  });
+
+  it('does not flag an unreadable date', () => {
+    expect(isStaleAgentItem(make([LABELS.ITEM], 'garbage'), NOW)).toBe(false);
   });
 });
