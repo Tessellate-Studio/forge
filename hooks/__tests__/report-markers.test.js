@@ -113,3 +113,55 @@ describe('the hook entry point', () => {
     );
   });
 });
+
+describe('the chat-reply check (Stop hook)', () => {
+  const { finalReplyText, checkReply } = require('../lib/report-markers.js');
+  const STOP = path.join(__dirname, '..', 'reply-markers.mjs');
+  const entry = (type, content) =>
+    JSON.stringify({ type, message: { role: type, content } });
+
+  it('reads only the reply after the last typed user message', () => {
+    const lines = [
+      entry('user', 'first ask'),
+      entry('assistant', [{ type: 'text', text: 'old reply' }]),
+      entry('user', 'yes, build it'),
+      entry('assistant', [{ type: 'tool_use', id: 't', name: 'Bash' }]),
+      entry('user', [{ type: 'tool_result', tool_use_id: 't', content: 'ok' }]),
+      entry('assistant', [{ type: 'text', text: '- ✅ built' }]),
+      '{torn',
+    ];
+    expect(finalReplyText(lines)).toBe('- ✅ built');
+  });
+
+  it('leaves a short answer alone', () => {
+    expect(checkReply('Done, PR #12 is open.').ok).toBe(true);
+    expect(checkReply('- one point only').ok).toBe(true);
+  });
+
+  it('holds a report with unmarked points', () => {
+    const v = checkReply('- ✅ a\n- b\n- c');
+    expect(v).toMatchObject({ ok: false, report: true });
+    expect(v.unmarked).toEqual(['- b', '- c']);
+  });
+
+  const runStop = payload =>
+    execFileSync(process.execPath, [STOP], {
+      input: JSON.stringify(payload),
+      encoding: 'utf8',
+    });
+
+  it('blocks once, then lets the retry through', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'stop-'));
+    const t = path.join(tmp, 't.jsonl');
+    fs.writeFileSync(
+      t,
+      [
+        entry('user', 'go'),
+        entry('assistant', [{ type: 'text', text: '- a\n- b' }]),
+      ].join('\n')
+    );
+    expect(JSON.parse(runStop({ transcript_path: t })).decision).toBe('block');
+    expect(runStop({ transcript_path: t, stop_hook_active: true })).toBe('');
+    expect(runStop({ last_assistant_message: '- ✅ a\n- 🟡 b' })).toBe('');
+  });
+});

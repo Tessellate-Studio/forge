@@ -112,4 +112,77 @@ const REFUSAL = ({ markerSeen, unmarked }) =>
     ' A bug fix leads with 🐛 saying what was broken for the user.',
   ].join('');
 
-module.exports = { MARKERS, isPrBodyCommand, extractBody, checkBody, REFUSAL };
+/**
+ * The text of the assistant's final reply this turn, from the transcript JSONL
+ * lines: every assistant text block after the last message the user typed (a
+ * user entry whose content is a string or has text blocks, not a tool result).
+ */
+function finalReplyText(lines) {
+  const entries = [];
+  for (const line of lines) {
+    try {
+      entries.push(JSON.parse(line));
+    } catch {
+      // a torn last line while the file is being written; skip it
+    }
+  }
+  let start = 0;
+  entries.forEach((e, i) => {
+    const c = e && e.type === 'user' && e.message && e.message.content;
+    const typed =
+      typeof c === 'string' ||
+      (Array.isArray(c) && c.some(b => b && b.type === 'text'));
+    if (typed) {
+      start = i + 1;
+    }
+  });
+  return entries
+    .slice(start)
+    .filter(e => e && e.type === 'assistant' && e.message)
+    .flatMap(e =>
+      Array.isArray(e.message.content)
+        ? e.message.content.filter(b => b && b.type === 'text').map(b => b.text)
+        : []
+    )
+    .join('\n')
+    .trim();
+}
+
+/**
+ * A chat reply is held to the rule only when it is a report: two or more
+ * top-level points. A one-line answer or a conversational paragraph is not a
+ * summary, and blocking it would only add noise.
+ */
+function checkReply(text) {
+  const points = String(text || '')
+    .split(/\r?\n/)
+    .filter(l => /^[-*]\s+/.test(l) && !/^[-*]\s+\[[ xX]\]/.test(l));
+  if (points.length < 2) {
+    return { ok: true, report: false, unmarked: [] };
+  }
+  const v = checkBody(text);
+  return { ok: v.unmarked.length === 0, report: true, unmarked: v.unmarked };
+}
+
+const REPLY_NUDGE = ({ unmarked }) =>
+  [
+    'Your final reply is a report, and these top-level points have no summary marker',
+    ' (forge standards/workflows.md → "Summary markers"):\n',
+    unmarked
+      .slice(0, 8)
+      .map(l => `  ${l.slice(0, 100)}`)
+      .join('\n'),
+    `\n\nRestate the reply with exactly one of ${MARKERS.join(' ')}`,
+    ' at the start of each point, most urgent first. Do not redo any work.',
+  ].join('');
+
+module.exports = {
+  MARKERS,
+  isPrBodyCommand,
+  extractBody,
+  checkBody,
+  REFUSAL,
+  finalReplyText,
+  checkReply,
+  REPLY_NUDGE,
+};

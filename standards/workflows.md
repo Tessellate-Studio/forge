@@ -1013,6 +1013,10 @@ marker from this fixed set:
   a `gh pr create` / `gh pr edit` whose body has no marker or has a top-level
   point without one. It is a plugin hook, so it fires in every session, chip
   and subagent where forge is enabled, not only ones that read this file.
+- **Nudged on chat reports.** `hooks/reply-markers.mjs` (Stop) reads the
+  final reply; when it has two or more top-level points and any lacks a
+  marker, it sends the agent back once to restate it. Shorter replies are
+  left alone, and a second miss is let through rather than looping.
 - **No new markers.** A meaning the set cannot express goes in words, or is
   proposed to the owner as a change to this table.
 - **Summary only.** Code, logs, quoted output and tool narration stay
