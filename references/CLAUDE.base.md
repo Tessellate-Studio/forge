@@ -70,8 +70,10 @@ All in `forge/standards/workflows.md` unless noted:
   PR titles for your intent (a duplicate wastes a whole branch). Commit boundaries
   follow the logical change as usual — a doc edit that is part of the change goes in
   its commit; a separate concern (regression-log row, runbook status) gets its own,
-  same PR is fine. Date-key new log rows, never a sequential number
-  (`anti-patterns.md`).
+  same PR is fine. A tiny fix (about one line) found during other work, or a
+  broken `master` that blocks your PR, is a separate commit on your current PR,
+  not a new PR; its commit ID is the record. Date-key new log rows, never a
+  sequential number (`anti-patterns.md`).
 - **Bug-fix pre-flight** — read `memory/project_regression_log.md` BEFORE any
   code; log new fixes there after.
 - **TDD** — failing test first, suite green before commit.
