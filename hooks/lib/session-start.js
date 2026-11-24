@@ -20,17 +20,18 @@
 // must not pull in chalk, commander, or any network client.
 
 /**
- * Emit a SessionStart result and nothing else.
+ * Emit a hook result and nothing else.
  *
  * @param {object} out
- * @param {string} out.systemMessage one line the user sees
- * @param {string} out.context       what the model is told (may be long)
+ * @param {string} [out.systemMessage] one line the user sees
+ * @param {string} out.context         what the model is told (may be long)
+ * @param {string} [out.event]         the hook event (default SessionStart)
  */
-function emit({ systemMessage, context }) {
+function emit({ systemMessage, context, event = 'SessionStart' }) {
   const payload = JSON.stringify({
     systemMessage,
     hookSpecificOutput: {
-      hookEventName: 'SessionStart',
+      hookEventName: event,
       additionalContext: context,
     },
   });

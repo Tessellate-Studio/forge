@@ -157,8 +157,8 @@ has already decided to work the item. Quiet when nothing is claimed. Rules and
 lifecycle: `standards/workflows.md` → "Work claims".
 
 `hooks/subagent-briefing.mjs` (`SubagentStart`) tells every subagent to read
-the repo's `CLAUDE.md`, the forge standards and the skill for its work, and
-lists the rules that hold inside a subagent. Rule: `standards/workflows.md` →
+the repo's `CLAUDE.md`, the skill for its work and the standards sections its
+task touches. Rule: `standards/workflows.md` →
 "Subagents start from forge". Off: `FORGE_SUBAGENT_BRIEFING_DISABLE=1`.
 
 **Turning it off:**

@@ -792,21 +792,14 @@ parent writes the brief: when it leaves the process out, the subagent works
 from the task alone and skips what the parent would have done (a draft PR, a
 claim, the regression log, a root-cause fix).
 
-**Enforced** by the `SubagentStart` hook `hooks/subagent-briefing.mjs`,
-which adds the briefing in `hooks/lib/subagent-briefing.js` to every
-subagent's context, whatever its type and whoever started it. The briefing
-tells the subagent to:
-
-1. read the `CLAUDE.md` of the repo it works in;
-2. read this file, `anti-patterns.md` and `authoritative-claims.md` (a
-   read-only task as far as they bear on what it reports);
-3. follow the skill for its work: `build-feature` for a code change, bug fix
-   or CI change, `plan` for a decision, `device-test` for a device test;
-4. keep the rules that hold inside a subagent too: draft PRs only, never
-   mark ready or merge; claim a work item it owns; root-cause fixes and the
-   🐛 first line; never `--no-verify`; cite or label a hypothesis;
-5. report a conflict between its brief and a standard instead of picking one
-   silently.
+**Enforced** by the `SubagentStart` hook `hooks/subagent-briefing.mjs`, which
+adds `hooks/lib/subagent-briefing.js` to every subagent's context, whatever its
+type and whoever started it. That file is the briefing's one source: it sends
+the subagent to the repo's `CLAUDE.md`, the skill for its work and the
+sections of these standards its task touches (by heading, so it does not
+restate rules that would then drift), defers to a forge agent charter when the
+prompt is one, and asks for any brief/standard conflict to be reported. A test
+checks that every file and heading it names exists.
 
 **The parent still writes a full brief.** The hook carries the process; the
 brief carries the task, the files, what is already ruled out and what done
