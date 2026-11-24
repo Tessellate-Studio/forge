@@ -147,3 +147,22 @@ describe('an explicit --priority is checked, not trusted', () => {
     expect(() => checkPriority('high')).toThrow(/P0-P3/);
   });
 });
+
+describe('the duplicate search reads open tests through the shared fetch', () => {
+  const { listLabelledIssues } = require('../scripts/queue-lib');
+
+  it('leaves pull requests out and refuses a silent empty answer', async () => {
+    const run = jest
+      .fn()
+      .mockResolvedValue(
+        '[{"number":7,"title":"a"},{"number":8,"title":"b","pull_request":{}}]'
+      );
+    await expect(listLabelledIssues('o/r', 'open', run)).resolves.toEqual([
+      { number: 7, title: 'a' },
+    ]);
+    expect(run.mock.calls[0][0].join(' ')).toMatch(/state=open/);
+    await expect(
+      listLabelledIssues('o/r', 'open', jest.fn().mockResolvedValue(''))
+    ).rejects.toThrow();
+  });
+});
