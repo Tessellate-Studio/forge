@@ -147,3 +147,27 @@ describe('an explicit --priority is checked, not trusted', () => {
     expect(() => checkPriority('high')).toThrow(/P0-P3/);
   });
 });
+
+describe('dtq enqueue waits as long as a person can, not a hook', () => {
+  // alate, 2026-11-23: on a slow network the 10 s hook budget killed the
+  // duplicate search and enqueue died with a bare "Command failed".
+  const { listOpenTests, CLI_TIMEOUT_MS } = require('../scripts/enqueue');
+
+  it('gives the CLI a limit well above the 10 s hook budget', () => {
+    expect(CLI_TIMEOUT_MS).toBeGreaterThanOrEqual(30_000);
+  });
+
+  it('lists open tests and leaves pull requests out', async () => {
+    const run = jest
+      .fn()
+      .mockResolvedValue(
+        '[{"number":7,"title":"a"},{"number":8,"title":"b","pull_request":{}}]'
+      );
+    await expect(listOpenTests('o/r', run)).resolves.toEqual([
+      { number: 7, title: 'a' },
+    ]);
+    expect(run.mock.calls[0][0]).toEqual(
+      expect.arrayContaining(['api', '--paginate'])
+    );
+  });
+});

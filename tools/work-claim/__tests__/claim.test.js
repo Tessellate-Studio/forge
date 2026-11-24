@@ -852,3 +852,54 @@ describe('checkGhReady', () => {
     expect(r.message).toMatch(/cannot reach the GitHub API/);
   });
 });
+
+describe('gh: a timeout says it is a timeout', () => {
+  // alate, 2026-11-23: `dtq enqueue` died with "Command failed: gh api
+  // repos/…/issues?labels=device-test&state=open…" and nothing else. It was
+  // the 10 s cap killing a slow call, but the message read like a broken
+  // command, and the session blamed the `&` in the URL.
+  const { gh } = require('../lib/claim');
+  const killed = () =>
+    Promise.reject(
+      Object.assign(new Error('Command failed: gh api x'), {
+        killed: true,
+        signal: 'SIGTERM',
+      })
+    );
+
+  it('names the timeout and the call when gh is killed for running too long', async () => {
+    await expect(gh(['api', 'x'], { run: killed })).rejects.toMatchObject({
+      code: 'GH_TIMEOUT',
+      message: expect.stringMatching(/^gh timed out after 10 s .*: gh api x$/),
+    });
+  });
+
+  it('passes a caller-chosen limit through to the child', async () => {
+    const run = jest.fn().mockResolvedValue({ stdout: 'ok' });
+    await expect(gh(['api', 'x'], { run, timeoutMs: 45_000 })).resolves.toBe(
+      'ok'
+    );
+    expect(run).toHaveBeenCalledWith(
+      'gh',
+      ['api', 'x'],
+      expect.objectContaining({ timeout: 45_000 })
+    );
+  });
+
+  it('keeps the 10 s default for hooks', async () => {
+    const run = jest.fn().mockResolvedValue({ stdout: '' });
+    await gh(['api', 'x'], { run });
+    expect(run).toHaveBeenCalledWith(
+      'gh',
+      ['api', 'x'],
+      expect.objectContaining({ timeout: 10_000 })
+    );
+  });
+
+  it('passes other failures through unchanged', async () => {
+    const boom = Object.assign(new Error('HTTP 404'), { code: 1 });
+    await expect(
+      gh(['api', 'x'], { run: () => Promise.reject(boom) })
+    ).rejects.toBe(boom);
+  });
+});

@@ -337,13 +337,39 @@ function claimDetails(claim) {
  *  has exited — on a SessionStart hook that is one orphan per slow start. */
 const GH_TIMEOUT_MS = 10_000;
 
-async function gh(args) {
-  const { stdout } = await execFileAsync('gh', args, {
-    encoding: 'utf8',
-    maxBuffer: 20 * 1024 * 1024,
-    timeout: GH_TIMEOUT_MS,
-  });
-  return stdout;
+/**
+ * Run `gh` with an argument list (no shell). `timeoutMs` lets an interactive
+ * CLI wait longer than a hook may; `run` is for tests.
+ *
+ * A call killed by the limit is reported AS a timeout. Node's own message for
+ * it is "Command failed: gh …" with nothing else, which reads like a broken
+ * command: `dtq enqueue` died that way on alate on 2026-11-23 and the
+ * session blamed the `&` in the URL.
+ */
+async function gh(
+  args,
+  { timeoutMs = GH_TIMEOUT_MS, run = execFileAsync } = {}
+) {
+  try {
+    const { stdout } = await run('gh', args, {
+      encoding: 'utf8',
+      maxBuffer: 20 * 1024 * 1024,
+      timeout: timeoutMs,
+    });
+    return stdout;
+  } catch (error) {
+    if (error && error.killed) {
+      throw Object.assign(
+        new Error(
+          `gh timed out after ${Math.round(
+            timeoutMs / 1000
+          )} s (no answer from GitHub in time): gh ${args.join(' ')}`
+        ),
+        { code: 'GH_TIMEOUT', cause: error }
+      );
+    }
+    throw error;
+  }
 }
 
 /**
