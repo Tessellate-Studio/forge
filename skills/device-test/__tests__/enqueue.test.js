@@ -148,26 +148,21 @@ describe('an explicit --priority is checked, not trusted', () => {
   });
 });
 
-describe('dtq enqueue waits as long as a person can, not a hook', () => {
-  // alate, 2026-11-23: on a slow network the 10 s hook budget killed the
-  // duplicate search and enqueue died with a bare "Command failed".
-  const { listOpenTests, CLI_TIMEOUT_MS } = require('../scripts/enqueue');
+describe('the duplicate search reads open tests through the shared fetch', () => {
+  const { listLabelledIssues } = require('../scripts/queue-lib');
 
-  it('gives the CLI a limit well above the 10 s hook budget', () => {
-    expect(CLI_TIMEOUT_MS).toBeGreaterThanOrEqual(30_000);
-  });
-
-  it('lists open tests and leaves pull requests out', async () => {
+  it('leaves pull requests out and refuses a silent empty answer', async () => {
     const run = jest
       .fn()
       .mockResolvedValue(
         '[{"number":7,"title":"a"},{"number":8,"title":"b","pull_request":{}}]'
       );
-    await expect(listOpenTests('o/r', run)).resolves.toEqual([
+    await expect(listLabelledIssues('o/r', 'open', run)).resolves.toEqual([
       { number: 7, title: 'a' },
     ]);
-    expect(run.mock.calls[0][0]).toEqual(
-      expect.arrayContaining(['api', '--paginate'])
-    );
+    expect(run.mock.calls[0][0].join(' ')).toMatch(/state=open/);
+    await expect(
+      listLabelledIssues('o/r', 'open', jest.fn().mockResolvedValue(''))
+    ).rejects.toThrow();
   });
 });

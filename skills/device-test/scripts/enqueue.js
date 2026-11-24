@@ -11,9 +11,15 @@
 
 const path = require('path');
 
-const { LABELS, PRIORITY, labelKey, resolveLabels } = require('./queue-lib');
+const {
+  LABELS,
+  PRIORITY,
+  labelKey,
+  resolveLabels,
+  listLabelledIssues,
+} = require('./queue-lib');
 
-const { gh: ghWithin } = require(path.join(
+const { gh } = require(path.join(
   __dirname,
   '..',
   '..',
@@ -23,15 +29,6 @@ const { gh: ghWithin } = require(path.join(
   'lib',
   'claim.js'
 ));
-
-/**
- * A person waits on `dtq enqueue`, so every call it makes may take longer than
- * a SessionStart hook's 10 s. On a slow network (alate, 2026-11-23: rate_limit
- * alone took 10 s) the hook budget killed the duplicate search and the command
- * died with a bare "Command failed".
- */
-const CLI_TIMEOUT_MS = 45_000;
-const gh = args => ghWithin(args, { timeoutMs: CLI_TIMEOUT_MS });
 
 /**
  * A step that needs a person, marked the way the old format marked it.
@@ -207,15 +204,6 @@ function matchesIntent(issue, intent) {
  * of one test wastes a device sitting four times over. On a hit the new
  * detail becomes a comment on the existing issue instead.
  */
-/** The open tests (pull requests left out), for the duplicate search. */
-async function listOpenTests(repo, run = gh) {
-  const out = await run([
-    'api',
-    `repos/${repo}/issues?labels=${LABELS.ITEM}&state=open&per_page=100`,
-    '--paginate',
-  ]);
-  return JSON.parse(out || '[]').filter(i => !i.pull_request);
-}
 
 async function enqueue({ repo, intent, fields, dryRun }) {
   const body = renderTestBody(fields);
@@ -225,7 +213,7 @@ async function enqueue({ repo, intent, fields, dryRun }) {
   const labels = labelsFor({ ...fields, priority });
   const title = `[device-test] ${intent}`;
 
-  const existing = (await listOpenTests(repo)).find(i =>
+  const existing = (await listLabelledIssues(repo, 'open')).find(i =>
     matchesIntent(i, intent)
   );
 
@@ -280,6 +268,4 @@ module.exports = {
   intentSlug,
   matchesIntent,
   enqueue,
-  listOpenTests,
-  CLI_TIMEOUT_MS,
 };

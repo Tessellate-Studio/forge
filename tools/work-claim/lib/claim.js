@@ -332,24 +332,44 @@ function claimDetails(claim) {
   ].filter(row => row[1]);
 }
 
-/** Every gh call is bounded. Promise.race does NOT cancel the loser, so
- *  without this a timed-out board leaves gh children running after the caller
- *  has exited — on a SessionStart hook that is one orphan per slow start. */
-const GH_TIMEOUT_MS = 10_000;
-
 /**
- * Run `gh` with an argument list (no shell). `timeoutMs` lets an interactive
- * CLI wait longer than a hook may; `run` is for tests.
+ * Every gh call is bounded, and the bound is decided once per PROCESS, by its
+ * entry point, not per call: the same library code runs under a hook and
+ * under a CLI. A CLI has a person waiting and gets CLI_GH_TIMEOUT_MS (the
+ * default). A hook calls setGhBudget(HOOK_GH_TIMEOUT_MS) at start-up: its
+ * harness kills it at its own deadline, and Promise.race does NOT cancel the
+ * loser, so an unbounded gh would outlive the hook as an orphan.
  *
- * A call killed by the limit is reported AS a timeout. Node's own message for
- * it is "Command failed: gh …" with nothing else, which reads like a broken
- * command: `dtq enqueue` died that way on alate on 2026-11-23 and the
- * session blamed the `&` in the URL.
+ * Why the CLI is the default: every gh call used to run on the 10 s hook
+ * budget, so a slow network killed `dtq enqueue` (alate, 2026-11-23, when
+ * `gh api rate_limit` alone took 10 s) and `wip`, `dtq` and safe-merge were
+ * one slow day from the same failure.
  */
-async function gh(
-  args,
-  { timeoutMs = GH_TIMEOUT_MS, run = execFileAsync } = {}
-) {
+const HOOK_GH_TIMEOUT_MS = 10_000;
+const CLI_GH_TIMEOUT_MS = 45_000;
+let ghBudgetMs = CLI_GH_TIMEOUT_MS;
+
+/** Called once by each hook entry point (hooks/*.mjs) before any gh call. */
+function setGhBudget(ms) {
+  ghBudgetMs = ms;
+}
+
+/** Node's message for a child killed by its timeout is "Command failed: gh …"
+ *  with no reason, which reads like a broken command (the 2026-11-23 session
+ *  blamed the `&` in the URL). Say it was a timeout. */
+function timedOut(args, ms, cause) {
+  return Object.assign(
+    new Error(
+      `gh timed out after ${Math.round(
+        ms / 1000
+      )} s (no answer from GitHub in time): gh ${args.join(' ')}`
+    ),
+    { code: 'GH_TIMEOUT', cause }
+  );
+}
+
+/** Run `gh` with an argument list (no shell). `run` is for tests. */
+async function gh(args, { timeoutMs = ghBudgetMs, run = execFileAsync } = {}) {
   try {
     const { stdout } = await run('gh', args, {
       encoding: 'utf8',
@@ -359,14 +379,7 @@ async function gh(
     return stdout;
   } catch (error) {
     if (error && error.killed) {
-      throw Object.assign(
-        new Error(
-          `gh timed out after ${Math.round(
-            timeoutMs / 1000
-          )} s (no answer from GitHub in time): gh ${args.join(' ')}`
-        ),
-        { code: 'GH_TIMEOUT', cause: error }
-      );
+      throw timedOut(args, timeoutMs, error);
     }
     throw error;
   }
@@ -382,9 +395,18 @@ async function gh(
  */
 async function checkGhReady(run = execFileAsync) {
   try {
-    await run('gh', ['api', 'rate_limit'], { encoding: 'utf8' });
+    await run('gh', ['api', 'rate_limit'], {
+      encoding: 'utf8',
+      timeout: ghBudgetMs,
+    });
     return { ok: true };
   } catch (error) {
+    if (error.killed) {
+      return {
+        ok: false,
+        message: timedOut(['api', 'rate_limit'], ghBudgetMs, error).message,
+      };
+    }
     if (error.code === 'ENOENT') {
       return {
         ok: false,
@@ -658,6 +680,9 @@ module.exports = {
   describeClaim,
   claimDetails,
   gh,
+  setGhBudget,
+  HOOK_GH_TIMEOUT_MS,
+  CLI_GH_TIMEOUT_MS,
   mapWithLimit,
   checkGhReady,
   fetchRepoClaims,

@@ -33,7 +33,12 @@ const {
   collect,
   describeClaim,
   claimDetails,
+  setGhBudget,
+  HOOK_GH_TIMEOUT_MS,
 } = require(path.join(here, '..', 'tools', 'work-claim', 'lib', 'claim.js'));
+
+// A hook: the short gh budget (see setGhBudget).
+setGhBudget(HOOK_GH_TIMEOUT_MS);
 const { emit, withDeadline, runHook, disabled } = require(path.join(
   here,
   'lib',
