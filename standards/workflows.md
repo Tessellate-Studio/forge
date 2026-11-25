@@ -1038,6 +1038,14 @@ marker from this fixed set:
   says, in plain words, what was broken for the person using the product. A
   bug fix must never read like a feature or a chore. *Precedent: a chat about
   the alate#1898 fix (PR #1903) gave no sign it was a bug.*
+- **Enforced on PR bodies** (forge#211). `hooks/report-markers.mjs` refuses
+  a `gh pr create` / `gh pr edit` whose body has no marker or has a top-level
+  point without one. It is a plugin hook, so it fires in every session, chip
+  and subagent where forge is enabled, not only ones that read this file.
+- **Nudged on chat reports.** `hooks/reply-markers.mjs` (Stop) reads the
+  final reply; when it has two or more top-level points and any lacks a
+  marker, it sends the agent back once to restate it. Shorter replies are
+  left alone, and a second miss is let through rather than looping.
 - **No new markers.** A meaning the set cannot express goes in words, or is
   proposed to the owner as a change to this table.
 - **Summary only.** Code, logs, quoted output and tool narration stay
@@ -1075,12 +1083,81 @@ nothing is parsed out of prose.
 | Situation | Issue state | Labels |
 |---|---|---|
 | Pending, agent-runnable | open | `device-test` |
-| Pending, needs a person | open | `device-test` `needs-human` |
+| Pending, needs a person (a `HUMAN:` step, see below) | open | `device-test` `needs-human` |
 | Blocked on a native build | open | `device-test` `needs-build` |
 | Parked by decision | open | `device-test` `parked` |
 | Failed, bug filed | **open** | `device-test` `failed` |
 | Passed | closed, reason `completed` | `device-test` |
 | Withdrawn / superseded | closed, reason `not_planned` | `device-test` |
+
+### A drain prepares its data — "blocked on data" is a drain failure
+
+Owner decision 2026-11-23. A test whose steps need app state (cards, verdicts,
+a profile, a gender, a size, a bought or arrived piece) is **agent-runnable**:
+the drain builds that state, then runs the steps. Missing data is the drain's
+job, not a blocker and not a question. *(2026-11-21 to 2026-11-23, alate:
+#1973 needed Great fit + Likely fit + Some concerns cards, #1974 a third card
+and a scannable dev-store product, #1690 a bikini-bottom, trousers, a men's
+shirt and a gender switch, #1638 a piece in arrived/bought state, #1590 a shoe
+with a nominated size, #1756 a second fit. Each was reported as "needs data" or
+"needs human" until the owner said "seed it", and a later drain did it in one
+pass. His words: tests were "stacked up as blockers or rolled over for
+days/weeks - this was the exact reason why the needs-human rule was brought in
+and this session shows it's not effective".)*
+
+1. **Every item states its seed.** A `**Seed:**` body field (`dtq enqueue
+   --seed "…"`) lists the state the steps need: cards and their verdicts,
+   profile, gender, size, wardrobe state. The enqueuing session fills it while
+   the context is warm. An item without one: the drain reads the steps, writes
+   the Seed field itself (a comment is fine, the body is not rewritten, see
+   "Never rewrites its Steps/Expect") and says so in its evidence. A step that
+   needs state and a Seed line that does not mention it is the same gap.
+2. **Where the seed is built.** On the **preview app or a persona**, never
+   production and never the owner's real profile. When the state can only be
+   built by editing the profile on the device (measurement variants, gender,
+   size), snapshot the profile first and restore it after, under "Wiping app
+   data on a real device" (back up before any wipe, restore and verify before
+   releasing the claim). A value the backup cannot see means that profile is
+   not edited: seed through a persona or the preview app instead, and if no
+   such route exists it is a drain failure (item 5), not a `HUMAN:` step.
+   **Re-seed after anything that changes the state.** A step that buys or
+   arrives a piece, switches gender, clears measurements or wipes app data
+   spoils the deck for the next item: rebuild what it consumed before the next
+   item runs, so a verdict never rests on state an earlier item left behind.
+3. **Links come from the queue, scrapes happen once.** Product links already in
+   the issue and its comments are the source; scrape each brand page ONCE
+   (`persona-product.ts <url> --save scrape.json`, then `--file`), reuse the
+   result for every item that needs it, and never loop brand sites or live
+   APIs. A product the issue does not name is picked by parameter from the
+   litmus test catalog.
+4. **The standard seed deck, per app.** A drain builds this once per sitting
+   and reuses it across items; extend it when an item needs more.
+   - **alate:** a deck of mixed verdicts (Great fit, Likely fit, Some
+     concerns, at least one of each); a shoe with a nominated size; a
+     bikini-bottom; trousers; a men's shirt (and the gender switch to reach
+     it); one piece **bought** and one **arrived**; a second fit; Advanced-account
+     measurement variants (exact measurements present, absent, partial).
+   - **mood-layer, badige, loom:** none yet. The first drain that seeds for one
+     adds its deck here in the same PR as the first use.
+5. **Blocked on data is a drain failure, never a reason to leave an item
+   open.** If the drain cannot build a seed, the wrap-up lists the item under
+   **drain failures** with exactly what it tried and what it did not try, and
+   spawns a chip for the missing tool or access. `needs-human` is reserved for
+   genuinely human-only steps: haptic feel, screen readers, iPhone/iOS, camera,
+   a real sign-in, two phones, wording judgement. "No data", "no exact
+   measurements", "deck has only one card" are never on that list.
+6. **A suspected bug seen once is not reported yet.** Before filing it, re-try
+   on **at least two other items** (or two other pieces/cards) and after an app
+   **relaunch**. Report it only if it reproduces, saying which entry points
+   did and did not. *(2026-11-23, alate#1638: a wardrobe-pill "bug" was
+   surfaced after three taps on one card.)* A single-shot oddity that does not
+   reproduce is noted on the test, not filed.
+7. **Stale agent-runnable items are agent failures.** Any plain pending item
+   (open, no `HUMAN:` step, not `failed`, `needs-build` or `parked`) created
+   more than **7 days** ago is listed in the wrap-up as an agent failure, with
+   why it is still open, and is worked in that drain. The clock runs from
+   creation. `dtq` marks it `STALE` (7 days here; `needs-build` has its own
+   14-day rule below, and a `failed` test is tracked by its bug).
 
 ### needs-build is an AGENT work item, never an owner wait
 
@@ -1170,6 +1247,7 @@ dtq enqueue --repo alate --intent "budget-column-739 — BUDGET is always the fi
   --verifies 739 --sha 8d3ce08 \
   --delivery "production OTA once #739 lands. Both platforms." \
   --needs-runtime 1.3.1 \
+  --seed "profile with a budget set, then cleared; any deck" \
   --step "Profile → Price range → clear any budget. Open a fit check." \
   --step "HUMAN: judge whether the ring reads as empty rather than broken." \
   --expect "Five columns, BUDGET an empty ring with a muted em dash."
@@ -1239,7 +1317,9 @@ itself — launch/force-stop, `adb shell input tap`/`text`/`keyevent`,
 `adb exec-out screencap -p`, logcat — and involves a human only for what needs
 judgment or a human-only surface (gesture feel, camera/biometrics,
 real-account sign-ins, iOS/TestFlight where there is no adb). Prefix those
-`HUMAN:`; that prefix is what labels the issue `needs-human`.
+`HUMAN:`; that prefix is what labels the issue `needs-human`. **Missing app
+data is not on that list** — put it in the `**Seed:**` field instead ("A drain
+prepares its data", above), and add `--seed` to the enqueue.
 
 **Code tier — prefer a worktree check to a phone.** Not every device-test
 needs a phone (owner, 2026-11-17). A step that a check in a worktree can

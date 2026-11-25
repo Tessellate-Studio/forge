@@ -430,12 +430,33 @@ function isStaleBuild(item, now = Date.now()) {
   return (now - created) / 86400000 > STALE_BUILD_DAYS;
 }
 
+/** An open agent-runnable test older than this is an agent failure (forge#211). */
+const STALE_AGENT_DAYS = 7;
+
+/**
+ * True for an open test an agent could run (not needs-human, needs-build,
+ * parked or failed) that has sat past the limit; false for anything
+ * unreadable. A `failed` test is tracked by its bug, not by this clock.
+ */
+function isStaleAgentItem(item, now = Date.now()) {
+  if (!item || item.state !== STATUS.OPEN || item.needsHuman) {
+    return false;
+  }
+  const created = Date.parse(item.createdAt);
+  if (Number.isNaN(created)) {
+    return false;
+  }
+  return (now - created) / 86400000 > STALE_AGENT_DAYS;
+}
+
 module.exports = {
   labelKey,
   resolveLabels,
   REPOS,
   STALE_BUILD_DAYS,
   isStaleBuild,
+  STALE_AGENT_DAYS,
+  isStaleAgentItem,
   STATUS,
   LABELS,
   PRIORITY,

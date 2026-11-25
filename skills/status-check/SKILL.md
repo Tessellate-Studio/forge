@@ -116,8 +116,10 @@ when not.
   (without `--paginate` the newest tests are the ones dropped) — and read each
   body's fields (`${CLAUDE_PLUGIN_ROOT}/standards/workflows.md` → "Device-test
   queue"). Is the **Verifies** PR merged? Is **Delivery** satisfied (OTA
-  published, build exists)?
-- **Auto-act:** PR unmerged → route it through (b)/(a) first, then correct the
+  published, build exists)? Does a test whose steps need app state have a
+  **Seed:** field (`workflows.md` → "A drain prepares its data")?
+- **Auto-act:** a test enqueued this session with no `**Seed:**` field gets one
+  now, while the context is warm (field edit, same rule below). PR unmerged → route it through (b)/(a) first, then correct the
   SHA in the test body's `**Verifies:**` line to the merged one. Field edits
   only — never close, relabel or delete a test; verdicts belong to the
   device-test skill. If the correction needs explaining, add an ordinary

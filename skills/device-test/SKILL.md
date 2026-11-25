@@ -1,6 +1,6 @@
 ---
 name: device-test
-description: Drains the open `device-test` issues (one GitHub issue per test) across every Tessellate app with a queue — the three mobile apps (alate, mood-layer, badige) plus loom, whose items are browser-verified rather than adb-driven — AGENT-FIRST, and always runs its actual work in a cost-controlled model:sonnet subagent regardless of the invoking session's model. That subagent IS the drain and never delegates further: it executes every adb-automatable step itself (launch, taps, text entry, screenshots, logcat) and verifies Expect from what it captures; the human is pulled in only for steps marked HUMAN: (gesture feel, camera/biometrics, real accounts, iOS). Sessions enqueue tests per forge standards/workflows.md → "Device-test queue"; this skill fetches every OPEN item, verifies the right build/OTA is on the connected device per app, runs or walks every step of each test and records a per-step outcome (a failed step never skips the independent ones; a step nobody ran reads as not run), and closes each passed test issue as completed (a failed one is labelled `failed` and left open) — filing failures instead of fixing mid-drain, and spinning up a tracked chip for every failure it files so the bug is chased to completion instead of accumulating as an unowned issue (later drains re-check each open `failed` test and re-spawn a dead chip). Tests that need a fresh native build (no OTA can reach them) get labelled `needs-build` instead of tested — OTA-deliverable changes always test immediately, ad hoc or scheduled, never gated by a build cadence. Self-schedules a daily drain (9am local by default) that skips needs-build items, plus a separate weekly task that dispatches builds only for apps with a needs-build backlog (the one standing exception to the no-automatic-builds CI-spend rule). Use whenever the user asks to "drain the device test queue", "run device tests", "what needs testing on my phone", "device test session", passively "anything waiting on my phone?" — or on a schedule/idle moment whenever a device is adb-connected: agent-only items need no invitation. Empty queues everywhere is a valid, quiet result. Output is a wrap-up table: passed / failed→filed / needs-build→unblock / needs-human, with what unblocks each.
+description: Drains the open `device-test` issues (one GitHub issue per test) across every Tessellate app with a queue — the three mobile apps (alate, mood-layer, badige) plus loom, whose items are browser-verified rather than adb-driven — AGENT-FIRST, and always runs its actual work in a cost-controlled model:sonnet subagent regardless of the invoking session's model. That subagent IS the drain and never delegates further: it executes every adb-automatable step itself (launch, taps, text entry, screenshots, logcat) and verifies Expect from what it captures; the human is pulled in only for steps marked HUMAN: (gesture feel, camera/biometrics, real accounts, iOS) — never for missing app data, which the drain seeds itself (Step 2c). Sessions enqueue tests per forge standards/workflows.md → "Device-test queue"; this skill fetches every OPEN item, verifies the right build/OTA is on the connected device per app, runs or walks every step of each test and records a per-step outcome (a failed step never skips the independent ones; a step nobody ran reads as not run), and closes each passed test issue as completed (a failed one is labelled `failed` and left open) — filing failures instead of fixing mid-drain, and spinning up a tracked chip for every failure it files so the bug is chased to completion instead of accumulating as an unowned issue (later drains re-check each open `failed` test and re-spawn a dead chip). Tests that need a fresh native build (no OTA can reach them) get labelled `needs-build` instead of tested — OTA-deliverable changes always test immediately, ad hoc or scheduled, never gated by a build cadence. Self-schedules a daily drain (9am local by default) that skips needs-build items, plus a separate weekly task that dispatches builds only for apps with a needs-build backlog (the one standing exception to the no-automatic-builds CI-spend rule). Use whenever the user asks to "drain the device test queue", "run device tests", "what needs testing on my phone", "device test session", passively "anything waiting on my phone?" — or on a schedule/idle moment whenever a device is adb-connected: agent-only items need no invitation. Empty queues everywhere is a valid, quiet result. Output is a wrap-up table: passed / failed→filed / needs-build→unblock / needs-human, with what unblocks each.
 ---
 
 # Device test drain
@@ -390,7 +390,12 @@ Classify every open test by its labels first, then (for the rest) by Steps:
   3), no question asked.** This is the self-maintenance path — the user should
   not be consulted about tests an agent can execute and judge from a
   screenshot/logcat (or a page read and its console).
-- **Open, `needs-human`** (at least one `HUMAN:` step): present one short table —
+- **Open, with a stale clock** — an agent-runnable item (no `HUMAN:` step) open
+  over 7 days, `dtq` marked `STALE`: list it in the wrap-up as an agent failure
+  and work it this drain ([`workflows.md` → "A drain prepares its
+  data"](../../standards/workflows.md), item 7).
+- **Open, `needs-human`** (at least one `HUMAN:` step; missing data is never
+  a `HUMAN:` step, Step 2c seeds it): present one short table —
   app · item · the specific `HUMAN:` steps · Needs runtime · testable-now
   verdict — and walk them with the user if they're present. If the user isn't
   in the loop right now (including every automated daily/weekly run — there is
@@ -505,6 +510,15 @@ disconnected or absent, and it runs before Step 0.4's claim matters.
 Same model rule as the rest: you run this yourself inside the one sonnet
 subagent — no nested agents.
 
+### Step 2c — Seed: build the data the steps need, before walking them
+
+For each item whose steps need app state, build it first, as
+[`workflows.md` → "A drain prepares its data"](../../standards/workflows.md)
+says: it is the single home for the Seed field, where to build, the standard
+deck, re-seeding after a step spoils it, and what counts as a drain failure.
+This step only runs it. Missing data is never `needs-human`; a seed you cannot
+build goes in the wrap-up's drain failures, with a chip.
+
 ### Step 3 — Execute the items, agent-first
 
 For each OPEN item on the current app:
@@ -528,7 +542,8 @@ For each OPEN item on the current app:
    Coordinates: take a screenshot first and derive tap targets from it rather
    than guessing; if a target can't be located confidently after two
    attempts, downgrade the item to needs-human with a note — never close on
-   a guessed tap.
+   a guessed tap. (A target you cannot find because the data is missing is not
+   this case: go back to Step 2c and seed it.)
 
    **Prove the app owns the screen before every input and after every
    capture.** `adb shell input` drives whatever is in front. On alate
@@ -628,7 +643,8 @@ For each OPEN item on the current app:
    ```
    Nothing to minimize: a closed issue is already out of the default view,
    which is what the minimize dance existed to fake.
-3. **Fail** (any step ❌, whatever the others did) → capture what was seen
+3. **Fail** (any step ❌, whatever the others did; a bug seen once is re-tried
+   before it counts, `workflows.md` → "A drain prepares its data", item 6) → capture what was seen
    (screenshot/logcat; the user's words for a `HUMAN:` step), file it where
    the app's rules say — regression-log row via PR, or a GitHub issue — and
    **label the test `failed`, leaving it OPEN**, with a comment linking the
@@ -703,6 +719,10 @@ confirmed / ❌ → filed link + chip `task_id` (or "chip re-spawned", or how
 many drains it has been open) / 🔧 needs build → what would unblock it / 🙋
 needs-human → the specific `HUMAN:` steps waiting). Identify each test by its
 issue number (`alate#712`) so the user can jump straight to it.
+**Drain failures go in their own list, above the table's other rows:** every
+item left open because the drain could not build its seed (what it tried, what
+it did not try) and every agent-runnable item open over 7 days. These are the
+drain's failures, not the owner's to-do.
 Then, per the user's communication style: what they need to do (installs,
 promotions), what got filed for follow-up sessions. If any test was missing
 body fields or stacked two tests in one body, say what you REPAIRED (Step 0.3)

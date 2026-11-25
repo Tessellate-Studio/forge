@@ -64,6 +64,7 @@ function renderTestBody(fields) {
     steps = [],
     expect = [],
     why,
+    seed,
   } = fields || {};
 
   const lines = [];
@@ -83,6 +84,12 @@ function renderTestBody(fields) {
   }
   if (why) {
     lines.push(`- **Why this item exists:** ${why}`);
+  }
+
+  // The app state the steps need (owner, 2026-11-23): the drain builds it on
+  // the preview app or a persona instead of reporting the test blocked.
+  if (seed) {
+    lines.push(`- **Seed:** ${seed}`);
   }
 
   lines.push('- **Steps:**');

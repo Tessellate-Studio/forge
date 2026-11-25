@@ -215,7 +215,7 @@ Block shape and field meanings: [`references/digest-format.md`](references/diges
 
 ### Step 1 — Honesty pass
 
-For each open item, scan for state claims and verify each against the source of truth. Also list every `device-test` + `needs-build` item open over 14 days (`dtq` marks them `STALE`) as agent failures: each needs a chip for its `Next:` action (`standards/workflows.md` → "needs-build is an AGENT work item"). Report only; never dispatch a build. Full detection logic in [`references/staleness-detection.md`](references/staleness-detection.md) — read it before running.
+For each open item, scan for state claims and verify each against the source of truth. Also list every `device-test` + `needs-build` item open over 14 days (`dtq` marks them `STALE`) as agent failures: each needs a chip for its `Next:` action (`standards/workflows.md` → "needs-build is an AGENT work item"). Also list every plain pending `device-test` item (no `HUMAN:` step, not `failed`, `needs-build` or `parked`) open over 7 days (`dtq` marks them `STALE` too) as an agent failure (`standards/workflows.md` → "A drain prepares its data", item 7). Report only; never dispatch a build. Full detection logic in [`references/staleness-detection.md`](references/staleness-detection.md) — read it before running.
 
 | Failure mode | Check | Cron action | Manual-run action |
 |---|---|---|---|

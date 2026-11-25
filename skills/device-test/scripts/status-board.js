@@ -18,6 +18,7 @@ const {
   collect,
   daysSince,
   isStaleBuild,
+  isStaleAgentItem,
   describeDeviceClaim,
   fetchDeviceClaims,
   REPOS,
@@ -179,7 +180,8 @@ function renderRepo(result, opts) {
         ? chalk.bold(item.priority)
         : chalk.dim('P?');
       const claimed = item.claimed ? chalk.yellow(' 🚧') : '';
-      const stale = isStaleBuild(item) ? chalk.red(' STALE') : '';
+      const stale =
+        isStaleBuild(item) || isStaleAgentItem(item) ? chalk.red(' STALE') : '';
 
       // `🧪N` = N steps a worktree check can still run, no phone needed.
       const code = item.codeSteps ? chalk.cyan(` 🧪${item.codeSteps}`) : '';
@@ -312,6 +314,7 @@ async function runEnqueue(argv) {
         'usage: dtq enqueue --repo <alate|mood-layer|badige|loom> --intent "<what this proves>"\n' +
           '                   [--verifies <pr>] [--sha <sha>] [--delivery <how it reaches the device>]\n' +
           '                   [--needs-runtime <version>] [--why <why a device is needed>]\n' +
+          '                   [--seed "<app state the steps need: cards, verdicts, profile, gender, size, state>"]\n' +
           '                   [--priority <P0-P3>]  (default: copied from what it verifies, else P2)\n' +
           '                   [--step "<one step>"]... [--expect "<one expectation>"]... [--dry-run]\n\n' +
           'Prefix a step with "HUMAN:" to mark it as needing a person — that is what labels the issue needs-human.'
@@ -330,6 +333,7 @@ async function runEnqueue(argv) {
       delivery: arg('delivery'),
       needsRuntime: arg('needs-runtime'),
       why: arg('why'),
+      seed: arg('seed'),
       priority: arg('priority'),
       steps: many('step'),
       expect: many('expect'),
