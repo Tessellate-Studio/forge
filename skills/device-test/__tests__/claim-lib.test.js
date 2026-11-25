@@ -215,3 +215,81 @@ describe('a taken-over claim cannot come back (review 2026-09-25)', () => {
     expect(losesRaceTo([a, b], pixel, 'drain-b')).toBe(a);
   });
 });
+
+describe('wip claim --device fails closed (forge#215)', () => {
+  const { deviceClaimVerdict } = require('../scripts/claim-lib');
+
+  it('refuses when any queue could not be read, even with no claims seen', () => {
+    const v = deviceClaimVerdict(
+      { claims: [], errors: ['alate: gh timed out'] },
+      'pixel'
+    );
+    expect(v).toMatchObject({ ok: false, reason: 'unreadable', device: pixel });
+    expect(v.errors).toEqual(['alate: gh timed out']);
+  });
+
+  it('refuses, naming the holder, when another live claim holds the phone', () => {
+    const drain = claim({ heldBy: 'drain-a (abcd1234)', testId: 'alate#2029' });
+    const v = deviceClaimVerdict({ claims: [drain], errors: [] }, 'pixel');
+    expect(v).toMatchObject({ ok: false, reason: 'held' });
+    expect(v.holder.heldBy).toBe('drain-a (abcd1234)');
+    expect(v.holder.testId).toBe('alate#2029');
+    expect(v.holder.sessionId).toBe('abcd1234-0000');
+  });
+
+  it('does not count my own claims as a rival', () => {
+    const mine = claim({ heldBy: 'me (11112222)' });
+    const v = deviceClaimVerdict(
+      { claims: [mine], errors: [] },
+      'pixel',
+      c => c.heldBy === 'me (11112222)'
+    );
+    expect(v).toEqual({ ok: true, device: pixel });
+  });
+
+  it('lets the phone go once the holder is silent past the heartbeat window', () => {
+    const dead = claim({ idle: HEARTBEAT_STALE_MINUTES + 1 });
+    expect(deviceClaimVerdict({ claims: [dead], errors: [] }, 'pixel').ok).toBe(
+      true
+    );
+  });
+
+  it('a claim on the iPhone does not lock the Pixel', () => {
+    const other = claim({ device: 'iphone' });
+    expect(
+      deviceClaimVerdict({ claims: [other], errors: [] }, 'pixel').ok
+    ).toBe(true);
+    expect(
+      deviceClaimVerdict({ claims: [other], errors: [] }, 'iphone').reason
+    ).toBe('held');
+  });
+});
+
+describe('readDeviceClaims — the read wip and dtq share', () => {
+  const {
+    readDeviceClaims,
+    fetchDeviceClaims,
+  } = require('../scripts/queue-lib');
+
+  it('reports a failed repo as an error, never as an empty list', async () => {
+    const run = jest.fn(async args => {
+      if (args[1].includes('/alate/')) {
+        throw new Error(
+          'Command failed: gh api repos/x/alate/issues?labels=a&state=open'
+        );
+      }
+      return '[]';
+    });
+    const { claims, errors } = await readDeviceClaims(run);
+    expect(claims).toEqual([]);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatch(/^alate: /);
+    const devices = await fetchDeviceClaims(run);
+    devices.forEach(d => expect(d.error).toMatch(/alate/));
+  });
+
+  it('an empty response is unknown, not an empty queue', async () => {
+    const { errors } = await readDeviceClaims(async () => '');
+    expect(errors.length).toBeGreaterThan(0);
+  });
+});

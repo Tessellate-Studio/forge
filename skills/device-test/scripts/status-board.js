@@ -419,8 +419,16 @@ async function main() {
       process.exit(1);
     }
 
+    // Fail closed, as `wip board` does (forge#215): a repo or device lock
+    // that could not be read makes the whole board exit 1, so nothing that
+    // scripts against dtq can read a partial board as a complete one.
+    const incomplete = results.some(r => r.error) || devices.some(d => d.error);
+    process.exitCode = incomplete ? 1 : 0;
+
     if (opts.json) {
-      console.log(JSON.stringify({ repos: results, devices }, null, 2));
+      console.log(
+        JSON.stringify({ repos: results, devices, incomplete }, null, 2)
+      );
       return;
     }
 
@@ -428,6 +436,14 @@ async function main() {
       process.stdout.write('\x1Bc'); // clear screen, keep scrollback intact
     }
     console.log(render(results, opts, devices));
+    if (incomplete) {
+      console.error(
+        chalk.red.bold(
+          'BOARD INCOMPLETE: some queues could not be read (above). A phone ' +
+            'that is not shown as held is UNKNOWN, not free.'
+        )
+      );
+    }
   }
 
   await tick();

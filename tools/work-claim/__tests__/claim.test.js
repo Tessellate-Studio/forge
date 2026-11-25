@@ -916,3 +916,146 @@ describe('gh: a timeout says it is a timeout', () => {
     ).rejects.toBe(boom);
   });
 });
+
+describe('gh: a transient failure on a read is retried (forge#215)', () => {
+  const { gh, isRead, isTransient } = require('../lib/claim');
+  const blip = () =>
+    Object.assign(new Error('Command failed: gh api x'), {
+      code: 1,
+      stderr: 'HTTP 502: Bad Gateway (https://api.github.com/...)',
+    });
+
+  it('retries a 502 on a GET and returns the answer', async () => {
+    const run = jest
+      .fn()
+      .mockRejectedValueOnce(blip())
+      .mockResolvedValueOnce({ stdout: '[]' });
+    await expect(gh(['api', 'x'], { run, delayMs: 0 })).resolves.toBe('[]');
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it('gives up after the retries and says how many tries it took', async () => {
+    const run = jest.fn().mockImplementation(() => Promise.reject(blip()));
+    await expect(gh(['api', 'x'], { run, delayMs: 0 })).rejects.toThrow(
+      /after 3 tries/
+    );
+    expect(run).toHaveBeenCalledTimes(3);
+  });
+
+  it('never retries a write: a POST GitHub applied would post twice', async () => {
+    const run = jest.fn().mockImplementation(() => Promise.reject(blip()));
+    await expect(
+      gh(['api', 'repos/o/r/issues/1/comments', '-f', 'body=x'], {
+        run,
+        delayMs: 0,
+      })
+    ).rejects.toThrow();
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('never retries a 404 or a timeout', async () => {
+    const notFound = Object.assign(new Error('HTTP 404: Not Found'), {
+      code: 1,
+    });
+    const run = jest.fn().mockRejectedValue(notFound);
+    await expect(gh(['api', 'x'], { run, delayMs: 0 })).rejects.toBe(notFound);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(isTransient({ killed: true, message: 'HTTP 502' })).toBe(false);
+  });
+
+  it('a hook budget gets no retries', async () => {
+    const {
+      setGhBudget,
+      HOOK_GH_TIMEOUT_MS,
+      CLI_GH_TIMEOUT_MS,
+    } = require('../lib/claim');
+    setGhBudget(HOOK_GH_TIMEOUT_MS);
+    try {
+      const run = jest.fn().mockImplementation(() => Promise.reject(blip()));
+      await expect(gh(['api', 'x'], { run, delayMs: 0 })).rejects.toThrow();
+      expect(run).toHaveBeenCalledTimes(1);
+    } finally {
+      setGhBudget(CLI_GH_TIMEOUT_MS);
+    }
+  });
+
+  it('tells reads from writes', () => {
+    expect(
+      isRead([
+        'api',
+        'repos/o/r/issues?labels=claimed&state=open',
+        '--paginate',
+      ])
+    ).toBe(true);
+    expect(isRead(['api', '--method', 'DELETE', 'x'])).toBe(false);
+    expect(isRead(['api', 'x', '-f', 'a=b'])).toBe(false);
+    expect(isRead(['label', 'create', 'claimed'])).toBe(false);
+  });
+
+  it('passes a URL with ? and & to gh as one untouched argv entry, no shell', async () => {
+    const run = jest.fn().mockResolvedValue({ stdout: '[]' });
+    const url = 'repos/o/r/issues?labels=claimed&state=open&per_page=100';
+    await gh(['api', url, '--paginate'], { run });
+    const [file, args, options] = run.mock.calls[0];
+    expect(file).toBe('gh');
+    expect(args).toEqual(['api', url, '--paginate']);
+    expect(options.shell).toBeUndefined();
+  });
+
+  it('the readiness probe retries a blip instead of refusing the board', async () => {
+    const { checkGhReady } = require('../lib/claim');
+    const run = jest
+      .fn()
+      .mockRejectedValueOnce(blip())
+      .mockResolvedValueOnce({ stdout: '{}' });
+    await expect(checkGhReady(run, { delayMs: 0 })).resolves.toEqual({
+      ok: true,
+    });
+  });
+});
+
+describe('the board says when it is incomplete (forge#215)', () => {
+  const { unreadable, incompleteMessage } = require('../lib/claim');
+
+  it('is null for a board that read everything', () => {
+    expect(
+      incompleteMessage([
+        { key: 'alate', repo: 'o/alate', items: [{ number: 1 }] },
+      ])
+    ).toBeNull();
+  });
+
+  it('names every repo it could not read and says unknown is not free', () => {
+    const msg = incompleteMessage([
+      {
+        key: 'alate',
+        repo: 'o/alate',
+        error: 'Command failed: gh api …',
+        items: [],
+      },
+      { key: 'forge', repo: 'o/forge', items: [] },
+    ]);
+    expect(msg).toMatch(/BOARD INCOMPLETE/);
+    expect(msg).toMatch(/alate/);
+    expect(msg).not.toMatch(/forge/);
+    expect(msg).toMatch(/UNKNOWN, not free/);
+  });
+
+  it('counts a claimed item whose comments failed — it used to vanish', () => {
+    const error = 'Command failed: gh api …/comments';
+    const results = [
+      {
+        key: 'alate',
+        repo: 'o/alate',
+        items: [
+          { number: 2029, url: 'u', error },
+          { number: 7, url: 'v' },
+        ],
+      },
+    ];
+    expect(unreadable(results).items).toEqual([
+      { key: 'alate', repo: 'o/alate', number: 2029, url: 'u', error },
+    ]);
+    expect(incompleteMessage(results)).toMatch(/alate#2029/);
+  });
+});

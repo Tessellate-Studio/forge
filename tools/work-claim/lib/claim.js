@@ -368,20 +368,87 @@ function timedOut(args, ms, cause) {
   );
 }
 
-/** Run `gh` with an argument list (no shell). `run` is for tests. */
-async function gh(args, { timeoutMs = ghBudgetMs, run = execFileAsync } = {}) {
-  try {
-    const { stdout } = await run('gh', args, {
-      encoding: 'utf8',
-      maxBuffer: 20 * 1024 * 1024,
-      timeout: timeoutMs,
-    });
-    return stdout;
-  } catch (error) {
-    if (error && error.killed) {
-      throw timedOut(args, timeoutMs, error);
+/**
+ * A failure worth asking again: GitHub's 5xx, a dropped connection, a DNS
+ * blip. NOT a timeout (the budget is already spent, and a hook retrying would
+ * outlive its deadline) and NOT a 4xx (asking again gets the same answer).
+ */
+const TRANSIENT =
+  /HTTP 5\d\d|\b50[0234]\b|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|socket hang up|connection reset|unexpected EOF|\bEOF\b|TLS handshake|i\/o timeout|no such host|could not resolve|secondary rate limit/i;
+
+function isTransient(error) {
+  if (!error || error.killed || error.code === 'ENOENT') {
+    return false;
+  }
+  return TRANSIENT.test(`${error.message || ''}\n${error.stderr || ''}`);
+}
+
+/**
+ * Only a READ is safe to send twice. `gh api` turns into a POST as soon as a
+ * field is passed, and a POST that GitHub applied before the 502 came back
+ * would post a second claim comment.
+ */
+function isRead(args) {
+  if (args[0] !== 'api') {
+    return false;
+  }
+  const flag = args.findIndex(a => a === '--method' || a === '-X');
+  const method = flag >= 0 ? String(args[flag + 1] || '') : 'GET';
+  if (method.toUpperCase() !== 'GET') {
+    return false;
+  }
+  return !args.some(a =>
+    ['-f', '-F', '--field', '--raw-field', '--input'].includes(a)
+  );
+}
+
+/** Retries after the first try, for a read on the CLI budget. */
+const GH_RETRIES = 2;
+const GH_RETRY_DELAY_MS = 750;
+
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Run `gh` with an argument list — execFile, no shell, so `?` and `&` in a
+ * URL reach gh byte for byte on Windows, Git Bash and POSIX alike. `run` and
+ * `delayMs` are for tests.
+ *
+ * A transient failure on a read is retried (forge#215: on 2026-11-23 a board
+ * read failed while a direct `gh api` of the same URL worked, and the board
+ * then read as "nobody on the phone"). Hooks get no retries: they run on a
+ * hard deadline, and a retry is how a gh child outlives the hook.
+ */
+async function gh(
+  args,
+  {
+    timeoutMs = ghBudgetMs,
+    run = execFileAsync,
+    retries = ghBudgetMs > HOOK_GH_TIMEOUT_MS ? GH_RETRIES : 0,
+    delayMs = GH_RETRY_DELAY_MS,
+  } = {}
+) {
+  const attempts = isRead(args) ? retries + 1 : 1;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const { stdout } = await run('gh', args, {
+        encoding: 'utf8',
+        maxBuffer: 20 * 1024 * 1024,
+        timeout: timeoutMs,
+      });
+      return stdout;
+    } catch (error) {
+      if (error && error.killed) {
+        throw timedOut(args, timeoutMs, error);
+      }
+      if (attempt < attempts && isTransient(error)) {
+        await pause(delayMs * attempt);
+        continue;
+      }
+      if (attempt > 1 && error && typeof error.message === 'string') {
+        error.message = `${error.message} (after ${attempt} tries)`;
+      }
+      throw error;
     }
-    throw error;
   }
 }
 
@@ -393,19 +460,15 @@ async function gh(args, { timeoutMs = ghBudgetMs, run = execFileAsync } = {}) {
  * work, `auth status` exits 1, and every board, scan and sweep refused to run
  * (forge#202). `rate_limit` needs no scope and counts against no quota.
  */
-async function checkGhReady(run = execFileAsync) {
+async function checkGhReady(run = execFileAsync, ghOpts = {}) {
   try {
-    await run('gh', ['api', 'rate_limit'], {
-      encoding: 'utf8',
-      timeout: ghBudgetMs,
-    });
+    // Through gh(), so the readiness probe gets the same retry as every
+    // other read — one blip here used to refuse the whole board.
+    await gh(['api', 'rate_limit'], { run, ...ghOpts });
     return { ok: true };
   } catch (error) {
-    if (error.killed) {
-      return {
-        ok: false,
-        message: timedOut(['api', 'rate_limit'], ghBudgetMs, error).message,
-      };
+    if (error.code === 'GH_TIMEOUT') {
+      return { ok: false, message: error.message };
     }
     if (error.code === 'ENOENT') {
       return {
@@ -640,6 +703,57 @@ function failedRepos(results) {
     .map(r => ({ key: r.key, repo: r.repo, error: r.error }));
 }
 
+/**
+ * Everything a board could NOT read: whole repos, and claimed items whose
+ * comments failed. An item in the second group carries the `claimed` label,
+ * so somebody holds it — and before forge#215 it was dropped from the board
+ * without a word, which is the device lock failing open one level down.
+ */
+function unreadable(results) {
+  const items = [];
+  (results || []).forEach(r => {
+    if (!r || r.error) {
+      return;
+    }
+    (r.items || []).forEach(item => {
+      if (item.error) {
+        items.push({
+          key: r.key,
+          repo: r.repo,
+          number: item.number,
+          url: item.url,
+          error: item.error,
+        });
+      }
+    });
+  });
+  return { repos: failedRepos(results), items };
+}
+
+/** One paragraph saying the board is incomplete, or null when it is not. */
+function incompleteMessage(results) {
+  const { repos, items } = unreadable(results);
+  if (repos.length === 0 && items.length === 0) {
+    return null;
+  }
+  const parts = [];
+  if (repos.length) {
+    parts.push(`${repos.length} repo(s) (${repos.map(r => r.key).join(', ')})`);
+  }
+  if (items.length) {
+    parts.push(
+      `${items.length} claimed item(s) (${items
+        .map(i => `${i.key}#${i.number}`)
+        .join(', ')})`
+    );
+  }
+  return (
+    `BOARD INCOMPLETE: could not read ${parts.join(' and ')}. ` +
+    'A claim missing from this board is UNKNOWN, not free: it may be the one ' +
+    'holding the phone. Re-run before taking any device or item.'
+  );
+}
+
 /** Every item whose label outlived its claim, flattened across repos.
  *  Silently skips errored repos — pair it with failedRepos(). */
 function leakedItems(results) {
@@ -690,4 +804,8 @@ module.exports = {
   isLeaked,
   leakedItems,
   failedRepos,
+  unreadable,
+  incompleteMessage,
+  isTransient,
+  isRead,
 };

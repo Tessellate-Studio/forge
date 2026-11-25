@@ -1510,7 +1510,14 @@ replaced, so a dead holder's comment never wins the phone back.
 
 **An unreadable lock is not a free device.** If any queue repo cannot be
 read, `dtq` prints `? UNREADABLE` for every phone — the claim holding it may
-be in exactly that repo — and that is a reason to stop.
+be in exactly that repo — and that is a reason to stop. `wip board` and `dtq`
+both exit 1 and print `BOARD INCOMPLETE` when anything could not be read, so
+never grep a board for a device name: a missing line is unknown, not free
+(forge#215). `wip claim --device` runs the same check itself before it posts:
+it refuses when the queue cannot be read, and when another live claim holds
+the phone it names that session and exits 2. Queue your test behind it as a
+`device-test` issue; `--force` takes a visible holder's phone, never an
+unreadable one.
 
 - **Before driving the device:** read `dtq`. Held by someone else and live →
   don't touch it; report who holds it, which test, what it's waiting on.
