@@ -852,3 +852,67 @@ describe('checkGhReady', () => {
     expect(r.message).toMatch(/cannot reach the GitHub API/);
   });
 });
+
+describe('gh: a timeout says it is a timeout', () => {
+  const { gh } = require('../lib/claim');
+  const killed = () =>
+    Promise.reject(
+      Object.assign(new Error('Command failed: gh api x'), {
+        killed: true,
+        signal: 'SIGTERM',
+      })
+    );
+
+  it('names the timeout and the call when gh is killed for running too long', async () => {
+    await expect(gh(['api', 'x'], { run: killed })).rejects.toMatchObject({
+      code: 'GH_TIMEOUT',
+      message: expect.stringMatching(/^gh timed out after 45 s .*: gh api x$/),
+    });
+  });
+
+  it('says a readiness check that ran out of time timed out, not "not logged in"', async () => {
+    const { checkGhReady } = require('../lib/claim');
+    const r = await checkGhReady(killed);
+    expect(r).toMatchObject({
+      ok: false,
+      message: expect.stringMatching(/timed out/),
+    });
+  });
+
+  it('passes a caller-chosen limit through to the child', async () => {
+    const run = jest.fn().mockResolvedValue({ stdout: 'ok' });
+    await expect(gh(['api', 'x'], { run, timeoutMs: 45_000 })).resolves.toBe(
+      'ok'
+    );
+    expect(run).toHaveBeenCalledWith(
+      'gh',
+      ['api', 'x'],
+      expect.objectContaining({ timeout: 45_000 })
+    );
+  });
+
+  it('gives a CLI the long budget by default, and a hook the short one once it says so', async () => {
+    const {
+      setGhBudget,
+      HOOK_GH_TIMEOUT_MS,
+      CLI_GH_TIMEOUT_MS,
+    } = require('../lib/claim');
+    const run = jest.fn().mockResolvedValue({ stdout: '' });
+    await gh(['api', 'x'], { run });
+    expect(run.mock.calls[0][2].timeout).toBe(CLI_GH_TIMEOUT_MS);
+    setGhBudget(HOOK_GH_TIMEOUT_MS);
+    try {
+      await gh(['api', 'x'], { run });
+      expect(run.mock.calls[1][2].timeout).toBe(HOOK_GH_TIMEOUT_MS);
+    } finally {
+      setGhBudget(CLI_GH_TIMEOUT_MS);
+    }
+  });
+
+  it('passes other failures through unchanged', async () => {
+    const boom = Object.assign(new Error('HTTP 404'), { code: 1 });
+    await expect(
+      gh(['api', 'x'], { run: () => Promise.reject(boom) })
+    ).rejects.toBe(boom);
+  });
+});

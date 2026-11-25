@@ -11,7 +11,13 @@
 
 const path = require('path');
 
-const { LABELS, PRIORITY, labelKey, resolveLabels } = require('./queue-lib');
+const {
+  LABELS,
+  PRIORITY,
+  labelKey,
+  resolveLabels,
+  listLabelledIssues,
+} = require('./queue-lib');
 
 const { gh } = require(path.join(
   __dirname,
@@ -205,6 +211,7 @@ function matchesIntent(issue, intent) {
  * of one test wastes a device sitting four times over. On a hit the new
  * detail becomes a comment on the existing issue instead.
  */
+
 async function enqueue({ repo, intent, fields, dryRun }) {
   const body = renderTestBody(fields);
   const priority =
@@ -213,14 +220,9 @@ async function enqueue({ repo, intent, fields, dryRun }) {
   const labels = labelsFor({ ...fields, priority });
   const title = `[device-test] ${intent}`;
 
-  const found = await gh([
-    'api',
-    `repos/${repo}/issues?labels=${LABELS.ITEM}&state=open&per_page=100`,
-    '--paginate',
-  ]);
-  const existing = JSON.parse(found || '[]')
-    .filter(i => !i.pull_request)
-    .find(i => matchesIntent(i, intent));
+  const existing = (await listLabelledIssues(repo, 'open')).find(i =>
+    matchesIntent(i, intent)
+  );
 
   if (dryRun) {
     return {

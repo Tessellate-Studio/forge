@@ -205,18 +205,24 @@ function itemHeadingCount(body) {
  *
  * `state=all` because a closed test is still the record of a pass.
  */
-async function fetchLabelledIssues(repoDef) {
-  const out = await gh([
+async function listLabelledIssues(repo, state = 'all', run = gh) {
+  const out = await run([
     'api',
-    `repos/${repoDef.repo}/issues?labels=${LABELS.ITEM}&state=all&per_page=100`,
+    `repos/${repo}/issues?labels=${LABELS.ITEM}&state=${state}&per_page=100`,
     '--paginate',
   ]);
 
   // /issues returns pull requests too; they carry a `pull_request` key. A PR
   // that happened to wear the label would otherwise render as a test.
-  return parseGh(out, `${repoDef.repo} device-test issues`)
-    .filter(i => !i.pull_request)
-    .map(i => itemFromIssue(i, repoDef.key));
+  return parseGh(out, `${repo} device-test issues`).filter(
+    i => !i.pull_request
+  );
+}
+
+async function fetchLabelledIssues(repoDef) {
+  return (await listLabelledIssues(repoDef.repo)).map(i =>
+    itemFromIssue(i, repoDef.key)
+  );
 }
 
 async function fetchRepoQueue(repoDef) {
@@ -470,6 +476,7 @@ module.exports = {
   parseGh,
   fetchRepoQueue,
   fetchLabelledIssues,
+  listLabelledIssues,
   fetchDeviceClaims,
   collect,
   daysSince,

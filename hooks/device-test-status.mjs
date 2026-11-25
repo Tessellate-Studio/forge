@@ -40,6 +40,17 @@ const { checkGhReady, collect } = require(path.join(
   'scripts',
   'queue-lib.js'
 ));
+
+// A hook: the short gh budget (tools/work-claim/lib/claim.js → setGhBudget).
+const { setGhBudget, HOOK_GH_TIMEOUT_MS } = require(path.join(
+  here,
+  '..',
+  'tools',
+  'work-claim',
+  'lib',
+  'claim.js'
+));
+setGhBudget(HOOK_GH_TIMEOUT_MS);
 const { emit, withDeadline, runHook, disabled } = require(path.join(
   here,
   'lib',

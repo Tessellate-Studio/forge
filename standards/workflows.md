@@ -33,6 +33,7 @@ process is a defect, whatever else shipped.
 | **Critical** | Device-test enqueue for anything only a phone can verify | "Device-test queue" |
 | **Critical** | Read the regression log before a bug fix | app `memory/project_regression_log.md` |
 | **Critical** | Replace, prove, shadow, then remove: no part is swapped out before 3 clean shadow builds | "Replace, prove, shadow, then remove" |
+| **Critical** | Every subagent starts from forge: the repo rules, the standards and the skill for its work | "Subagents start from forge" |
 | Minor | `/simplify`, `/design-critique` | "Quality pass before commit" |
 | Minor | Adversarial review on a small diff (`/code-review` covers it) | same |
 | Minor | Closing-retro detail beyond the three questions | build-feature Step 7 |
@@ -782,6 +783,34 @@ blocks your PR is fixed the same way (owner, 2026-11-23). Work items don't colli
 content any more, because each is its own issue: claim it (`wip claim`)
 instead of checking a file. Full rule:
 [`anti-patterns.md` → "Concurrent branches collide in content"](./anti-patterns.md).
+
+## Subagents start from forge — the brief says what, forge says how
+
+Owner, 2026-11-24: **any subagent spun up reads forge and follows the skills
+and processes the work calls for.** A subagent knows only its brief, and the
+parent writes the brief: when it leaves the process out, the subagent works
+from the task alone and skips what the parent would have done (a draft PR, a
+claim, the regression log, a root-cause fix).
+
+**Enforced** by the `SubagentStart` hook `hooks/subagent-briefing.mjs`, which
+adds `hooks/lib/subagent-briefing.js` to every subagent's context, whatever its
+type and whoever started it. That file is the briefing's one source: it sends
+the subagent to the repo's `CLAUDE.md`, the skill for its work and the
+sections of these standards its task touches (by heading, so it does not
+restate rules that would then drift), defers to a forge agent charter when the
+prompt is one, and asks for any brief/standard conflict to be reported. A test
+checks that every file and heading it names exists.
+
+**The parent still writes a full brief.** The hook carries the process; the
+brief carries the task, the files, what is already ruled out and what done
+looks like. Neither stands in for the other.
+
+**Not yet confirmed:** whether `SubagentStart` fires for agents started by
+the `Workflow` tool (Claude Code's docs name the Agent tool). The workflow
+scripts' own agent charters (`references/agents/`) carry their process until
+that is checked on a live run.
+
+Off switch: `FORGE_SUBAGENT_BRIEFING_DISABLE=1`.
 
 ## Root-cause fixes, not band-aids
 

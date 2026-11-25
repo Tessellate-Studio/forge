@@ -134,6 +134,13 @@ const deviceCheck = async (command, cwd) => {
     trackedRepo,
     fetchVerification,
   } = require('../skills/device-test/scripts/verification.js');
+
+  // A hook: the short gh budget (see setGhBudget in tools/work-claim/lib/claim.js).
+  const {
+    setGhBudget,
+    HOOK_GH_TIMEOUT_MS,
+  } = require('../tools/work-claim/lib/claim.js');
+  setGhBudget(HOOK_GH_TIMEOUT_MS);
   if (!trackedRepo(repo)) {
     return { status: 'clear', detail: `${repo} has no device-test queue` };
   }
