@@ -1137,6 +1137,14 @@ and this session shows it's not effective".)*
      bikini-bottom; trousers; a men's shirt (and the gender switch to reach
      it); one piece **bought** and one **arrived**; a second fit; Advanced-account
      measurement variants (exact measurements present, absent, partial).
+     **Built by `backend/scripts/dtq-seed.ts`** (alate#2038), from `backend/`:
+     `npx tsx scripts/dtq-seed.ts plan` (offline, checks the deck against
+     `deck.golden.json`); `npx tsx --env-file=<backend/.env> scripts/dtq-seed.ts
+     seed` writes it to the preview account only (`PREVIEW_USER_ID`, any other
+     is refused), snapshots the profile first and relaunches Alate Preview;
+     run `seed` again after a test spends an item. `snapshot` / `restore` keep
+     and put back the profile (local scratch only, never printed); `scrape`
+     refreshes the saved pages, one read per page.
    - **mood-layer, badige, loom:** none yet. The first drain that seeds for one
      adds its deck here in the same PR as the first use.
 5. **Blocked on data is a drain failure, never a reason to leave an item

@@ -40,6 +40,17 @@ describe('reading the body', () => {
     expect(extractBody('gh pr create -F b.md')).toEqual({ file: 'b.md' });
   });
 
+  it('judges a body file the same command writes, not a stale copy on disk', () => {
+    // 2026-11-25: the hook ran before `cat > "$TEMP/pr3.md" <<'EOF'` wrote the
+    // file and judged another session's stale pr3.md instead.
+    const cmd =
+      'cat > "$TEMP/pr3.md" <<\'EOF\'\n- ✅ new body\nEOF\ngh pr create -t t --body-file "$TEMP/pr3.md"';
+    expect(extractBody(cmd)).toEqual({ text: '- ✅ new body' });
+    const flipped =
+      "cat <<'EOF' > b.md\n- plain\nEOF\ngh pr create -t t -F b.md";
+    expect(extractBody(flipped)).toEqual({ text: '- plain' });
+  });
+
   it('reads a heredoc body', () => {
     const cmd =
       'gh pr create --title t --body "$(cat <<\'EOF\'\n- ✅ done\nEOF\n)"';
