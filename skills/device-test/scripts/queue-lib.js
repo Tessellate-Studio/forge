@@ -243,13 +243,24 @@ async function fetchRepoQueue(repoDef) {
  * the drain's last act on it. Any repo that fails turns every device
  * UNREADABLE (resolveDevices), because the missing claim may be there.
  */
-async function fetchDeviceClaims() {
+async function fetchDeviceClaims(run = gh) {
+  const { claims, errors } = await readDeviceClaims(run);
+  return resolveDevices(claims, errors);
+}
+
+/**
+ * The raw read behind fetchDeviceClaims: every parsed claim on every open,
+ * claimed device-test issue, plus one error per repo that failed. Split out
+ * so `wip claim --device` asks the SAME question dtq answers, not a copy of
+ * it (forge#215). `run` is for tests.
+ */
+async function readDeviceClaims(run = gh) {
   const errors = [];
   const claims = [];
   await Promise.all(
     REPOS.map(async repoDef => {
       try {
-        const out = await gh([
+        const out = await run([
           'api',
           `repos/${repoDef.repo}/issues?labels=${LABELS.ITEM},${CLAIM_LABEL}&state=open&per_page=100`,
           '--paginate',
@@ -259,7 +270,7 @@ async function fetchDeviceClaims() {
         );
         await Promise.all(
           issues.map(async i => {
-            const raw = await gh([
+            const raw = await run([
               'api',
               `repos/${repoDef.repo}/issues/${i.number}/comments?per_page=100`,
               '--paginate',
@@ -281,7 +292,7 @@ async function fetchDeviceClaims() {
       }
     })
   );
-  return resolveDevices(claims, errors);
+  return { claims, errors };
 }
 
 /**
@@ -478,6 +489,7 @@ module.exports = {
   fetchLabelledIssues,
   listLabelledIssues,
   fetchDeviceClaims,
+  readDeviceClaims,
   collect,
   daysSince,
 };

@@ -53,6 +53,7 @@ const {
   collect,
   leakedItems,
   failedRepos,
+  incompleteMessage,
   mapWithLimit,
   claimDetails,
 } = require('./lib/claim');
@@ -264,11 +265,27 @@ function renderRepo(result) {
     i => !i.claim && i.claims.some(c => c.held)
   );
 
-  if (claimed.length === 0 && abandoned.length === 0) {
+  // Labelled `claimed`, comments unreadable: somebody may hold it. Shown as
+  // unknown, never dropped — dropping it is the device lock failing open
+  // one level down (forge#215).
+  const unknown = result.items.filter(i => i.error);
+
+  if (claimed.length === 0 && abandoned.length === 0 && unknown.length === 0) {
     return lines; // nothing in flight here — say nothing, same as dtq
   }
 
   lines.push(`${header}  ${chalk.gray(`${claimed.length} in flight`)}`);
+
+  unknown.forEach(item => {
+    lines.push(
+      `  ${chalk.red('???')} ${chalk.bold(`#${item.number}`)} ${clip(
+        item.title,
+        46
+      )}  ${chalk.red('claim UNREADABLE, may be held')}`
+    );
+    lines.push(`      ${chalk.gray(clip(item.error, 70))}`);
+    lines.push(`      ${chalk.gray(item.url)}`);
+  });
 
   claimed.forEach(item => {
     const c = item.claim;
@@ -314,6 +331,15 @@ async function board(opts) {
   const out = [];
   results.forEach(r => out.push(...renderRepo(r)));
 
+  // Fail closed (forge#215). A board that could not read a repo used to
+  // print its errors and its normal footer and exit 0, and a session that
+  // grepped it for "pixel" read the silence as a free phone. Now it says so
+  // at the top and the bottom, and exits 1 so a script cannot miss it.
+  const incomplete = incompleteMessage(results);
+  if (incomplete) {
+    process.exitCode = 1;
+  }
+
   if (out.length === 0) {
     console.log(
       chalk.gray('Nothing claimed — no session is on a tracked item.')
@@ -322,6 +348,10 @@ async function board(opts) {
   }
 
   console.log('');
+  if (incomplete) {
+    console.log(chalk.red.bold(incomplete));
+    console.log('');
+  }
   console.log(chalk.bold('🚧 Work in flight'));
   console.log('');
   console.log(out.join('\n'));
@@ -346,6 +376,9 @@ async function board(opts) {
           'run `wip sweep` to clear them.'
       )
     );
+  }
+  if (incomplete) {
+    console.error(chalk.red.bold(incomplete));
   }
   console.log('');
 }
@@ -491,6 +524,9 @@ async function sweep(opts) {
   failed.forEach(f => {
     console.error(chalk.red(`${f.key}: could not check — ${f.error}`));
   });
+  if (failed.length) {
+    process.exitCode = 1; // a partial sweep is not a clean one (forge#215)
+  }
 
   if (leaked.length === 0) {
     console.log(
@@ -545,6 +581,72 @@ async function sweep(opts) {
 
 // --------------------------------------------------------------- writes ----
 
+/**
+ * The device lock, checked BEFORE a device claim is posted (forge#215).
+ *
+ * Asks dtq's own question — queue-lib readDeviceClaims + claim-lib
+ * deviceClaimVerdict — so `wip` and the dtq board can never disagree about
+ * who has the phone. Fails closed: a queue it cannot read is a refusal, and
+ * `--force` does not override that, because there is nothing to take over
+ * from, only something unknown. `--force` does take over a holder it can
+ * see, out loud.
+ */
+async function refuseBusyDevice(deviceName, me, force) {
+  // Lazy: only a device claim pays for loading the queue lib.
+  const {
+    readDeviceClaims,
+    deviceClaimVerdict,
+  } = require('../../skills/device-test/scripts/queue-lib');
+  const verdict = deviceClaimVerdict(await readDeviceClaims(), deviceName, c =>
+    isMine(c, me)
+  );
+  if (verdict.ok) {
+    return;
+  }
+  const name = verdict.device.label;
+
+  if (verdict.reason === 'unreadable') {
+    console.error(
+      chalk.red(
+        `Refusing the ${name} claim: the device-test queue could not be read, ` +
+          'so another session may be on the phone right now.'
+      )
+    );
+    verdict.errors.forEach(e => console.error(chalk.gray(`  ${e}`)));
+    console.error(chalk.gray('Re-run in a minute. Do not drive the device.'));
+    process.exit(1);
+  }
+
+  const h = verdict.holder;
+  const idle = h.idleMinutes === null ? '?' : `${Math.round(h.idleMinutes)}m`;
+  if (force) {
+    console.error(
+      chalk.yellow(
+        `Taking the ${name} from ${h.heldBy} (${h.testId}, last touch ${idle} ago) — tell them.`
+      )
+    );
+    return;
+  }
+  console.error(
+    chalk.yellow(
+      `The ${name} is busy: ${h.testId} is claimed by ${h.heldBy} ` +
+        `(last touch ${idle} ago${
+          h.waitingOnHuman ? `, waiting on ${h.waitingOn}` : ''
+        }).`
+    )
+  );
+  if (h.sessionId) {
+    console.error(chalk.gray(`Holder:    claude --resume ${h.sessionId}`));
+  }
+  console.error(
+    chalk.gray(
+      'Queue behind it: enqueue your test as a device-test issue and let the drain run it. ' +
+        'Take the phone anyway with --force.'
+    )
+  );
+  process.exit(2);
+}
+
 async function claim(target, opts) {
   const { repo, number } = parseTarget(target);
   const existing = await findClaimComments(repo, number);
@@ -582,6 +684,10 @@ async function claim(target, opts) {
       chalk.gray('Take it over anyway with --force (say so in your claim).')
     );
     process.exit(2);
+  }
+
+  if (opts.device) {
+    await refuseBusyDevice(opts.device, me, opts.force);
   }
 
   // Already ours — refresh the heartbeat instead of stacking a second claim.

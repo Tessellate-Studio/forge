@@ -193,6 +193,33 @@ function resolveDevices(claims, errors = []) {
   );
 }
 
+/**
+ * May this session take `deviceName` now? Asked by `wip claim --device`
+ * before it posts anything (forge#215).
+ *
+ * Fails CLOSED: any queue that could not be read is a refusal, for the same
+ * reason resolveDevices prints UNREADABLE. On 2026-11-23 a session read a
+ * failing board as a free phone and took it mid-drain.
+ *
+ * @param read `{ claims, errors }` from queue-lib `readDeviceClaims`
+ * @param isMine claim => true for this session's own claims, which are never
+ *   rivals (one drain holds several tests)
+ * @returns `{ ok: true, device }`, or `{ ok: false, reason: 'unreadable' |
+ *   'held', device, errors?, holder? }`
+ */
+function deviceClaimVerdict(read, deviceName, isMine = () => false) {
+  const device = deviceFor(deviceName);
+  const errors = (read && read.errors) || [];
+  if (errors.length) {
+    return { ok: false, reason: 'unreadable', device, errors };
+  }
+  const rivals = ((read && read.claims) || []).filter(c => !isMine(c));
+  const holder = deviceHolder(rivals, device);
+  return holder
+    ? { ok: false, reason: 'held', device, holder }
+    : { ok: true, device };
+}
+
 /** One-line summary for the board: which phone, which test, who. */
 function describeDeviceClaim(device, claim) {
   if (!claim) {
@@ -214,5 +241,6 @@ module.exports = {
   deviceHolder,
   losesRaceTo,
   resolveDevices,
+  deviceClaimVerdict,
   describeDeviceClaim,
 };
