@@ -29,13 +29,38 @@ function isPrBodyCommand(command) {
   );
 }
 
+const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** The heredoc text this command writes to `target`, or null if it writes none. */
+function writtenInCommand(command, target) {
+  const t = escapeRe(target);
+  const re = new RegExp(
+    `>\\s*(?:"${t}"|'${t}'|${t})\\s*<<-?\\s*['"]?(\\w+)['"]?[^\\n]*\\n([\\s\\S]*?)\\n\\s*\\1\\s*(?:\\n|$)`
+  );
+  const m = command.match(re);
+  if (m) {
+    return m[2];
+  }
+  const before = new RegExp(
+    `<<-?\\s*['"]?(\\w+)['"]?\\s*>\\s*(?:"${t}"|'${t}'|${t})[^\\n]*\\n([\\s\\S]*?)\\n\\s*\\1\\s*(?:\\n|$)`
+  );
+  const n = command.match(before);
+  return n ? n[2] : null;
+}
+
 /** Pull the body text, or a body-file path, out of the command. */
 function extractBody(command) {
   const file = command.match(
     /\s(?:--body-file|-F)[\s=]+("([^"]+)"|'([^']+)'|(\S+))/
   );
   if (file) {
-    return { file: file[2] || file[3] || file[4] };
+    const target = file[2] || file[3] || file[4];
+
+    // The hook runs BEFORE the command, so a body file the same command writes
+    // (`cat > "$TEMP/pr.md" <<'EOF' … EOF`) does not exist yet, or is a stale
+    // copy another session left there. Judge the text being written instead.
+    const written = writtenInCommand(command, target);
+    return written === null ? { file: target } : { text: written };
   }
   const heredoc = command.match(
     /\s(?:--body|-b)[\s=]+"\$\(cat <<-?\s*'?(\w+)'?\s*\n([\s\S]*?)\n\s*\1\s*\n?\)"/
