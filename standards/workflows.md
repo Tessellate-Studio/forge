@@ -1145,7 +1145,19 @@ and this session shows it's not effective".)*
      run `seed` again after a test spends an item. `snapshot` / `restore` keep
      and put back the profile (local scratch only, never printed); `scrape`
      refreshes the saved pages, one read per page.
-   - **mood-layer, badige, loom:** none yet. The first drain that seeds for one
+   - **loom** (browser-verified): the dev store's 15 `seed-e2e` products with
+     their charts (product, collection and shop scope), offerings, model
+     sizing and stock states (a size sold out and coming back, fully sold out
+     either way); no fabric on any product; exactly one size-range tap
+     ("above") on Heritage Cardigan, none elsewhere; niches tall, petite,
+     slow-fashion. **Built by `npm run seed:verify -- --fix`** from a loom
+     checkout of `main` whose `.env` holds the dev-store Admin token and the
+     Supabase service key (loom#317); plain `npm run seed:verify` reports what
+     differs. Run `--fix` again after an item that saves fabric, edits a
+     chart, changes stock or taps. Which product carries what:
+     `docs/E2E_TEST_MATRIX.md` → "The device-test seed". A sign-in to the
+     dev store's Shopify admin is the one step the deck cannot build.
+   - **mood-layer, badige:** none yet. The first drain that seeds for one
      adds its deck here in the same PR as the first use.
 5. **Blocked on data is a drain failure, never a reason to leave an item
    open.** If the drain cannot build a seed, the wrap-up lists the item under
